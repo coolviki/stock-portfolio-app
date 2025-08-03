@@ -177,7 +177,7 @@ async def upload_contract_notes(
     
     results = []
     for file in files:
-        if file.filename.endswith('.pdf'):
+        if file.filename.lower().endswith('.pdf'):
             content = await file.read()
             try:
                 transactions = parse_contract_note(content, password)
@@ -191,6 +191,7 @@ async def upload_contract_notes(
                 results.append({"error": f"Failed to parse {file.filename}: {str(e)}"})
     
     return {"uploaded_transactions": len([r for r in results if not isinstance(r, dict)]), "results": results}
+
 
 @app.get("/stock-price/{symbol}")
 def get_stock_price(symbol: str):
