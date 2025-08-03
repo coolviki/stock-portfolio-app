@@ -234,35 +234,9 @@ const Dashboard = () => {
                   const pnl = currentValue - stock.total_invested;
                   const pnlPercent = stock.total_invested > 0 ? (pnl / stock.total_invested) * 100 : 0;
 
-                  // Generate external finance link using ISIN if available
-                  const handleSecurityClick = () => {
-                    if (stock.isin) {
-                      // Use Yahoo Finance with ISIN search
-                      const url = `https://finance.yahoo.com/quote/${stock.isin}`;
-                      window.open(url, '_blank', 'noopener,noreferrer');
-                    } else {
-                      // Fallback to Google Finance with security name
-                      const url = `https://www.google.com/finance/quote/${encodeURIComponent(symbol)}`;
-                      window.open(url, '_blank', 'noopener,noreferrer');
-                    }
-                  };
-
                   return (
                     <tr key={symbol}>
-                      <td>
-                        <strong 
-                          style={{ 
-                            cursor: 'pointer', 
-                            color: '#007bff', 
-                            textDecoration: 'none',
-                            borderBottom: '1px dotted #007bff'
-                          }}
-                          onClick={handleSecurityClick}
-                          title={stock.isin ? `Click to view ${symbol} on Yahoo Finance (ISIN: ${stock.isin})` : `Click to view ${symbol} on Google Finance`}
-                        >
-                          {symbol}
-                        </strong>
-                      </td>
+                      <td><strong>{symbol}</strong></td>
                       <td>{stock.quantity}</td>
                       <td>₹{avgPrice.toFixed(2)}</td>
                       <td>₹{currentPrice.toFixed(2)}</td>
