@@ -1,8 +1,12 @@
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import os
+import json
+import tempfile
+from datetime import datetime
 from dotenv import load_dotenv
 
 from database import get_db, engine, Base
@@ -272,6 +276,172 @@ def get_portfolio_summary(
         "unrealized_gains": unrealized_gains,
         "current_values": current_values
     }
+
+@app.get("/admin/export")
+def export_database(db: Session = Depends(get_db)):
+    """Export all database data to JSON format"""
+    try:
+        # Export users
+        users = db.query(User).all()
+        users_data = []
+        for user in users:
+            users_data.append({
+                "id": user.id,
+                "username": user.username,
+                "created_at": user.created_at.isoformat() if user.created_at else None
+            })
+        
+        # Export transactions
+        transactions = db.query(Transaction).all()
+        transactions_data = []
+        for trans in transactions:
+            transactions_data.append({
+                "id": trans.id,
+                "user_id": trans.user_id,
+                "security_name": trans.security_name,
+                "security_symbol": trans.security_symbol,
+                "transaction_type": trans.transaction_type,
+                "quantity": trans.quantity,
+                "price_per_unit": trans.price_per_unit,
+                "total_amount": trans.total_amount,
+                "transaction_date": trans.transaction_date.isoformat() if trans.transaction_date else None,
+                "order_date": trans.order_date.isoformat() if trans.order_date else None,
+                "exchange": trans.exchange,
+                "broker_fees": trans.broker_fees,
+                "taxes": trans.taxes,
+                "created_at": trans.created_at.isoformat() if trans.created_at else None,
+                "updated_at": trans.updated_at.isoformat() if trans.updated_at else None
+            })
+        
+        # Create export data
+        export_data = {
+            "export_timestamp": datetime.now().isoformat(),
+            "users": users_data,
+            "transactions": transactions_data
+        }
+        
+        # Create temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp_file:
+            json.dump(export_data, tmp_file, indent=2)
+            tmp_file_path = tmp_file.name
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"stock_portfolio_export_{timestamp}.json"
+        
+        return FileResponse(
+            path=tmp_file_path,
+            filename=filename,
+            media_type="application/json"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+@app.post("/admin/import")
+async def import_database(
+    file: UploadFile = File(...),
+    replace_existing: bool = Form(False),
+    db: Session = Depends(get_db)
+):
+    """Import database data from JSON file"""
+    try:
+        if not file.filename.lower().endswith('.json'):
+            raise HTTPException(status_code=400, detail="Only JSON files are supported")
+        
+        # Read and parse the uploaded file
+        content = await file.read()
+        import_data = json.loads(content.decode('utf-8'))
+        
+        # Validate structure
+        if "users" not in import_data or "transactions" not in import_data:
+            raise HTTPException(status_code=400, detail="Invalid file format. Expected 'users' and 'transactions' keys")
+        
+        results = {
+            "users_imported": 0,
+            "transactions_imported": 0,
+            "users_skipped": 0,
+            "transactions_skipped": 0,
+            "errors": []
+        }
+        
+        # If replace_existing is True, clear existing data
+        if replace_existing:
+            db.query(Transaction).delete()
+            db.query(User).delete()
+            db.commit()
+        
+        # Import users
+        existing_usernames = set()
+        if not replace_existing:
+            existing_users = db.query(User).all()
+            existing_usernames = {user.username for user in existing_users}
+        
+        user_id_mapping = {}  # Map old IDs to new IDs
+        
+        for user_data in import_data["users"]:
+            try:
+                if not replace_existing and user_data["username"] in existing_usernames:
+                    results["users_skipped"] += 1
+                    existing_user = db.query(User).filter(User.username == user_data["username"]).first()
+                    user_id_mapping[user_data["id"]] = existing_user.id
+                    continue
+                
+                # Create new user (let database assign new ID)
+                new_user = User(username=user_data["username"])
+                db.add(new_user)
+                db.commit()
+                db.refresh(new_user)
+                
+                user_id_mapping[user_data["id"]] = new_user.id
+                results["users_imported"] += 1
+                existing_usernames.add(user_data["username"])
+                
+            except Exception as e:
+                results["errors"].append(f"Failed to import user {user_data.get('username', 'Unknown')}: {str(e)}")
+        
+        # Import transactions
+        for trans_data in import_data["transactions"]:
+            try:
+                # Map old user_id to new user_id
+                old_user_id = trans_data["user_id"]
+                if old_user_id not in user_id_mapping:
+                    results["errors"].append(f"Transaction skipped: User ID {old_user_id} not found")
+                    results["transactions_skipped"] += 1
+                    continue
+                
+                new_user_id = user_id_mapping[old_user_id]
+                
+                # Create new transaction (let database assign new ID)
+                transaction_dict = trans_data.copy()
+                transaction_dict.pop("id", None)  # Remove old ID
+                transaction_dict["user_id"] = new_user_id
+                
+                # Parse datetime strings back to datetime objects
+                if transaction_dict.get("transaction_date"):
+                    transaction_dict["transaction_date"] = datetime.fromisoformat(transaction_dict["transaction_date"])
+                if transaction_dict.get("order_date"):
+                    transaction_dict["order_date"] = datetime.fromisoformat(transaction_dict["order_date"])
+                if transaction_dict.get("created_at"):
+                    transaction_dict.pop("created_at")  # Let database set this
+                if transaction_dict.get("updated_at"):
+                    transaction_dict.pop("updated_at")  # Let database set this
+                
+                new_transaction = Transaction(**transaction_dict)
+                db.add(new_transaction)
+                db.commit()
+                
+                results["transactions_imported"] += 1
+                
+            except Exception as e:
+                results["errors"].append(f"Failed to import transaction: {str(e)}")
+                results["transactions_skipped"] += 1
+        
+        return results
+        
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON file")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

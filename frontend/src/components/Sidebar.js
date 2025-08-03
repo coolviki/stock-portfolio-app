@@ -11,7 +11,8 @@ const Sidebar = () => {
     { path: '/transactions', icon: '📋', label: 'Transactions' },
     { path: '/upload', icon: '📤', label: 'Upload Contract Notes' },
     { path: '/manual-entry', icon: '✏️', label: 'Manual Entry' },
-    { path: '/users', icon: '👥', label: 'Manage Users' }
+    { path: '/users', icon: '👥', label: 'Manage Users' },
+    { path: '/admin', icon: '⚙️', label: 'Admin' }
   ];
 
   return (
