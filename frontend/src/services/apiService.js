@@ -1,0 +1,86 @@
+import api from './authService';
+
+export const apiService = {
+  // Transaction APIs
+  async getTransactions(userId, filters = {}) {
+    const params = new URLSearchParams();
+    params.append('user_id', userId);
+    Object.keys(filters).forEach(key => {
+      if (filters[key]) params.append(key, filters[key]);
+    });
+    
+    const response = await api.get(`/transactions/?${params}`);
+    return response.data;
+  },
+
+  async createTransaction(transaction, userId) {
+    const transactionWithUserId = {
+      ...transaction,
+      user_id: userId
+    };
+    
+    const response = await api.post('/transactions/', transactionWithUserId);
+    return response.data;
+  },
+
+  async updateTransaction(id, transaction, userId) {
+    const formData = new FormData();
+    formData.append('user_id', userId);
+    Object.keys(transaction).forEach(key => {
+      if (transaction[key] !== null && transaction[key] !== undefined) {
+        formData.append(key, transaction[key]);
+      }
+    });
+    
+    const response = await api.put(`/transactions/${id}`, formData);
+    return response.data;
+  },
+
+  async deleteTransaction(id, userId) {
+    const formData = new FormData();
+    formData.append('user_id', userId);
+    
+    const response = await api.delete(`/transactions/${id}`, { data: formData });
+    return response.data;
+  },
+
+  // File Upload APIs
+  async uploadContractNotes(files, password, userId) {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    formData.append('password', password);
+    formData.append('user_id', userId);
+    
+    const response = await api.post('/upload-contract-notes/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  // Stock APIs
+  async getStockPrice(symbol) {
+    const response = await api.get(`/stock-price/${symbol}`);
+    return response.data;
+  },
+
+  // Portfolio APIs
+  async getPortfolioSummary(userId) {
+    const response = await api.get('/portfolio-summary/', {
+      params: { user_id: userId }
+    });
+    return response.data;
+  },
+
+  // User APIs
+  async getUsers() {
+    const response = await api.get('/users/');
+    return response.data;
+  },
+
+  async createUser(userData) {
+    const response = await api.post('/users/', userData);
+    return response.data;
+  }
+};
