@@ -19,6 +19,7 @@ class Transaction(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     security_name = Column(String, nullable=False, index=True)
     security_symbol = Column(String, index=True)
+    isin = Column(String, index=True)  # International Securities Identification Number
     transaction_type = Column(String, nullable=False)  # BUY or SELL
     quantity = Column(Float, nullable=False)
     price_per_unit = Column(Float, nullable=False)

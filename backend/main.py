@@ -13,7 +13,7 @@ from database import get_db, engine, Base
 from models import User, Transaction
 from schemas import UserCreate, UserResponse, TransactionCreate, TransactionResponse, TransactionUpdate
 from pdf_parser import parse_contract_note
-from stock_api import get_current_price
+from stock_api import get_current_price, get_current_price_with_fallback
 
 load_dotenv()
 
@@ -123,6 +123,7 @@ def update_transaction(
     user_id: int = Form(...),
     security_name: Optional[str] = Form(None),
     security_symbol: Optional[str] = Form(None),
+    isin: Optional[str] = Form(None),
     transaction_type: Optional[str] = Form(None),
     quantity: Optional[float] = Form(None),
     price_per_unit: Optional[float] = Form(None),
@@ -151,6 +152,7 @@ def update_transaction(
     update_fields = {
         'security_name': security_name,
         'security_symbol': security_symbol,
+        'isin': isin,
         'transaction_type': transaction_type,
         'quantity': quantity,
         'price_per_unit': price_per_unit,
@@ -273,6 +275,15 @@ def get_stock_price(symbol: str):
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Could not fetch price for {symbol}: {str(e)}")
 
+@app.get("/stock-price-isin/{isin}")
+def get_stock_price_by_isin(isin: str):
+    try:
+        from stock_api import get_price_by_isin
+        price = get_price_by_isin(isin)
+        return {"isin": isin, "price": price}
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Could not fetch price for ISIN {isin}: {str(e)}")
+
 @app.get("/portfolio-summary/")
 def get_portfolio_summary(
     user_id: int,
@@ -309,7 +320,13 @@ def get_portfolio_summary(
     for symbol, data in portfolio.items():
         if data["quantity"] > 0:
             try:
-                current_price = get_current_price(symbol)
+                # Get the first transaction to extract the security_symbol and isin
+                first_transaction = data["transactions"][0] if data["transactions"] else None
+                security_symbol = first_transaction.security_symbol if first_transaction else symbol
+                isin = first_transaction.isin if first_transaction else None
+                
+                # Use ISIN-aware price fetching with fallback
+                current_price = get_current_price_with_fallback(symbol=security_symbol, isin=isin)
                 current_value = current_price * data["quantity"]
                 current_values[symbol] = current_value
                 unrealized_gains += current_value - data["total_invested"]

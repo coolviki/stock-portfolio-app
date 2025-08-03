@@ -4,6 +4,32 @@ from datetime import datetime
 from typing import List, Dict
 import io
 
+def extract_isin_from_text(text: str, security_name: str) -> str:
+    """
+    Extract ISIN from contract note text based on security name
+    """
+    # Look for ISIN pattern near the security name
+    # ISIN format: 2 letters + 10 alphanumeric characters (e.g., INE925R01014)
+    isin_pattern = r'(IN[A-Z0-9]{10})'
+    
+    # Find all ISINs in the text
+    isins = re.findall(isin_pattern, text)
+    
+    if isins:
+        # Try to find ISIN closest to the security name
+        security_index = text.find(security_name)
+        if security_index != -1:
+            # Look for ISIN within a reasonable distance from security name
+            for isin in isins:
+                isin_index = text.find(isin)
+                if abs(isin_index - security_index) < 1000:  # Within 1000 characters
+                    return isin
+        
+        # If no close match, return the first ISIN found
+        return isins[0]
+    
+    return None
+
 def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
     """
     Parse contract note PDF and extract transaction data
@@ -140,9 +166,13 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
                     elif 'CMS' in security_name.upper() or 'INFO SYSTEMS' in security_name.upper():
                         security_symbol = 'CMS'
                     
+                    # Extract ISIN for this security
+                    isin = extract_isin_from_text(full_text, security_name)
+                    
                     transaction = {
                         'security_name': security_name,
                         'security_symbol': security_symbol,
+                        'isin': isin,
                         'transaction_type': transaction_type,
                         'quantity': quantity,
                         'price_per_unit': average_rate,
@@ -221,9 +251,13 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
                 if len(words) > 0:
                     security_symbol = ''.join([word[0] for word in words[:3] if word.upper() not in ['LTD', 'LIMITED', 'INC', 'CORP']])
             
+            # Extract ISIN for this security
+            isin = extract_isin_from_text(full_text, security_name)
+            
             transaction = {
                 'security_name': security_name,
                 'security_symbol': security_symbol,
+                'isin': isin,
                 'transaction_type': transaction_type,
                 'quantity': quantity,
                 'price_per_unit': average_rate,
@@ -322,9 +356,13 @@ def parse_tabular_format(summary_text, order_date):
                             elif 'MANAPPURAM' in security_name.upper():
                                 security_symbol = 'MANAPPURAM'
                             
+                            # Extract ISIN for this security
+                            isin = extract_isin_from_text(full_text, security_name)
+                            
                             transaction = {
                                 'security_name': security_name,
                                 'security_symbol': security_symbol,
+                                'isin': isin,
                                 'transaction_type': transaction_type,
                                 'quantity': quantity,
                                 'price_per_unit': price,

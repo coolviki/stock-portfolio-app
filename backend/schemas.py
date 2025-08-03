@@ -18,6 +18,7 @@ class UserResponse(UserBase):
 class TransactionBase(BaseModel):
     security_name: str
     security_symbol: Optional[str] = None
+    isin: Optional[str] = None
     transaction_type: str
     quantity: float
     price_per_unit: float
@@ -34,6 +35,7 @@ class TransactionCreate(TransactionBase):
 class TransactionUpdate(BaseModel):
     security_name: Optional[str] = None
     security_symbol: Optional[str] = None
+    isin: Optional[str] = None
     transaction_type: Optional[str] = None
     quantity: Optional[float] = None
     price_per_unit: Optional[float] = None
