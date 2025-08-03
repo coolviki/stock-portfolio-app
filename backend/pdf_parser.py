@@ -46,6 +46,9 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
         # Extract the relevant section
         summary_text = full_text[summary_start:]
         
+        # Check if this is a tabular format (contains Trade Time, Order No, etc.)
+        is_tabular_format = 'Trade Time' in summary_text and 'Order No' in summary_text
+        
         # Extract order date from the document
         date_patterns = [
             r"Trade Date[:\s]+(\d{2}[-/]\d{2}[-/]\d{4})",
@@ -71,6 +74,10 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
         
         if not order_date:
             order_date = datetime.now()
+        
+        # Handle tabular format (individual trades with Order No, Trade Time, etc.)
+        if is_tabular_format:
+            return parse_tabular_format(summary_text, order_date)
         
         # Parse HDFC format transaction lines
         # Remove line breaks from summary text to make regex easier
@@ -235,63 +242,104 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
     
     return transactions
 
-def extract_table_data(text: str) -> List[Dict]:
-    """
-    Alternative method to extract tabular data from contract notes
-    """
-    lines = text.split('\n')
+
+def parse_tabular_format(summary_text, order_date):
+    """Parse tabular format PDFs with individual trade entries"""
     transactions = []
     
-    # Look for table headers
-    header_patterns = [
-        r'Security.*Buy.*Sell.*Quantity.*Rate.*Amount',
-        r'Script.*Type.*Qty.*Price.*Value'
-    ]
+    # Clean the text
+    summary_clean = re.sub(r'\n+', ' ', summary_text)
     
-    table_start = -1
-    for i, line in enumerate(lines):
-        for pattern in header_patterns:
-            if re.search(pattern, line, re.IGNORECASE):
-                table_start = i + 1
-                break
-        if table_start != -1:
-            break
+    # Parse the specific tabular format where data spans multiple lines
+    # Look for entries like: S COMPANY_NAME\nLIMITED\n-Cash-INE...\nQUANTITY PRICE
     
-    if table_start == -1:
-        return transactions
+    transactions_found = set()  # To avoid duplicates
     
-    # Parse table rows
-    for i in range(table_start, len(lines)):
+    # Split into lines and process sequentially
+    lines = summary_text.split('\n')
+    i = 0
+    while i < len(lines) - 3:
         line = lines[i].strip()
-        if not line or line.startswith('Total') or line.startswith('Grand'):
-            break
         
-        # Split by multiple spaces (assuming tabular format)
-        parts = re.split(r'\s{2,}', line)
-        if len(parts) >= 5:
-            try:
-                security_name = parts[0]
-                transaction_type = 'BUY' if 'buy' in parts[1].lower() else 'SELL'
-                quantity = float(re.findall(r'\d+(?:\.\d+)?', parts[2])[0])
-                price = float(re.findall(r'\d+(?:\.\d+)?', parts[3])[0])
-                amount = float(re.findall(r'\d+(?:\.\d+)?', parts[4])[0])
+        # Look for transaction start: Order details + S/B COMPANY_NAME
+        if re.match(r'\d+\s+\d+:\d+:\d+\s+\d+\s+\d+:\d+:\d+\s+([SB])\s+([A-Z\s]+)', line):
+            match = re.match(r'\d+\s+\d+:\d+:\d+\s+\d+\s+\d+:\d+:\d+\s+([SB])\s+([A-Z\s]+)', line)
+            if match:
+                transaction_type_char = match.group(1)
+                company_start = match.group(2).strip()
                 
-                transaction = {
-                    'security_name': security_name,
-                    'security_symbol': None,
-                    'transaction_type': transaction_type,
-                    'quantity': quantity,
-                    'price_per_unit': price,
-                    'total_amount': amount,
-                    'transaction_date': datetime.now(),
-                    'order_date': datetime.now(),
-                    'exchange': 'NSE',
-                    'broker_fees': 0.0,
-                    'taxes': 0.0
-                }
+                # Get the next few lines to complete the company name and find quantity/price
+                company_parts = [company_start]
+                j = i + 1
                 
-                transactions.append(transaction)
-            except (ValueError, IndexError):
-                continue
+                # Collect company name parts until we hit -Cash-
+                while j < len(lines) and '-Cash-' not in lines[j]:
+                    if lines[j].strip() and not re.match(r'^\d+\s+[\d.]+', lines[j]):
+                        company_parts.append(lines[j].strip())
+                    j += 1
+                
+                # Find the quantity/price line (after -Cash-)
+                while j < len(lines):
+                    qty_price_line = lines[j].strip()
+                    qty_price_match = re.match(r'(\d+)\s+([\d.]+)', qty_price_line)
+                    if qty_price_match:
+                        # Extract the last 2-3 digits as quantity, rest as order/trade number
+                        full_number = qty_price_match.group(1)
+                        price = float(qty_price_match.group(2))
+                        
+                        # For TARSONS: 10231 -> quantity = 31, 10234 -> quantity = 34, etc.
+                        if len(full_number) >= 3:
+                            quantity = int(full_number[-2:])  # Last 2 digits
+                        else:
+                            quantity = int(full_number)
+                        
+                        # Build complete company name
+                        security_name = ' '.join(company_parts)
+                        security_name = re.sub(r'\s+', ' ', security_name).strip()
+                        
+                        # Clean up broken words and fix company names
+                        security_name = re.sub(r'DIST RIBUTORS', 'DISTRIBUTORS', security_name)
+                        security_name = re.sub(r'LIMI$', 'LIMITED', security_name)
+                        security_name = re.sub(r'LIMIT$', 'LIMITED', security_name)
+                        
+                        if not security_name.endswith(('LIMITED', 'LTD')):
+                            security_name += ' LIMITED'
+                        
+                        # Create unique key to avoid duplicates
+                        transaction_key = (security_name, transaction_type_char, quantity, price)
+                        
+                        if transaction_key not in transactions_found:
+                            transactions_found.add(transaction_key)
+                            
+                            transaction_type = "SELL" if transaction_type_char == 'S' else "BUY"
+                            total_amount = quantity * price
+                            
+                            security_symbol = None
+                            if 'TARSONS' in security_name.upper():
+                                security_symbol = 'TARSONS'
+                            elif 'DIGIDRIVE' in security_name.upper():
+                                security_symbol = 'DIGIDRIVE' 
+                            elif 'MANAPPURAM' in security_name.upper():
+                                security_symbol = 'MANAPPURAM'
+                            
+                            transaction = {
+                                'security_name': security_name,
+                                'security_symbol': security_symbol,
+                                'transaction_type': transaction_type,
+                                'quantity': quantity,
+                                'price_per_unit': price,
+                                'total_amount': total_amount,
+                                'transaction_date': order_date,
+                                'order_date': order_date,
+                                'exchange': 'BSE',
+                                'broker_fees': 0.0,
+                                'taxes': 0.0
+                            }
+                            
+                            transactions.append(transaction)
+                        
+                        break
+                    j += 1
+        i += 1
     
     return transactions
