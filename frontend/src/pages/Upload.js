@@ -77,6 +77,46 @@ const Upload = () => {
     setShowPreview(false);
   };
 
+  // Function to aggregate transactions by security and transaction type
+  const aggregateTransactions = (transactions) => {
+    const aggregatedMap = new Map();
+    
+    transactions.forEach(transaction => {
+      if (!transaction.security_name || transaction.error) return;
+      
+      // Create a unique key for each security + transaction type + date combination
+      const date = transaction.transaction_date ? new Date(transaction.transaction_date).toDateString() : 'Unknown Date';
+      const key = `${transaction.security_name}_${transaction.transaction_type}_${date}`;
+      
+      if (aggregatedMap.has(key)) {
+        // Aggregate with existing transaction
+        const existing = aggregatedMap.get(key);
+        existing.quantity += transaction.quantity || 0;
+        existing.total_amount += transaction.total_amount || 0;
+        existing.transaction_count += 1;
+        // Weighted average price calculation
+        existing.price_per_unit = existing.total_amount / existing.quantity;
+      } else {
+        // Create new aggregated transaction
+        aggregatedMap.set(key, {
+          ...transaction,
+          quantity: transaction.quantity || 0,
+          total_amount: transaction.total_amount || 0,
+          transaction_count: 1,
+          price_per_unit: transaction.price_per_unit || 0
+        });
+      }
+    });
+    
+    return Array.from(aggregatedMap.values()).sort((a, b) => {
+      // Sort by security name, then by transaction type
+      if (a.security_name !== b.security_name) {
+        return a.security_name.localeCompare(b.security_name);
+      }
+      return a.transaction_type.localeCompare(b.transaction_type);
+    });
+  };
+
   return (
     <div>
       <h2 className="mb-4">📤 Upload Contract Notes</h2>
@@ -260,45 +300,67 @@ const Upload = () => {
                 Successfully extracted {uploadResults.uploaded_transactions} transactions
               </Alert>
               
-              <div className="table-responsive">
-                <Table striped hover>
-                  <thead>
-                    <tr>
-                      <th>Security</th>
-                      <th>Type</th>
-                      <th>Quantity</th>
-                      <th>Price</th>
-                      <th>Total Amount</th>
-                      <th>Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {uploadResults.results
-                      .filter(r => !r.error && r.security_name) // Filter out empty objects
-                      .slice(0, 10) // Show first 10 transactions
-                      .map((transaction, index) => (
-                        <tr key={index}>
-                          <td>{transaction.security_name}</td>
-                          <td>
-                            <Badge bg={transaction.transaction_type === 'BUY' ? 'success' : 'danger'}>
-                              {transaction.transaction_type}
-                            </Badge>
-                          </td>
-                          <td>{transaction.quantity || 'N/A'}</td>
-                          <td>₹{transaction.price_per_unit || 'N/A'}</td>
-                          <td>₹{transaction.total_amount ? transaction.total_amount.toLocaleString('en-IN') : 'N/A'}</td>
-                          <td>{transaction.transaction_date ? new Date(transaction.transaction_date).toLocaleDateString() : 'N/A'}</td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </Table>
-              </div>
-              
-              {uploadResults.results.filter(r => !r.error).length > 10 && (
-                <p className="text-muted text-center">
-                  ... and {uploadResults.results.filter(r => !r.error).length - 10} more transactions
-                </p>
-              )}
+              {(() => {
+                const validTransactions = uploadResults.results.filter(r => !r.error && r.security_name);
+                const aggregatedTransactions = aggregateTransactions(validTransactions);
+                
+                return (
+                  <>
+                    <div className="d-flex justify-content-between align-items-center mb-3">
+                      <h6>Transaction Summary (Aggregated by Security)</h6>
+                      <Badge bg="info" pill>
+                        {aggregatedTransactions.length} unique positions from {validTransactions.length} individual trades
+                      </Badge>
+                    </div>
+                    
+                    <div className="table-responsive">
+                      <Table striped hover>
+                        <thead>
+                          <tr>
+                            <th>Security</th>
+                            <th>Type</th>
+                            <th>Total Quantity</th>
+                            <th>Avg Price</th>
+                            <th>Total Amount</th>
+                            <th>Date</th>
+                            <th>Trades</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {aggregatedTransactions.map((transaction, index) => (
+                            <tr key={index}>
+                              <td>{transaction.security_name}</td>
+                              <td>
+                                <Badge bg={transaction.transaction_type === 'BUY' ? 'success' : 'danger'}>
+                                  {transaction.transaction_type}
+                                </Badge>
+                              </td>
+                              <td>{transaction.quantity ? transaction.quantity.toLocaleString('en-IN') : 'N/A'}</td>
+                              <td>₹{transaction.price_per_unit ? transaction.price_per_unit.toFixed(2) : 'N/A'}</td>
+                              <td>₹{transaction.total_amount ? transaction.total_amount.toLocaleString('en-IN') : 'N/A'}</td>
+                              <td>{transaction.transaction_date ? new Date(transaction.transaction_date).toLocaleDateString() : 'N/A'}</td>
+                              <td>
+                                <Badge bg="secondary" pill>
+                                  {transaction.transaction_count}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </Table>
+                    </div>
+                    
+                    {validTransactions.length > aggregatedTransactions.length && (
+                      <Alert variant="info" className="mt-3">
+                        <small>
+                          <strong>Note:</strong> Multiple trades for the same security on the same day have been combined. 
+                          Original {validTransactions.length} individual trades aggregated into {aggregatedTransactions.length} positions.
+                        </small>
+                      </Alert>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
         </Modal.Body>
