@@ -41,4 +41,8 @@ Buy Or Sell
 Quantity 
 Total Trade Price/ Transaction Amount.
 
+- 'backend/' - The backend code repo.
+- 'ftontend/' - The frontend code repo. 
+
+
 This file should be updated once actual development begins to include relevant build commands, architecture details, and development workflows.
