@@ -325,9 +325,6 @@ def get_portfolio_summary(
                 security_symbol = first_transaction.security_symbol if first_transaction else symbol
                 isin = first_transaction.isin if first_transaction else None
                 
-                # Add ISIN to portfolio data for frontend use
-                data["isin"] = isin
-                
                 # Use ISIN-aware price fetching with fallback
                 current_price = get_current_price_with_fallback(symbol=security_symbol, isin=isin)
                 current_value = current_price * data["quantity"]
