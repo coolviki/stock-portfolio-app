@@ -120,8 +120,18 @@ def get_all_transactions(
 @app.put("/transactions/{transaction_id}", response_model=TransactionResponse)
 def update_transaction(
     transaction_id: int,
-    transaction: TransactionUpdate,
     user_id: int = Form(...),
+    security_name: Optional[str] = Form(None),
+    security_symbol: Optional[str] = Form(None),
+    transaction_type: Optional[str] = Form(None),
+    quantity: Optional[float] = Form(None),
+    price_per_unit: Optional[float] = Form(None),
+    total_amount: Optional[float] = Form(None),
+    transaction_date: Optional[str] = Form(None),
+    order_date: Optional[str] = Form(None),
+    exchange: Optional[str] = Form(None),
+    broker_fees: Optional[float] = Form(None),
+    taxes: Optional[float] = Form(None),
     db: Session = Depends(get_db)
 ):
     # Verify user exists
@@ -137,8 +147,44 @@ def update_transaction(
     if not db_transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     
-    for field, value in transaction.dict(exclude_unset=True).items():
-        setattr(db_transaction, field, value)
+    # Create update dictionary from form fields
+    update_fields = {
+        'security_name': security_name,
+        'security_symbol': security_symbol,
+        'transaction_type': transaction_type,
+        'quantity': quantity,
+        'price_per_unit': price_per_unit,
+        'total_amount': total_amount,
+        'transaction_date': transaction_date,
+        'order_date': order_date,
+        'exchange': exchange,
+        'broker_fees': broker_fees,
+        'taxes': taxes
+    }
+    
+    # Only update fields that are provided (not None)
+    quantity_updated = False
+    price_updated = False
+    
+    for field, value in update_fields.items():
+        if value is not None:
+            if field in ['transaction_date', 'order_date'] and isinstance(value, str):
+                # Handle date parsing if needed
+                try:
+                    from datetime import datetime
+                    value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                except:
+                    continue
+            setattr(db_transaction, field, value)
+            
+            if field == 'quantity':
+                quantity_updated = True
+            elif field == 'price_per_unit':
+                price_updated = True
+    
+    # Recalculate total_amount if quantity or price was updated (and total_amount wasn't explicitly provided)
+    if (quantity_updated or price_updated) and total_amount is None:
+        db_transaction.total_amount = db_transaction.quantity * db_transaction.price_per_unit
     
     db.commit()
     db.refresh(db_transaction)

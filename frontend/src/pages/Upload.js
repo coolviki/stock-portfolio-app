@@ -11,6 +11,9 @@ const Upload = () => {
   const [uploadResults, setUploadResults] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editedTransactions, setEditedTransactions] = useState({});
+  const [savingChanges, setSavingChanges] = useState(false);
   const { selectedUserId } = useAuth();
 
   const handleFileSelect = (e) => {
@@ -115,6 +118,114 @@ const Upload = () => {
       }
       return a.transaction_type.localeCompare(b.transaction_type);
     });
+  };
+
+  // Editing functions
+  const handleEditToggle = () => {
+    if (editMode) {
+      // Cancel edit mode - reset edited transactions
+      setEditedTransactions({});
+    }
+    setEditMode(!editMode);
+  };
+
+  const handleTransactionEdit = (transactionId, field, value) => {
+    setEditedTransactions(prev => ({
+      ...prev,
+      [transactionId]: {
+        ...prev[transactionId],
+        [field]: value
+      }
+    }));
+  };
+
+  const handleSaveChanges = async () => {
+    setSavingChanges(true);
+    try {
+      const updatedResults = [...uploadResults.results];
+      
+      // Process each edited transaction
+      for (const transactionId of Object.keys(editedTransactions)) {
+        const edits = editedTransactions[transactionId];
+        const transactionIndex = updatedResults.findIndex(t => t.id == transactionId);
+        
+        if (transactionIndex !== -1) {
+          const transaction = updatedResults[transactionIndex];
+          const updateData = {};
+          
+          // Prepare update data with proper type conversion
+          Object.keys(edits).forEach(field => {
+            if (field === 'quantity' || field === 'price_per_unit') {
+              updateData[field] = parseFloat(edits[field]) || 0;
+            } else {
+              updateData[field] = edits[field];
+            }
+          });
+          
+          // Recalculate total amount if quantity or price changed
+          if (updateData.quantity !== undefined || updateData.price_per_unit !== undefined) {
+            const quantity = updateData.quantity !== undefined ? updateData.quantity : transaction.quantity;
+            const price = updateData.price_per_unit !== undefined ? updateData.price_per_unit : transaction.price_per_unit;
+            updateData.total_amount = quantity * price;
+          }
+          
+          // Call backend API to update the transaction
+          const updatedTransaction = await apiService.updateTransaction(transactionId, updateData, selectedUserId);
+          
+          // Update the local results with the backend response
+          updatedResults[transactionIndex] = {
+            ...transaction,
+            ...updatedTransaction,
+            transaction_date: updatedTransaction.transaction_date,
+            order_date: updatedTransaction.order_date,
+            created_at: updatedTransaction.created_at,
+            updated_at: updatedTransaction.updated_at
+          };
+        }
+      }
+
+      // Update uploadResults with edited transactions
+      setUploadResults({
+        ...uploadResults,
+        results: updatedResults
+      });
+      
+      setEditMode(false);
+      setEditedTransactions({});
+      toast.success(`Successfully updated ${Object.keys(editedTransactions).length} transaction(s)!`);
+    } catch (error) {
+      toast.error('Error saving changes: ' + (error.response?.data?.detail || error.message));
+      console.error('Save changes error:', error);
+    } finally {
+      setSavingChanges(false);
+    }
+  };
+
+  const renderEditableField = (transaction, field, value, type = 'text') => {
+    if (!editMode) {
+      // Display mode
+      if (field === 'total_amount' && value) {
+        return `₹${value.toLocaleString('en-IN')}`;
+      } else if (field === 'price_per_unit' && value) {
+        return `₹${value.toFixed(2)}`;
+      } else if (field === 'quantity' && value) {
+        return value.toLocaleString('en-IN');
+      }
+      return value || 'N/A';
+    }
+
+    // Edit mode
+    const editedValue = editedTransactions[transaction.id]?.[field] ?? value;
+    
+    return (
+      <Form.Control
+        type={type}
+        size="sm"
+        value={editedValue || ''}
+        onChange={(e) => handleTransactionEdit(transaction.id, field, e.target.value)}
+        style={{ minWidth: type === 'number' ? '80px' : '120px' }}
+      />
+    );
   };
 
   return (
@@ -289,9 +400,15 @@ const Upload = () => {
       )}
 
       {/* Transaction Preview Modal */}
-      <Modal show={showPreview} onHide={() => setShowPreview(false)} size="xl">
+      <Modal show={showPreview} onHide={() => {
+        setShowPreview(false);
+        setEditMode(false);
+        setEditedTransactions({});
+      }} size="xl">
         <Modal.Header closeButton>
-          <Modal.Title>Extracted Transactions Preview</Modal.Title>
+          <Modal.Title>
+            {editMode ? 'Edit Transactions' : 'Extracted Transactions Preview'}
+          </Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {uploadResults && (
@@ -300,17 +417,59 @@ const Upload = () => {
                 Successfully extracted {uploadResults.uploaded_transactions} transactions
               </Alert>
               
+              {/* Edit Controls */}
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  {editMode && (
+                    <Alert variant="warning" className="mb-0 me-3" style={{display: 'inline-block', padding: '5px 10px'}}>
+                      <small><strong>Edit Mode:</strong> Click on fields to modify transaction details</small>
+                    </Alert>
+                  )}
+                </div>
+                <div className="d-flex gap-2">
+                  {editMode ? (
+                    <>
+                      <Button 
+                        variant="success" 
+                        size="sm" 
+                        onClick={handleSaveChanges}
+                        disabled={savingChanges || Object.keys(editedTransactions).length === 0}
+                      >
+                        {savingChanges ? 'Saving...' : 'Save Changes'}
+                      </Button>
+                      <Button variant="outline-secondary" size="sm" onClick={handleEditToggle}>
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <Button variant="outline-primary" size="sm" onClick={handleEditToggle}>
+                      ✏️ Edit Transactions
+                    </Button>
+                  )}
+                </div>
+              </div>
+              
               {(() => {
                 const validTransactions = uploadResults.results.filter(r => !r.error && r.security_name);
                 const aggregatedTransactions = aggregateTransactions(validTransactions);
                 
+                // In edit mode, show individual transactions; otherwise show aggregated
+                const transactionsToShow = editMode ? validTransactions : aggregatedTransactions;
+                
                 return (
                   <>
                     <div className="d-flex justify-content-between align-items-center mb-3">
-                      <h6>Transaction Summary (Aggregated by Security)</h6>
-                      <Badge bg="info" pill>
-                        {aggregatedTransactions.length} unique positions from {validTransactions.length} individual trades
-                      </Badge>
+                      <h6>
+                        {editMode 
+                          ? 'Individual Transactions (Editable)' 
+                          : 'Transaction Summary (Aggregated by Security)'
+                        }
+                      </h6>
+                      {!editMode && (
+                        <Badge bg="info" pill>
+                          {aggregatedTransactions.length} unique positions from {validTransactions.length} individual trades
+                        </Badge>
+                      )}
                     </div>
                     
                     <div className="table-responsive">
@@ -319,42 +478,97 @@ const Upload = () => {
                           <tr>
                             <th>Security</th>
                             <th>Type</th>
-                            <th>Total Quantity</th>
-                            <th>Avg Price</th>
+                            <th>{editMode ? 'Quantity' : 'Total Quantity'}</th>
+                            <th>{editMode ? 'Price' : 'Avg Price'}</th>
                             <th>Total Amount</th>
                             <th>Date</th>
-                            <th>Trades</th>
+                            {!editMode && <th>Trades</th>}
                           </tr>
                         </thead>
                         <tbody>
-                          {aggregatedTransactions.map((transaction, index) => (
-                            <tr key={index}>
-                              <td>{transaction.security_name}</td>
+                          {transactionsToShow.map((transaction, index) => (
+                            <tr key={editMode ? transaction.id || index : index}>
                               <td>
-                                <Badge bg={transaction.transaction_type === 'BUY' ? 'success' : 'danger'}>
-                                  {transaction.transaction_type}
-                                </Badge>
+                                {editMode ? (
+                                  renderEditableField(transaction, 'security_name', transaction.security_name)
+                                ) : (
+                                  transaction.security_name
+                                )}
                               </td>
-                              <td>{transaction.quantity ? transaction.quantity.toLocaleString('en-IN') : 'N/A'}</td>
-                              <td>₹{transaction.price_per_unit ? transaction.price_per_unit.toFixed(2) : 'N/A'}</td>
-                              <td>₹{transaction.total_amount ? transaction.total_amount.toLocaleString('en-IN') : 'N/A'}</td>
-                              <td>{transaction.transaction_date ? new Date(transaction.transaction_date).toLocaleDateString() : 'N/A'}</td>
                               <td>
-                                <Badge bg="secondary" pill>
-                                  {transaction.transaction_count}
-                                </Badge>
+                                {editMode ? (
+                                  <Form.Select
+                                    size="sm"
+                                    value={editedTransactions[transaction.id]?.transaction_type ?? transaction.transaction_type}
+                                    onChange={(e) => handleTransactionEdit(transaction.id, 'transaction_type', e.target.value)}
+                                    style={{ minWidth: '80px' }}
+                                  >
+                                    <option value="BUY">BUY</option>
+                                    <option value="SELL">SELL</option>
+                                  </Form.Select>
+                                ) : (
+                                  <Badge bg={transaction.transaction_type === 'BUY' ? 'success' : 'danger'}>
+                                    {transaction.transaction_type}
+                                  </Badge>
+                                )}
                               </td>
+                              <td>
+                                {editMode ? (
+                                  renderEditableField(transaction, 'quantity', transaction.quantity, 'number')
+                                ) : (
+                                  transaction.quantity ? transaction.quantity.toLocaleString('en-IN') : 'N/A'
+                                )}
+                              </td>
+                              <td>
+                                {editMode ? (
+                                  renderEditableField(transaction, 'price_per_unit', transaction.price_per_unit, 'number')
+                                ) : (
+                                  transaction.price_per_unit ? `₹${transaction.price_per_unit.toFixed(2)}` : 'N/A'
+                                )}
+                              </td>
+                              <td>
+                                {editMode ? (
+                                  // In edit mode, calculate total amount automatically
+                                  (() => {
+                                    const edits = editedTransactions[transaction.id] || {};
+                                    const qty = edits.quantity ?? transaction.quantity;
+                                    const price = edits.price_per_unit ?? transaction.price_per_unit;
+                                    const total = qty && price ? qty * price : transaction.total_amount;
+                                    return total ? `₹${total.toLocaleString('en-IN')}` : 'N/A';
+                                  })()
+                                ) : (
+                                  transaction.total_amount ? `₹${transaction.total_amount.toLocaleString('en-IN')}` : 'N/A'
+                                )}
+                              </td>
+                              <td>
+                                {transaction.transaction_date ? new Date(transaction.transaction_date).toLocaleDateString() : 'N/A'}
+                              </td>
+                              {!editMode && (
+                                <td>
+                                  <Badge bg="secondary" pill>
+                                    {transaction.transaction_count || 1}
+                                  </Badge>
+                                </td>
+                              )}
                             </tr>
                           ))}
                         </tbody>
                       </Table>
                     </div>
                     
-                    {validTransactions.length > aggregatedTransactions.length && (
+                    {!editMode && validTransactions.length > aggregatedTransactions.length && (
                       <Alert variant="info" className="mt-3">
                         <small>
                           <strong>Note:</strong> Multiple trades for the same security on the same day have been combined. 
                           Original {validTransactions.length} individual trades aggregated into {aggregatedTransactions.length} positions.
+                        </small>
+                      </Alert>
+                    )}
+                    
+                    {editMode && Object.keys(editedTransactions).length > 0 && (
+                      <Alert variant="warning" className="mt-3">
+                        <small>
+                          <strong>Pending Changes:</strong> You have {Object.keys(editedTransactions).length} transaction(s) with unsaved changes.
                         </small>
                       </Alert>
                     )}
