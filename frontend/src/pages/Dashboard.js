@@ -13,6 +13,18 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const { selectedUserId } = useAuth();
 
+  const handleSecurityClick = (symbol, isin) => {
+    let url;
+    if (isin) {
+      // Use Yahoo Finance with ISIN for better accuracy
+      url = `https://finance.yahoo.com/quote/${isin}`;
+    } else {
+      // Fallback to Google Finance with security name
+      url = `https://www.google.com/finance/quote/${encodeURIComponent(symbol)}`;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   useEffect(() => {
     loadPortfolioData();
   }, [selectedUserId]);
@@ -236,7 +248,22 @@ const Dashboard = () => {
 
                   return (
                     <tr key={symbol}>
-                      <td><strong>{symbol}</strong></td>
+                      <td>
+                        <strong 
+                          style={{
+                            color: '#007bff',
+                            textDecoration: 'underline dotted',
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => handleSecurityClick(symbol, stock.isin)}
+                          title={stock.isin ? 
+                            `Click to view ${symbol} on Yahoo Finance (ISIN: ${stock.isin})` : 
+                            `Click to view ${symbol} on Google Finance`
+                          }
+                        >
+                          {symbol}
+                        </strong>
+                      </td>
                       <td>{stock.quantity}</td>
                       <td>₹{avgPrice.toFixed(2)}</td>
                       <td>₹{currentPrice.toFixed(2)}</td>
