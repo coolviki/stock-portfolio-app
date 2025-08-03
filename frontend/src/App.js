@@ -11,6 +11,7 @@ import Transactions from './pages/Transactions';
 import Upload from './pages/Upload';
 import ManualEntry from './pages/ManualEntry';
 import Users from './pages/Users';
+import Admin from './pages/Admin';
 
 function App() {
   const { user, loading } = useAuth();
@@ -52,6 +53,7 @@ function App() {
               <Route path="/upload" element={<Upload />} />
               <Route path="/manual-entry" element={<ManualEntry />} />
               <Route path="/users" element={<Users />} />
+              <Route path="/admin" element={<Admin />} />
               <Route path="*" element={<Navigate to="/dashboard" />} />
             </Routes>
           </div>
