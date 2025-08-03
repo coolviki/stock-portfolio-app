@@ -67,6 +67,9 @@ export const apiService = {
 
   // Portfolio APIs
   async getPortfolioSummary(userId) {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
     const response = await api.get('/portfolio-summary/', {
       params: { user_id: userId }
     });

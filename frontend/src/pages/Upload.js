@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Card, Form, Button, Alert, Table, Modal, Badge } from 'react-bootstrap';
 import { apiService } from '../services/apiService';
+import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 
 const Upload = () => {
@@ -10,6 +11,7 @@ const Upload = () => {
   const [uploadResults, setUploadResults] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const { selectedUserId } = useAuth();
 
   const handleFileSelect = (e) => {
     const selectedFiles = Array.from(e.target.files);
@@ -45,9 +47,14 @@ const Upload = () => {
       return;
     }
 
+    if (!selectedUserId) {
+      toast.error('Please select a user first');
+      return;
+    }
+
     setUploading(true);
     try {
-      const result = await apiService.uploadContractNotes(files, password);
+      const result = await apiService.uploadContractNotes(files, password, selectedUserId);
       setUploadResults(result);
       setShowPreview(true);
       toast.success(`Successfully processed ${result.uploaded_transactions} transactions`);

@@ -36,9 +36,11 @@ const Transactions = () => {
   const loadTransactions = async () => {
     try {
       setLoading(true);
-      const data = await apiService.getTransactions({ 
-        user_id: selectedUserId 
-      });
+      if (!selectedUserId) {
+        toast.error('Please select a user first');
+        return;
+      }
+      const data = await apiService.getTransactions(selectedUserId);
       setTransactions(data);
     } catch (error) {
       toast.error('Error loading transactions');
@@ -111,7 +113,7 @@ const Transactions = () => {
         order_date: editingTransaction.order_date.toISOString()
       };
       
-      await apiService.updateTransaction(editingTransaction.id, updatedTransaction);
+      await apiService.updateTransaction(editingTransaction.id, updatedTransaction, selectedUserId);
       toast.success('Transaction updated successfully');
       setShowEditModal(false);
       setEditingTransaction(null);
@@ -125,7 +127,7 @@ const Transactions = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this transaction?')) {
       try {
-        await apiService.deleteTransaction(id);
+        await apiService.deleteTransaction(id, selectedUserId);
         toast.success('Transaction deleted successfully');
         loadTransactions();
       } catch (error) {

@@ -20,10 +20,14 @@ const Dashboard = () => {
   const loadPortfolioData = async () => {
     try {
       setLoading(true);
-      const data = await apiService.getPortfolioSummary();
+      if (!selectedUserId) {
+        toast.error('Please select a user first');
+        return;
+      }
+      const data = await apiService.getPortfolioSummary(selectedUserId);
       setPortfolio(data);
     } catch (error) {
-      toast.error('Error loading portfolio data');
+      toast.error('Unable to load Portfolio Data');
       console.error('Error loading portfolio:', error);
     } finally {
       setLoading(false);
