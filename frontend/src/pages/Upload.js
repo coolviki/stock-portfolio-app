@@ -274,7 +274,7 @@ const Upload = () => {
                   </thead>
                   <tbody>
                     {uploadResults.results
-                      .filter(r => !r.error)
+                      .filter(r => !r.error && r.security_name) // Filter out empty objects
                       .slice(0, 10) // Show first 10 transactions
                       .map((transaction, index) => (
                         <tr key={index}>
@@ -284,10 +284,10 @@ const Upload = () => {
                               {transaction.transaction_type}
                             </Badge>
                           </td>
-                          <td>{transaction.quantity}</td>
-                          <td>₹{transaction.price_per_unit}</td>
-                          <td>₹{transaction.total_amount.toLocaleString('en-IN')}</td>
-                          <td>{new Date(transaction.transaction_date).toLocaleDateString()}</td>
+                          <td>{transaction.quantity || 'N/A'}</td>
+                          <td>₹{transaction.price_per_unit || 'N/A'}</td>
+                          <td>₹{transaction.total_amount ? transaction.total_amount.toLocaleString('en-IN') : 'N/A'}</td>
+                          <td>{transaction.transaction_date ? new Date(transaction.transaction_date).toLocaleDateString() : 'N/A'}</td>
                         </tr>
                       ))}
                   </tbody>
