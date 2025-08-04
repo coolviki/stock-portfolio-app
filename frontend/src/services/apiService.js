@@ -85,5 +85,27 @@ export const apiService = {
   async createUser(userData) {
     const response = await api.post('/users/', userData);
     return response.data;
+  },
+
+  // Capital Gains APIs
+  async getCapitalGains(financialYear, userId = null) {
+    const params = new URLSearchParams();
+    params.append('financial_year', financialYear);
+    if (userId) {
+      params.append('user_id', userId);
+    }
+    
+    const response = await api.get(`/capital-gains/?${params}`);
+    return response.data;
+  },
+
+  async getCapitalGainsAvailableYears(userId = null) {
+    const params = new URLSearchParams();
+    if (userId) {
+      params.append('user_id', userId);
+    }
+    
+    const response = await api.get(`/capital-gains/available-years?${params}`);
+    return response.data;
   }
 };
