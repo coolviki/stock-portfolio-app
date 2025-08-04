@@ -1,8 +1,12 @@
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional
 from sqlalchemy.orm import Session
+from decimal import Decimal, ROUND_HALF_UP
 from models import Transaction
 from schemas import CapitalGainsResponse, SecurityCapitalGains, CapitalGainDetail, TransactionResponse
+import logging
+
+logger = logging.getLogger(__name__)
 
 def get_financial_year_dates(year: int) -> Tuple[datetime, datetime]:
     """
@@ -68,11 +72,17 @@ def calculate_capital_gains_for_security(transactions: List[Transaction]) -> Sec
             # Quantity to match
             quantity_to_match = min(remaining_sell_quantity, available_buy_quantity)
             
-            # Calculate gain/loss for this match
-            buy_price_per_unit = buy_tx.price_per_unit
-            sell_price_per_unit = sell_tx.price_per_unit
-            gain_loss = (sell_price_per_unit - buy_price_per_unit) * quantity_to_match
-            gain_loss_percentage = ((sell_price_per_unit - buy_price_per_unit) / buy_price_per_unit) * 100
+            # Calculate gain/loss for this match using Decimal for precision
+            buy_price_per_unit = Decimal(str(buy_tx.price_per_unit))
+            sell_price_per_unit = Decimal(str(sell_tx.price_per_unit))
+            quantity_decimal = Decimal(str(quantity_to_match))
+            
+            gain_loss = (sell_price_per_unit - buy_price_per_unit) * quantity_decimal
+            gain_loss_percentage = ((sell_price_per_unit - buy_price_per_unit) / buy_price_per_unit) * Decimal('100')
+            
+            # Round to 2 decimal places for currency
+            gain_loss = float(gain_loss.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+            gain_loss_percentage = float(gain_loss_percentage.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
             
             # Determine holding period
             holding_period_days = (sell_tx.transaction_date - buy_tx.transaction_date).days
@@ -86,8 +96,8 @@ def calculate_capital_gains_for_security(transactions: List[Transaction]) -> Sec
                 buy_transaction=TransactionResponse.model_validate(buy_tx),
                 sell_transaction=TransactionResponse.model_validate(sell_tx),
                 quantity_sold=quantity_to_match,
-                buy_price_per_unit=buy_price_per_unit,
-                sell_price_per_unit=sell_price_per_unit,
+                buy_price_per_unit=float(buy_price_per_unit),
+                sell_price_per_unit=float(sell_price_per_unit),
                 gain_loss=gain_loss,
                 gain_loss_percentage=gain_loss_percentage,
                 holding_period_days=holding_period_days,
@@ -109,6 +119,14 @@ def calculate_capital_gains_for_security(transactions: List[Transaction]) -> Sec
             # Remove exhausted buy transaction
             if buy_queue[0][1] <= 0:
                 buy_queue.pop(0)
+        
+        # Handle edge case: log unmatched sell quantities
+        if remaining_sell_quantity > 0:
+            logger.warning(
+                f"Unmatched sell quantity for {security_name}: {remaining_sell_quantity} units "
+                f"from sell transaction on {sell_tx.transaction_date}. "
+                f"This may indicate short selling or data inconsistency."
+            )
     
     return SecurityCapitalGains(
         security_name=security_name,
@@ -166,20 +184,50 @@ def get_capital_gains_for_financial_year(
     total_short_term = 0
     total_long_term = 0
     
+    # Optimize database queries - fetch all transactions at once
+    all_securities_keys = list(securities_map.keys())
+    isin_keys = []
+    name_keys = []
+    
     for security_key, security_sells in securities_map.items():
-        # Get all transactions for this security for all time (to calculate FIFO properly)
-        security_name = security_sells[0].security_name
-        isin = security_sells[0].isin
-        
-        if isin:
-            all_transactions_query = db.query(Transaction).filter(Transaction.isin == isin)
+        first_sell = security_sells[0]
+        if first_sell.isin:
+            isin_keys.append(security_key)
         else:
-            all_transactions_query = db.query(Transaction).filter(Transaction.security_name == security_name)
+            name_keys.append(security_key)
+    
+    # Build optimized query for all securities at once
+    all_transactions_query = db.query(Transaction)
+    
+    if isin_keys or name_keys:
+        conditions = []
+        if isin_keys:
+            conditions.append(Transaction.isin.in_(isin_keys))
+        if name_keys:
+            conditions.append(Transaction.security_name.in_(name_keys))
         
-        if user_id:
-            all_transactions_query = all_transactions_query.filter(Transaction.user_id == user_id)
-        
-        all_transactions = all_transactions_query.order_by(Transaction.transaction_date).all()
+        if len(conditions) == 1:
+            all_transactions_query = all_transactions_query.filter(conditions[0])
+        else:
+            from sqlalchemy import or_
+            all_transactions_query = all_transactions_query.filter(or_(*conditions))
+    
+    if user_id:
+        all_transactions_query = all_transactions_query.filter(Transaction.user_id == user_id)
+    
+    all_transactions = all_transactions_query.order_by(Transaction.transaction_date).all()
+    
+    # Group transactions by security key for processing
+    transactions_by_security = {}
+    for tx in all_transactions:
+        security_key = tx.isin if tx.isin else tx.security_name
+        if security_key not in transactions_by_security:
+            transactions_by_security[security_key] = []
+        transactions_by_security[security_key].append(tx)
+
+    for security_key, security_sells in securities_map.items():
+        # Get all transactions for this security from our optimized query
+        all_transactions = transactions_by_security.get(security_key, [])
         
         security_gains = calculate_capital_gains_for_security(all_transactions)
         

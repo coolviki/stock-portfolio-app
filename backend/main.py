@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 from database import get_db, engine, Base
 from models import User, Transaction
-from schemas import UserCreate, UserResponse, TransactionCreate, TransactionResponse, TransactionUpdate, CapitalGainsResponse
+from schemas import UserCreate, UserResponse, TransactionCreate, TransactionResponse, TransactionUpdate, CapitalGainsResponse, CapitalGainsQuery
 from pdf_parser import parse_contract_note
 from stock_api import get_current_price, get_current_price_with_fallback
 from capital_gains import get_capital_gains_for_financial_year, get_available_financial_years, get_current_financial_year
@@ -513,11 +513,19 @@ async def import_database(
 
 @app.get("/capital-gains/", response_model=CapitalGainsResponse)
 def get_capital_gains(
-    financial_year: int,
-    user_id: Optional[int] = None,
+    financial_year: int = Query(ge=2000, le=2050, description="Financial year (e.g., 2023 for FY 2023-24)"),
+    user_id: Optional[int] = Query(None, ge=1, description="User ID (optional)"),
     db: Session = Depends(get_db)
 ):
     """Get capital gains for a specific financial year"""
+    # Validate financial year
+    current_year = datetime.now().year
+    if financial_year > current_year + 1:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Financial year cannot be more than {current_year + 1}"
+        )
+    
     if user_id:
         # Verify user exists
         user = db.query(User).filter(User.id == user_id).first()
@@ -526,6 +534,8 @@ def get_capital_gains(
     
     try:
         return get_capital_gains_for_financial_year(db, financial_year, user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to calculate capital gains: {str(e)}")
 

@@ -55,7 +55,20 @@ const CapitalGains = () => {
       setCapitalGains(response);
     } catch (error) {
       console.error('Error loading capital gains:', error);
-      toast.error('Failed to load capital gains data');
+      
+      // Enhanced error handling
+      if (error.response?.status === 400) {
+        toast.error(error.response.data?.detail || 'Invalid request parameters');
+      } else if (error.response?.status === 404) {
+        toast.error('User not found');
+      } else if (error.response?.status >= 500) {
+        toast.error('Server error occurred. Please try again later.');
+      } else {
+        toast.error('Failed to load capital gains data');
+      }
+      
+      // Clear data on error
+      setCapitalGains(null);
     } finally {
       setLoading(false);
     }
@@ -115,7 +128,14 @@ const CapitalGains = () => {
                     <Form.Label>Select Financial Year:</Form.Label>
                     <Form.Select 
                       value={selectedYear} 
-                      onChange={(e) => setSelectedYear(e.target.value)}
+                      onChange={(e) => {
+                        const year = e.target.value;
+                        if (year && (isNaN(year) || year < 2000 || year > new Date().getFullYear() + 1)) {
+                          toast.error('Please select a valid financial year');
+                          return;
+                        }
+                        setSelectedYear(year);
+                      }}
                       disabled={loading}
                     >
                       <option value="">Select a financial year...</option>

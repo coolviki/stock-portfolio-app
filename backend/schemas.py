@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 from datetime import datetime
 from typing import Optional, List
 
@@ -77,6 +77,17 @@ class SecurityCapitalGains(BaseModel):
     short_term_gain_loss: float
     long_term_gain_loss: float
     details: List[CapitalGainDetail]
+
+class CapitalGainsQuery(BaseModel):
+    financial_year: int = Field(ge=2000, le=2050, description="Financial year (e.g., 2023 for FY 2023-24)")
+    user_id: Optional[int] = Field(None, ge=1, description="User ID (optional)")
+    
+    @validator('financial_year')
+    def validate_financial_year(cls, v):
+        current_year = datetime.now().year
+        if v > current_year + 1:
+            raise ValueError(f'Financial year cannot be more than {current_year + 1}')
+        return v
 
 class CapitalGainsResponse(BaseModel):
     financial_year: str
