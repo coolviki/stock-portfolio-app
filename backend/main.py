@@ -61,6 +61,38 @@ def get_user_by_username(username: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
+@app.delete("/users/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    """Delete a user and all their transactions"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Delete all transactions for this user first (due to foreign key constraint)
+    db.query(Transaction).filter(Transaction.user_id == user_id).delete()
+    
+    # Delete the user
+    db.delete(user)
+    db.commit()
+    
+    return {"message": f"User '{user.username}' and all their transactions deleted successfully"}
+
+@app.delete("/users/{user_id}/transactions")
+def clear_user_transactions(user_id: int, db: Session = Depends(get_db)):
+    """Clear all transactions for a user without deleting the user"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Count transactions before deletion
+    transaction_count = db.query(Transaction).filter(Transaction.user_id == user_id).count()
+    
+    # Delete all transactions for this user
+    db.query(Transaction).filter(Transaction.user_id == user_id).delete()
+    db.commit()
+    
+    return {"message": f"Cleared {transaction_count} transactions for user '{user.username}'"}
+
 @app.post("/transactions/", response_model=TransactionResponse)
 def create_transaction(
     transaction: TransactionCreate,
