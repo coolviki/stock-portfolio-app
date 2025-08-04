@@ -55,3 +55,34 @@ class TransactionResponse(TransactionBase):
     class Config:
         from_attributes = True
 
+class CapitalGainDetail(BaseModel):
+    security_name: str
+    security_symbol: Optional[str] = None
+    isin: Optional[str] = None
+    buy_transaction: TransactionResponse
+    sell_transaction: TransactionResponse
+    quantity_sold: float
+    buy_price_per_unit: float
+    sell_price_per_unit: float
+    gain_loss: float
+    gain_loss_percentage: float
+    holding_period_days: int
+    is_long_term: bool
+
+class SecurityCapitalGains(BaseModel):
+    security_name: str
+    security_symbol: Optional[str] = None
+    isin: Optional[str] = None
+    total_gain_loss: float
+    short_term_gain_loss: float
+    long_term_gain_loss: float
+    details: List[CapitalGainDetail]
+
+class CapitalGainsResponse(BaseModel):
+    financial_year: str
+    user_id: Optional[int] = None
+    short_term_gain_loss: float
+    long_term_gain_loss: float
+    total_gain_loss: float
+    securities: List[SecurityCapitalGains]
+

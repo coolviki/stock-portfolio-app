@@ -11,9 +11,10 @@ from dotenv import load_dotenv
 
 from database import get_db, engine, Base
 from models import User, Transaction
-from schemas import UserCreate, UserResponse, TransactionCreate, TransactionResponse, TransactionUpdate
+from schemas import UserCreate, UserResponse, TransactionCreate, TransactionResponse, TransactionUpdate, CapitalGainsResponse
 from pdf_parser import parse_contract_note
 from stock_api import get_current_price, get_current_price_with_fallback
+from capital_gains import get_capital_gains_for_financial_year, get_available_financial_years, get_current_financial_year
 
 load_dotenv()
 
@@ -509,6 +510,46 @@ async def import_database(
         raise HTTPException(status_code=400, detail="Invalid JSON file")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+
+@app.get("/capital-gains/", response_model=CapitalGainsResponse)
+def get_capital_gains(
+    financial_year: int,
+    user_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get capital gains for a specific financial year"""
+    if user_id:
+        # Verify user exists
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+    
+    try:
+        return get_capital_gains_for_financial_year(db, financial_year, user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to calculate capital gains: {str(e)}")
+
+@app.get("/capital-gains/available-years")
+def get_capital_gains_available_years(
+    user_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get list of financial years that have sell transactions"""
+    if user_id:
+        # Verify user exists
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+    
+    try:
+        years = get_available_financial_years(db, user_id)
+        current_fy = get_current_financial_year()
+        return {
+            "available_years": years,
+            "current_financial_year": current_fy
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get available years: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
