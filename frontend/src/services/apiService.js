@@ -95,6 +95,16 @@ export const apiService = {
     return response.data;
   },
 
+  async deleteUser(userId) {
+    const response = await api.delete(`/users/${userId}`);
+    return response.data;
+  },
+
+  async clearUserTransactions(userId) {
+    const response = await api.delete(`/users/${userId}/transactions`);
+    return response.data;
+  },
+
   // Capital Gains APIs
   async getCapitalGains(financialYear, userId = null) {
     const params = new URLSearchParams();

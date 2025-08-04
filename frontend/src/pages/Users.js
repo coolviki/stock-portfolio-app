@@ -7,12 +7,17 @@ const Users = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
   const [newUser, setNewUser] = useState({
     username: '',
     email: '',
     password: ''
   });
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -50,6 +55,51 @@ const Users = () => {
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return;
+
+    setDeleting(true);
+    try {
+      await apiService.deleteUser(selectedUser.id);
+      toast.success(`User '${selectedUser.username}' and all their transactions deleted successfully!`);
+      setShowDeleteModal(false);
+      setSelectedUser(null);
+      loadUsers();
+    } catch (error) {
+      toast.error('Error deleting user: ' + (error.response?.data?.detail || error.message));
+      console.error('Error deleting user:', error);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleClearTransactions = async () => {
+    if (!selectedUser) return;
+
+    setClearing(true);
+    try {
+      const result = await apiService.clearUserTransactions(selectedUser.id);
+      toast.success(result.message);
+      setShowClearModal(false);
+      setSelectedUser(null);
+    } catch (error) {
+      toast.error('Error clearing transactions: ' + (error.response?.data?.detail || error.message));
+      console.error('Error clearing transactions:', error);
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  const openDeleteModal = (user) => {
+    setSelectedUser(user);
+    setShowDeleteModal(true);
+  };
+
+  const openClearModal = (user) => {
+    setSelectedUser(user);
+    setShowClearModal(true);
   };
 
   const formatDate = (dateString) => {
@@ -116,13 +166,24 @@ const Users = () => {
                     </td>
                     <td>{formatDate(user.created_at)}</td>
                     <td>
-                      <Button 
-                        variant="outline-primary" 
-                        size="sm"
-                        onClick={() => toast.info('User management features coming soon!')}
-                      >
-                        Manage
-                      </Button>
+                      <div className="d-flex gap-2">
+                        <Button 
+                          variant="outline-warning" 
+                          size="sm"
+                          onClick={() => openClearModal(user)}
+                          title="Clear all transactions for this user"
+                        >
+                          Clear Data
+                        </Button>
+                        <Button 
+                          variant="outline-danger" 
+                          size="sm"
+                          onClick={() => openDeleteModal(user)}
+                          title="Delete user and all their transactions"
+                        >
+                          Delete User
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -233,6 +294,78 @@ const Users = () => {
             disabled={creating}
           >
             {creating ? 'Creating...' : 'Create User'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Delete User Confirmation Modal */}
+      <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>⚠️ Delete User</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Alert variant="danger">
+            <strong>Warning!</strong> This action cannot be undone.
+          </Alert>
+          <p>
+            Are you sure you want to delete user <strong>'{selectedUser?.username}'</strong>?
+          </p>
+          <p className="text-danger">
+            <strong>This will permanently delete:</strong>
+          </p>
+          <ul className="text-danger">
+            <li>The user account</li>
+            <li>All their transaction records</li>
+            <li>All their portfolio data</li>
+          </ul>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
+            Cancel
+          </Button>
+          <Button 
+            variant="danger" 
+            onClick={handleDeleteUser}
+            disabled={deleting}
+          >
+            {deleting ? 'Deleting...' : 'Yes, Delete User'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Clear User Transactions Confirmation Modal */}
+      <Modal show={showClearModal} onHide={() => setShowClearModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>⚠️ Clear User Transactions</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Alert variant="warning">
+            <strong>Warning!</strong> This action cannot be undone.
+          </Alert>
+          <p>
+            Are you sure you want to clear all transaction data for user <strong>'{selectedUser?.username}'</strong>?
+          </p>
+          <p className="text-warning">
+            <strong>This will permanently delete:</strong>
+          </p>
+          <ul className="text-warning">
+            <li>All their transaction records</li>
+            <li>All their portfolio data</li>
+          </ul>
+          <p>
+            <strong>Note:</strong> The user account will remain active, but their portfolio will be empty.
+          </p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowClearModal(false)}>
+            Cancel
+          </Button>
+          <Button 
+            variant="warning" 
+            onClick={handleClearTransactions}
+            disabled={clearing}
+          >
+            {clearing ? 'Clearing...' : 'Yes, Clear Transactions'}
           </Button>
         </Modal.Footer>
       </Modal>
