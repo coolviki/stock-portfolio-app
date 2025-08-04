@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Row, Col, Card, Table, Button, Form, Modal, Badge, 
-  InputGroup, FormControl, Dropdown 
+  InputGroup, FormControl, Dropdown, ListGroup 
 } from 'react-bootstrap';
 import DatePicker from 'react-datepicker';
 import { format } from 'date-fns';
@@ -10,18 +10,50 @@ import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import 'react-datepicker/dist/react-datepicker.css';
 
+// Helper function to get current Indian Financial Year dates
+const getIndianFinancialYearDates = () => {
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth(); // 0-indexed (0 = January, 3 = April)
+  
+  let fyStartYear, fyEndYear;
+  
+  if (currentMonth >= 3) { // April (3) onwards is current FY
+    fyStartYear = currentYear;
+    fyEndYear = currentYear + 1;
+  } else { // January to March belongs to previous FY
+    fyStartYear = currentYear - 1;
+    fyEndYear = currentYear;
+  }
+  
+  return {
+    startDate: new Date(fyStartYear, 3, 1), // April 1st
+    endDate: new Date(fyEndYear, 2, 31)     // March 31st
+  };
+};
+
 const Transactions = () => {
   const [transactions, setTransactions] = useState([]);
   const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
+  
+  // Initialize filters with Indian Financial Year dates
+  const { startDate, endDate } = getIndianFinancialYearDates();
   const [filters, setFilters] = useState({
     security_name: '',
     transaction_type: '',
-    date_from: null,
-    date_to: null
+    date_from: startDate,
+    date_to: endDate
   });
+
+  // Type-ahead search state
+  const [searchSuggestions, setSearchSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimeoutRef = useRef(null);
+  const suggestionRefs = useRef([]);
 
   const { selectedUserId } = useAuth();
 
@@ -85,15 +117,60 @@ const Transactions = () => {
       ...prev,
       [field]: value
     }));
+
+    // Handle type-ahead search for security_name
+    if (field === 'security_name') {
+      handleSecuritySearch(value);
+    }
+  };
+
+  const handleSecuritySearch = async (query) => {
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (!query || query.trim().length < 2) {
+      setSearchSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    // Debounce search
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        setSearchLoading(true);
+        const response = await apiService.searchStocks(query);
+        setSearchSuggestions(response.results || []);
+        setShowSuggestions(true);
+      } catch (error) {
+        console.error('Search error:', error);
+        setSearchSuggestions([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+  };
+
+  const handleSuggestionSelect = (suggestion) => {
+    setFilters(prev => ({
+      ...prev,
+      security_name: suggestion.name
+    }));
+    setShowSuggestions(false);
+    setSearchSuggestions([]);
   };
 
   const clearFilters = () => {
+    const { startDate, endDate } = getIndianFinancialYearDates();
     setFilters({
       security_name: '',
       transaction_type: '',
-      date_from: null,
-      date_to: null
+      date_from: startDate,
+      date_to: endDate
     });
+    setSearchSuggestions([]);
+    setShowSuggestions(false);
   };
 
   const handleEdit = (transaction) => {
@@ -188,12 +265,59 @@ const Transactions = () => {
             <Col md={3}>
               <Form.Group>
                 <Form.Label>Security Name</Form.Label>
-                <FormControl
-                  type="text"
-                  placeholder="Search by security..."
-                  value={filters.security_name}
-                  onChange={(e) => handleFilterChange('security_name', e.target.value)}
-                />
+                <div style={{ position: 'relative' }}>
+                  <FormControl
+                    type="text"
+                    placeholder="Search by security..."
+                    value={filters.security_name}
+                    onChange={(e) => handleFilterChange('security_name', e.target.value)}
+                    onFocus={() => {
+                      if (searchSuggestions.length > 0) {
+                        setShowSuggestions(true);
+                      }
+                    }}
+                    onBlur={() => {
+                      // Delay hiding suggestions to allow click
+                      setTimeout(() => setShowSuggestions(false), 200);
+                    }}
+                  />
+                  {searchLoading && (
+                    <div style={{ position: 'absolute', right: '10px', top: '8px', zIndex: 10 }}>
+                      <div className="spinner-border spinner-border-sm text-primary" role="status">
+                        <span className="visually-hidden">Searching...</span>
+                      </div>
+                    </div>
+                  )}
+                  {showSuggestions && searchSuggestions.length > 0 && (
+                    <ListGroup 
+                      style={{ 
+                        position: 'absolute', 
+                        top: '100%', 
+                        left: 0, 
+                        right: 0, 
+                        zIndex: 1000,
+                        maxHeight: '200px',
+                        overflowY: 'auto',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                        border: '1px solid #dee2e6'
+                      }}
+                    >
+                      {searchSuggestions.map((suggestion, index) => (
+                        <ListGroup.Item
+                          key={index}
+                          action
+                          onClick={() => handleSuggestionSelect(suggestion)}
+                          style={{ cursor: 'pointer', padding: '8px 12px' }}
+                        >
+                          <div>
+                            <strong>{suggestion.name}</strong>
+                            <small className="text-muted d-block">{suggestion.symbol}</small>
+                          </div>
+                        </ListGroup.Item>
+                      ))}
+                    </ListGroup>
+                  )}
+                </div>
               </Form.Group>
             </Col>
             <Col md={2}>

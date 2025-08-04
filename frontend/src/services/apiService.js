@@ -65,6 +65,14 @@ export const apiService = {
     return response.data;
   },
 
+  async searchStocks(query) {
+    if (!query || query.trim().length < 2) {
+      return { results: [] };
+    }
+    const response = await api.get(`/search-stocks/${encodeURIComponent(query.trim())}`);
+    return response.data;
+  },
+
   // Portfolio APIs
   async getPortfolioSummary(userId) {
     if (!userId) {

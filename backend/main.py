@@ -13,7 +13,7 @@ from database import get_db, engine, Base
 from models import User, Transaction
 from schemas import UserCreate, UserResponse, TransactionCreate, TransactionResponse, TransactionUpdate, CapitalGainsResponse, CapitalGainsQuery
 from pdf_parser import parse_contract_note
-from stock_api import get_current_price, get_current_price_with_fallback
+from stock_api import get_current_price, get_current_price_with_fallback, search_stocks
 from capital_gains import get_capital_gains_for_financial_year, get_available_financial_years, get_current_financial_year
 
 load_dotenv()
@@ -284,6 +284,18 @@ def get_stock_price_by_isin(isin: str):
         return {"isin": isin, "price": price}
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Could not fetch price for ISIN {isin}: {str(e)}")
+
+@app.get("/search-stocks/{query}")
+def search_securities(query: str):
+    """Search for stocks by name or symbol"""
+    try:
+        if len(query.strip()) < 2:
+            return {"results": []}
+        
+        results = search_stocks(query)
+        return {"results": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 @app.get("/portfolio-summary/")
 def get_portfolio_summary(
