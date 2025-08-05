@@ -263,39 +263,42 @@ async def upload_contract_notes(
     results = []
     for file in files:
         if file.filename.lower().endswith('.pdf'):
-            content = await file.read()
             try:
-                transactions = parse_contract_note(content, password)
-                for trans_data in transactions:
-                    try:
-                        db_transaction = Transaction(**trans_data, user_id=user_id)
-                        db.add(db_transaction)
-                        db.commit()
-                        db.refresh(db_transaction)
-                        
-                        # Convert to dict for JSON serialization
-                        transaction_dict = {
-                            'id': db_transaction.id,
-                            'user_id': db_transaction.user_id,
-                            'security_name': db_transaction.security_name,
-                            'security_symbol': db_transaction.security_symbol,
-                            'transaction_type': db_transaction.transaction_type,
-                            'quantity': db_transaction.quantity,
-                            'price_per_unit': db_transaction.price_per_unit,
-                            'total_amount': db_transaction.total_amount,
-                            'transaction_date': db_transaction.transaction_date.isoformat() if db_transaction.transaction_date else None,
-                            'order_date': db_transaction.order_date.isoformat() if db_transaction.order_date else None,
-                            'exchange': db_transaction.exchange,
-                            'broker_fees': db_transaction.broker_fees,
-                            'taxes': db_transaction.taxes,
-                            'created_at': db_transaction.created_at.isoformat() if db_transaction.created_at else None,
-                            'updated_at': db_transaction.updated_at.isoformat() if db_transaction.updated_at else None
-                        }
-                        results.append(transaction_dict)
-                    except Exception as trans_error:
-                        results.append({"error": f"Transaction failed: {str(trans_error)}"})
-            except Exception as e:
-                results.append({"error": f"Failed to parse {file.filename}: {str(e)}"})
+                content = await file.read()
+                try:
+                    transactions = parse_contract_note(content, password)
+                    for trans_data in transactions:
+                        try:
+                            db_transaction = Transaction(**trans_data, user_id=user_id)
+                            db.add(db_transaction)
+                            db.commit()
+                            db.refresh(db_transaction)
+                            
+                            # Convert to dict for JSON serialization
+                            transaction_dict = {
+                                'id': db_transaction.id,
+                                'user_id': db_transaction.user_id,
+                                'security_name': db_transaction.security_name,
+                                'security_symbol': db_transaction.security_symbol,
+                                'transaction_type': db_transaction.transaction_type,
+                                'quantity': db_transaction.quantity,
+                                'price_per_unit': db_transaction.price_per_unit,
+                                'total_amount': db_transaction.total_amount,
+                                'transaction_date': db_transaction.transaction_date.isoformat() if db_transaction.transaction_date else None,
+                                'order_date': db_transaction.order_date.isoformat() if db_transaction.order_date else None,
+                                'exchange': db_transaction.exchange,
+                                'broker_fees': db_transaction.broker_fees,
+                                'taxes': db_transaction.taxes,
+                                'created_at': db_transaction.created_at.isoformat() if db_transaction.created_at else None,
+                                'updated_at': db_transaction.updated_at.isoformat() if db_transaction.updated_at else None
+                            }
+                            results.append(transaction_dict)
+                        except Exception as trans_error:
+                            results.append({"error": f"Transaction failed: {str(trans_error)}"})
+                except Exception as e:
+                    results.append({"error": f"Failed to parse {file.filename}: {str(e)}"})
+            finally:
+                await file.close()
     
     return {"uploaded_transactions": len([r for r in results if isinstance(r, dict) and 'id' in r]), "results": results}
 
@@ -554,6 +557,8 @@ async def import_database(
         raise HTTPException(status_code=400, detail="Invalid JSON file")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+    finally:
+        await file.close()
 
 @app.get("/capital-gains/", response_model=CapitalGainsResponse)
 def get_capital_gains(
