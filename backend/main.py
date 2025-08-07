@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import os
@@ -33,9 +34,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-async def root():
-    return {"message": "Stock Portfolio API"}
+# Check if we're in production with built frontend
+FRONTEND_BUILD_PATH = "../frontend/build"
+IS_PRODUCTION = os.path.exists(FRONTEND_BUILD_PATH)
+
+if IS_PRODUCTION:
+    # Mount static files for production (frontend build)
+    app.mount("/static", StaticFiles(directory=f"{FRONTEND_BUILD_PATH}/static"), name="static")
+
+@app.get("/api")
+async def api_root():
+    return {"message": "Stock Portfolio API", "environment": "production" if IS_PRODUCTION else "development"}
+
+# API health check
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
 
 @app.post("/users/select-or-create", response_model=UserResponse)
 def select_or_create_user(username: str = Form(...), db: Session = Depends(get_db)):
@@ -612,6 +626,23 @@ def get_capital_gains_available_years(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get available years: {str(e)}")
+
+# SPA routing - serve frontend for all non-API routes (production only)
+if IS_PRODUCTION:
+    @app.get("/")
+    async def serve_frontend():
+        return FileResponse(f"{FRONTEND_BUILD_PATH}/index.html")
+    
+    @app.get("/{path:path}")
+    async def serve_spa(path: str):
+        # Don't serve SPA for API routes
+        if path.startswith("api/") or path.startswith("health") or path.startswith("docs") or path.startswith("openapi"):
+            raise HTTPException(status_code=404, detail="Not found")
+            
+        file_path = f"{FRONTEND_BUILD_PATH}/{path}"
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(f"{FRONTEND_BUILD_PATH}/index.html")
 
 if __name__ == "__main__":
     import uvicorn
