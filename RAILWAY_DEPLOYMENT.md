@@ -11,34 +11,56 @@ This guide explains how to deploy the Stock Portfolio App to Railway using GitHu
 
 ### 1. Create New Railway Project
 
-1. Go to [Railway](https://railway.app/) and click "Start a New Project"
-2. Select "Deploy from GitHub repo" 
-3. Connect your GitHub account and select this repository
-4. Railway will automatically detect the multi-service setup
+1. Go to [Railway](https://railway.app/) and click "**Start a New Project**"
+2. You'll create **3 separate services** in this project
 
-### 2. Configure Services
+### 2. Deploy Backend Service (FIRST)
 
-Railway will create services based on the `railway.toml` configuration:
+1. Click "**+ New**" → "**Deploy from GitHub repo**"
+2. Connect your GitHub account and select this repository  
+3. **CRITICAL**: Set **Root Directory** to `backend` 
+4. Click "**Deploy**"
+5. Railway will use `backend/nixpacks.toml` and build only the Python FastAPI backend
+
+### 3. Deploy Frontend Service (SECOND)
+
+1. In the same Railway project, click "**+ New**" → "**Deploy from GitHub repo**" 
+2. Select the same repository
+3. **CRITICAL**: Set **Root Directory** to `frontend`
+4. Click "**Deploy**" 
+5. Railway will use `frontend/nixpacks.toml` and build only the React frontend
+
+### 4. Add Database (THIRD)
+
+1. Click "**+ New**" → "**Database**" → "**PostgreSQL**"
+2. This creates a PostgreSQL database that will auto-connect to your backend
+
+### 2. Service Configuration
 
 - **Backend Service**: FastAPI application running on port 8000
-- **Frontend Service**: React application served with nginx
+- **Frontend Service**: React application served with nginx  
 - **PostgreSQL Database**: Automatically provisioned
 
 ### 3. Environment Variables
 
 #### Backend Environment Variables
-The backend will automatically receive:
-- `DATABASE_URL`: From the PostgreSQL service
-- `PORT`: Set to 8000 by default
+**Required**: Set these in the Railway backend service:
+- `DATABASE_URL`: Will be automatically provided by Railway PostgreSQL service
+- `PORT`: Automatically set by Railway (usually 8000)
+- `SECRET_KEY`: Set a secure random key for production (e.g., `openssl rand -hex 32`)
+- `CORS_ORIGINS`: Set to your frontend Railway domain (e.g., `https://your-frontend.railway.app`)
 
-Optional environment variables you can set:
-- `SECRET_KEY`: Generate a secure random key for production
-- `CORS_ORIGINS`: Will be automatically configured for your Railway domains
+**Optional environment variables**:
+- `PYTHONPATH`: Set to `/app` (already configured in nixpacks.toml)
 
-#### Frontend Environment Variables
-The frontend will automatically receive:
-- `REACT_APP_API_URL`: Points to your backend Railway domain
-- `PORT`: Set to 3000 by default
+#### Frontend Environment Variables  
+**Required**: Set these in the Railway frontend service:
+- `REACT_APP_API_URL`: Set to your backend Railway domain (e.g., `https://your-backend.railway.app`)
+- `PORT`: Automatically set by Railway (usually 3000)
+
+**Optional**:
+- `GENERATE_SOURCEMAP`: Set to `false` for production (already configured)
+- `CI`: Set to `false` to avoid build warnings (already configured)
 
 ### 4. Database Setup
 
