@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["nodejs-18_x"]
+nixPkgs = ["nodejs-18_x", "npm-9_x"]
 
 [phases.install]
 cmds = [
@@ -16,3 +16,5 @@ cmd = "npx serve -s build -l $PORT"
 
 [variables]
 NODE_ENV = "production"
+GENERATE_SOURCEMAP = "false"
+CI = "false"
