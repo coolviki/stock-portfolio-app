@@ -1,0 +1,13 @@
+{
+  "name": "stock-portfolio-app",
+  "version": "1.0.0",
+  "description": "Stock Portfolio Management Application",
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build",
+    "start": "cd backend && python main.py"
+  },
+  "engines": {
+    "node": "18.x",
+    "python": "3.9"
+  }
+}
