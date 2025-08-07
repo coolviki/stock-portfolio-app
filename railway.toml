@@ -1,0 +1,31 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+numReplicas = 1
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# Backend service
+[[services]]
+name = "backend"
+source = "./backend"
+
+[services.variables]
+PORT = "8000"
+PYTHONPATH = "/app"
+DATABASE_URL = "${{Postgres.DATABASE_URL}}"
+
+# Frontend service
+[[services]]
+name = "frontend"
+source = "./frontend"
+
+[services.variables]
+PORT = "3000"
+REACT_APP_API_URL = "${{backend.RAILWAY_PUBLIC_DOMAIN}}"
+
+# PostgreSQL database
+[[services]]
+name = "postgres"
+plugin = "postgresql"

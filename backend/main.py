@@ -22,9 +22,12 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Stock Portfolio API", version="1.0.0")
 
+# Get CORS origins from environment variable, default to localhost for development
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -612,4 +615,5 @@ def get_capital_gains_available_years(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
