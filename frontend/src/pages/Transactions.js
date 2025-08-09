@@ -92,7 +92,7 @@ const Transactions = () => {
 
     if (filters.security_name) {
       filtered = filtered.filter(t => 
-        t.security_name.toLowerCase().includes(filters.security_name.toLowerCase())
+        t.security?.security_name?.toLowerCase().includes(filters.security_name.toLowerCase())
       );
     }
 
@@ -235,9 +235,9 @@ const Transactions = () => {
       let timestamp = new Date().toLocaleString('en-IN');
 
       // Try waterfall price fetching: TICKER → ISIN → Security Name
-      if (transaction.security_symbol) {
+      if (transaction.security?.security_ticker) {
         try {
-          const response = await fetchStockPriceBySymbol(transaction.security_symbol);
+          const response = await fetchStockPriceBySymbol(transaction.security.security_ticker);
           if (response.ok) {
             const data = await response.json();
             price = data.price;
@@ -249,9 +249,9 @@ const Transactions = () => {
       }
 
       // Fallback to ISIN if ticker failed
-      if (!price && transaction.isin) {
+      if (!price && transaction.security?.security_ISIN) {
         try {
-          const response = await fetchStockPriceByIsin(transaction.isin);
+          const response = await fetchStockPriceByIsin(transaction.security.security_ISIN);
           if (response.ok) {
             const data = await response.json();
             price = data.price;
@@ -269,7 +269,7 @@ const Transactions = () => {
           price: price || 'N/A',
           method,
           timestamp,
-          symbol: transaction.security_symbol || 'N/A',
+          symbol: transaction.security?.security_ticker || 'N/A',
           error: !price,
           transactionPrice: transaction.price_per_unit,
           priceChange: price ? ((price - transaction.price_per_unit) / transaction.price_per_unit * 100) : null
@@ -284,7 +284,7 @@ const Transactions = () => {
           price: 'Error',
           method: 'ERROR',
           timestamp: new Date().toLocaleString('en-IN'),
-          symbol: transaction.security_symbol || 'N/A',
+          symbol: transaction.security?.security_ticker || 'N/A',
           error: true,
           transactionPrice: transaction.price_per_unit,
           priceChange: null
@@ -326,7 +326,7 @@ const Transactions = () => {
               <br />
               Date: {format(new Date(transaction.transaction_date), 'dd/MM/yyyy')}
               <br />
-              Symbol: {transaction.security_symbol || 'N/A'}
+              Symbol: {transaction.security?.security_ticker || 'N/A'}
             </small>
           </div>
         </Tooltip>
@@ -341,7 +341,7 @@ const Transactions = () => {
         <div>
           <strong>💰 Price Comparison</strong>
           <hr className="my-2" style={{borderColor: '#fff'}} />
-          <div><strong>Security:</strong> {transaction.security_name}</div>
+          <div><strong>Security:</strong> {transaction.security?.security_name || 'Unknown Security'}</div>
           <div><strong>Symbol:</strong> {data.symbol}</div>
           
           <hr className="my-2" style={{borderColor: '#fff'}} />
@@ -374,7 +374,7 @@ const Transactions = () => {
       ['Date', 'Security', 'Type', 'Quantity', 'Price', 'Total Amount'],
       ...filteredTransactions.map(t => [
         format(new Date(t.transaction_date), 'yyyy-MM-dd'),
-        t.security_name,
+        t.security?.security_name || 'Unknown Security',
         t.transaction_type,
         t.quantity,
         t.price_per_unit,
@@ -566,19 +566,19 @@ const Transactions = () => {
                               gap: '4px'
                             }}
                             onClick={() => handleSecurityNameClick(transaction)}
-                            title={`Click to fetch current price for ${transaction.security_name}`}
+                            title={`Click to fetch current price for ${transaction.security?.security_name || 'this security'}`}
                             onMouseEnter={(e) => e.target.style.color = '#0a58ca'}
                             onMouseLeave={(e) => e.target.style.color = '#0d6efd'}
                           >
-                            {transaction.security_name}
+                            {transaction.security?.security_name || 'Unknown Security'}
                             {loadingPrice[transaction.id] ? (
                               <Spinner animation="border" size="sm" />
                             ) : (
                               '📈'
                             )}
                           </strong>
-                          {transaction.security_symbol && (
-                            <small className="text-muted d-block">{transaction.security_symbol}</small>
+                          {transaction.security?.security_ticker && (
+                            <small className="text-muted d-block">{transaction.security.security_ticker}</small>
                           )}
                         </div>
                       </OverlayTrigger>
@@ -638,7 +638,7 @@ const Transactions = () => {
                     <Form.Label>Security Name</Form.Label>
                     <Form.Control
                       type="text"
-                      value={editingTransaction.security_name}
+                      value={editingTransaction.security?.security_name || editingTransaction.security_name || ''}
                       onChange={(e) => setEditingTransaction({
                         ...editingTransaction,
                         security_name: e.target.value
@@ -651,7 +651,7 @@ const Transactions = () => {
                     <Form.Label>Security Symbol</Form.Label>
                     <Form.Control
                       type="text"
-                      value={editingTransaction.security_symbol || ''}
+                      value={editingTransaction.security?.security_ticker || editingTransaction.security_symbol || ''}
                       onChange={(e) => setEditingTransaction({
                         ...editingTransaction,
                         security_symbol: e.target.value
