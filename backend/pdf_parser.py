@@ -104,7 +104,7 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
         
         # Handle tabular format (individual trades with Order No, Trade Time, etc.)
         if is_tabular_format:
-            return parse_tabular_format(summary_text, order_date)
+            return parse_tabular_format(summary_text, order_date, full_text)
         
         # Parse HDFC format transaction lines
         # Remove line breaks from summary text to make regex easier
@@ -292,7 +292,7 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
     return transactions
 
 
-def parse_tabular_format(summary_text, order_date):
+def parse_tabular_format(summary_text, order_date, full_text):
     """Parse tabular format PDFs with individual trade entries"""
     transactions = []
     
