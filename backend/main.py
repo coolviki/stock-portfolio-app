@@ -477,8 +477,9 @@ async def upload_contract_notes(
                             transaction_dict = {
                                 'id': db_transaction.id,
                                 'user_id': db_transaction.user_id,
-                                'security_name': db_transaction.security_name,
-                                'security_symbol': db_transaction.security_symbol,
+                                'security_name': db_transaction.security.security_name,
+                                'security_symbol': db_transaction.security.security_ticker,
+                                'isin': db_transaction.security.security_ISIN,
                                 'transaction_type': db_transaction.transaction_type,
                                 'quantity': db_transaction.quantity,
                                 'price_per_unit': db_transaction.price_per_unit,
@@ -636,8 +637,9 @@ def export_database(db: Session = Depends(get_db)):
             transactions_data.append({
                 "id": trans.id,
                 "user_id": trans.user_id,
-                "security_name": trans.security_name,
-                "security_symbol": trans.security_symbol,
+                "security_name": trans.security.security_name,
+                "security_symbol": trans.security.security_ticker,
+                "isin": trans.security.security_ISIN,
                 "transaction_type": trans.transaction_type,
                 "quantity": trans.quantity,
                 "price_per_unit": trans.price_per_unit,

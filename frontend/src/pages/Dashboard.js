@@ -1,28 +1,145 @@
 import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, Table, Badge, Spinner } from 'react-bootstrap';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
+import { Row, Col, Card, Table, Badge, Spinner, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
 import { Doughnut, Bar } from 'react-chartjs-2';
 import { apiService } from '../services/apiService';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
+ChartJS.register(ArcElement, ChartTooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
 const Dashboard = () => {
   const [portfolio, setPortfolio] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [priceData, setPriceData] = useState({});
+  const [loadingPrice, setLoadingPrice] = useState({});
   const { selectedUserId } = useAuth();
 
-  const handleSecurityClick = (symbol, isin) => {
-    let url;
-    if (isin) {
-      // Use Yahoo Finance with ISIN for better accuracy
-      url = `https://finance.yahoo.com/quote/${isin}`;
-    } else {
-      // Fallback to Google Finance with security name
-      url = `https://www.google.com/finance/quote/${encodeURIComponent(symbol)}`;
+  const fetchSecurityPrice = async (symbol, isin) => {
+    const securityKey = symbol;
+    
+    // Don't fetch if already loading
+    if (loadingPrice[securityKey]) {
+      return;
     }
-    window.open(url, '_blank', 'noopener,noreferrer');
+
+    setLoadingPrice(prev => ({ ...prev, [securityKey]: true }));
+    
+    try {
+      let price = null;
+      let method = '';
+      let timestamp = new Date().toLocaleString('en-IN');
+
+      // Try waterfall price fetching: TICKER → ISIN → Security Name
+      if (symbol) {
+        try {
+          const response = await fetch(`http://localhost:8000/stock-price/${symbol}`);
+          if (response.ok) {
+            const data = await response.json();
+            price = data.price;
+            method = 'TICKER';
+          }
+        } catch (error) {
+          console.log('Ticker price fetch failed:', error);
+        }
+      }
+
+      // Fallback to ISIN if ticker failed
+      if (!price && isin) {
+        try {
+          const response = await fetch(`http://localhost:8000/stock-price-isin/${isin}`);
+          if (response.ok) {
+            const data = await response.json();
+            price = data.price;
+            method = 'ISIN';
+          }
+        } catch (error) {
+          console.log('ISIN price fetch failed:', error);
+        }
+      }
+
+      // Store the price data
+      setPriceData(prev => ({
+        ...prev,
+        [securityKey]: {
+          price: price || 'N/A',
+          method,
+          timestamp,
+          symbol: symbol || 'N/A',
+          error: !price
+        }
+      }));
+
+    } catch (error) {
+      console.error('Error fetching price:', error);
+      setPriceData(prev => ({
+        ...prev,
+        [securityKey]: {
+          price: 'Error',
+          method: 'ERROR',
+          timestamp: new Date().toLocaleString('en-IN'),
+          symbol: symbol || 'N/A',
+          error: true
+        }
+      }));
+    } finally {
+      setLoadingPrice(prev => ({ ...prev, [securityKey]: false }));
+    }
+  };
+
+  const handleSecurityNameClick = (symbol, isin) => {
+    fetchSecurityPrice(symbol, isin);
+  };
+
+  const renderPriceTooltip = (symbol, isin) => {
+    const securityKey = symbol;
+    const loading = loadingPrice[securityKey];
+    const data = priceData[securityKey];
+
+    if (loading) {
+      return (
+        <Tooltip id={`price-tooltip-${securityKey}`}>
+          <div className="text-center">
+            <Spinner animation="border" size="sm" className="me-2" />
+            Fetching price...
+          </div>
+        </Tooltip>
+      );
+    }
+
+    if (!data) {
+      return (
+        <Tooltip id={`price-tooltip-${securityKey}`}>
+          <div>
+            <strong>📈 Click to fetch latest price</strong>
+            <br />
+            <small>Price will be fetched using waterfall method:<br />
+            1. Ticker Symbol ({symbol || 'N/A'})<br />
+            2. ISIN Code ({isin || 'N/A'})<br />
+            3. Fallback pricing</small>
+          </div>
+        </Tooltip>
+      );
+    }
+
+    return (
+      <Tooltip id={`price-tooltip-${securityKey}`}>
+        <div>
+          <strong>💰 Latest Price Information</strong>
+          <hr className="my-2" style={{borderColor: '#fff'}} />
+          <div><strong>Security:</strong> {symbol}</div>
+          <div><strong>Symbol:</strong> {data.symbol}</div>
+          <div><strong>Price:</strong> {data.error ? '❌ Unable to fetch' : `₹${parseFloat(data.price).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}</div>
+          <div><strong>Method:</strong> {data.method || 'FALLBACK'}</div>
+          <div><strong>Updated:</strong> {data.timestamp}</div>
+          {!data.error && (
+            <small className="text-light">
+              <br />💡 Click again to refresh price
+            </small>
+          )}
+        </div>
+      </Tooltip>
+    );
   };
 
   useEffect(() => {
@@ -220,7 +337,10 @@ const Dashboard = () => {
       {/* Holdings Table */}
       <Card>
         <Card.Header>
-          <h5>Current Holdings</h5>
+          <div className="d-flex justify-content-between align-items-center">
+            <h5>Current Holdings</h5>
+            <small className="text-muted">💡 Click on security names to see current prices</small>
+          </div>
         </Card.Header>
         <Card.Body>
           <div className="table-responsive">
@@ -249,20 +369,34 @@ const Dashboard = () => {
                   return (
                     <tr key={symbol}>
                       <td>
-                        <strong 
-                          style={{
-                            color: '#007bff',
-                            textDecoration: 'underline dotted',
-                            cursor: 'pointer'
-                          }}
-                          onClick={() => handleSecurityClick(symbol, stock.isin)}
-                          title={stock.isin ? 
-                            `Click to view ${symbol} on Yahoo Finance (ISIN: ${stock.isin})` : 
-                            `Click to view ${symbol} on Google Finance`
-                          }
+                        <OverlayTrigger
+                          placement="top"
+                          delay={{ show: 250, hide: 400 }}
+                          overlay={renderPriceTooltip(symbol, stock.isin)}
+                          trigger={['hover', 'focus']}
                         >
-                          {symbol}
-                        </strong>
+                          <strong 
+                            style={{
+                              color: '#0d6efd',
+                              cursor: 'pointer',
+                              textDecoration: 'underline',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                            onClick={() => handleSecurityNameClick(symbol, stock.isin)}
+                            title={`Click to fetch current price for ${symbol}`}
+                            onMouseEnter={(e) => e.target.style.color = '#0a58ca'}
+                            onMouseLeave={(e) => e.target.style.color = '#0d6efd'}
+                          >
+                            {symbol}
+                            {loadingPrice[symbol] ? (
+                              <Spinner animation="border" size="sm" />
+                            ) : (
+                              '📈'
+                            )}
+                          </strong>
+                        </OverlayTrigger>
                       </td>
                       <td>{stock.quantity}</td>
                       <td>₹{avgPrice.toFixed(2)}</td>
