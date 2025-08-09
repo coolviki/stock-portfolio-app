@@ -15,10 +15,29 @@ class UserResponse(UserBase):
     class Config:
         from_attributes = True
 
-class TransactionBase(BaseModel):
+class SecurityBase(BaseModel):
     security_name: str
-    security_symbol: Optional[str] = None
-    isin: Optional[str] = None
+    security_ISIN: str
+    security_ticker: str
+
+class SecurityCreate(SecurityBase):
+    pass
+
+class SecurityUpdate(BaseModel):
+    security_name: Optional[str] = None
+    security_ISIN: Optional[str] = None
+    security_ticker: Optional[str] = None
+
+class SecurityResponse(SecurityBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class TransactionBase(BaseModel):
+    security_id: int
     transaction_type: str
     quantity: float
     price_per_unit: float
@@ -33,9 +52,7 @@ class TransactionCreate(TransactionBase):
     user_id: int
 
 class TransactionUpdate(BaseModel):
-    security_name: Optional[str] = None
-    security_symbol: Optional[str] = None
-    isin: Optional[str] = None
+    security_id: Optional[int] = None
     transaction_type: Optional[str] = None
     quantity: Optional[float] = None
     price_per_unit: Optional[float] = None
@@ -51,14 +68,29 @@ class TransactionResponse(TransactionBase):
     user_id: int
     created_at: datetime
     updated_at: datetime
+    security: SecurityResponse
     
     class Config:
         from_attributes = True
 
-class CapitalGainDetail(BaseModel):
+# Legacy schemas for backward compatibility with existing API contracts
+class LegacyTransactionCreate(BaseModel):
+    user_id: int
     security_name: str
     security_symbol: Optional[str] = None
     isin: Optional[str] = None
+    transaction_type: str
+    quantity: float
+    price_per_unit: float
+    total_amount: float
+    transaction_date: datetime
+    order_date: datetime
+    exchange: Optional[str] = None
+    broker_fees: Optional[float] = 0.0
+    taxes: Optional[float] = 0.0
+
+class CapitalGainDetail(BaseModel):
+    security: SecurityResponse
     buy_transaction: TransactionResponse
     sell_transaction: TransactionResponse
     quantity_sold: float
@@ -70,9 +102,7 @@ class CapitalGainDetail(BaseModel):
     is_long_term: bool
 
 class SecurityCapitalGains(BaseModel):
-    security_name: str
-    security_symbol: Optional[str] = None
-    isin: Optional[str] = None
+    security: SecurityResponse
     total_gain_loss: float
     short_term_gain_loss: float
     long_term_gain_loss: float

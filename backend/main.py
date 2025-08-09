@@ -11,8 +11,8 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 from database import get_db, engine, Base
-from models import User, Transaction
-from schemas import UserCreate, UserResponse, TransactionCreate, TransactionResponse, TransactionUpdate, CapitalGainsResponse, CapitalGainsQuery
+from models import User, Transaction, Security
+from schemas import UserCreate, UserResponse, TransactionCreate, TransactionResponse, TransactionUpdate, CapitalGainsResponse, CapitalGainsQuery, SecurityCreate, SecurityResponse, SecurityUpdate, LegacyTransactionCreate
 from pdf_parser import parse_contract_note
 from stock_api import get_current_price, get_current_price_with_fallback, search_stocks
 from capital_gains import get_capital_gains_for_financial_year, get_available_financial_years, get_current_financial_year
@@ -110,6 +110,85 @@ def clear_user_transactions(user_id: int, db: Session = Depends(get_db)):
     
     return {"message": f"Cleared {transaction_count} transactions for user '{user.username}'"}
 
+# Helper function to get or create security
+def get_or_create_security(db: Session, security_name: str, isin: str = "", ticker: str = ""):
+    # First try to find existing security by name and ISIN
+    security = db.query(Security).filter(
+        Security.security_name == security_name,
+        Security.security_ISIN == isin
+    ).first()
+    
+    if security:
+        return security
+    
+    # Create new security if not found
+    if not ticker:
+        ticker = security_name  # Use name as ticker if no ticker provided
+    
+    new_security = Security(
+        security_name=security_name,
+        security_ISIN=isin,
+        security_ticker=ticker
+    )
+    db.add(new_security)
+    db.commit()
+    db.refresh(new_security)
+    return new_security
+
+# Security endpoints
+@app.post("/securities/", response_model=SecurityResponse)
+def create_security(security: SecurityCreate, db: Session = Depends(get_db)):
+    db_security = Security(**security.model_dump())
+    db.add(db_security)
+    db.commit()
+    db.refresh(db_security)
+    return db_security
+
+@app.get("/securities/", response_model=List[SecurityResponse])
+def get_securities(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    securities = db.query(Security).offset(skip).limit(limit).all()
+    return securities
+
+@app.get("/securities/{security_id}", response_model=SecurityResponse)
+def get_security(security_id: int, db: Session = Depends(get_db)):
+    security = db.query(Security).filter(Security.id == security_id).first()
+    if security is None:
+        raise HTTPException(status_code=404, detail="Security not found")
+    return security
+
+@app.put("/securities/{security_id}", response_model=SecurityResponse)
+def update_security(security_id: int, security: SecurityUpdate, db: Session = Depends(get_db)):
+    db_security = db.query(Security).filter(Security.id == security_id).first()
+    if db_security is None:
+        raise HTTPException(status_code=404, detail="Security not found")
+    
+    update_data = security.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_security, field, value)
+    
+    db_security.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(db_security)
+    return db_security
+
+@app.delete("/securities/{security_id}")
+def delete_security(security_id: int, db: Session = Depends(get_db)):
+    db_security = db.query(Security).filter(Security.id == security_id).first()
+    if db_security is None:
+        raise HTTPException(status_code=404, detail="Security not found")
+    
+    # Check if security is referenced by any transactions
+    transaction_count = db.query(Transaction).filter(Transaction.security_id == security_id).count()
+    if transaction_count > 0:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot delete security. It is referenced by {transaction_count} transactions."
+        )
+    
+    db.delete(db_security)
+    db.commit()
+    return {"message": f"Security '{db_security.security_name}' deleted successfully"}
+
 @app.post("/transactions/", response_model=TransactionResponse)
 def create_transaction(
     transaction: TransactionCreate,
@@ -120,9 +199,53 @@ def create_transaction(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Verify security exists
+    security = db.query(Security).filter(Security.id == transaction.security_id).first()
+    if not security:
+        raise HTTPException(status_code=404, detail="Security not found")
+    
     transaction_dict = transaction.model_dump()
     user_id = transaction_dict.pop('user_id')
     db_transaction = Transaction(**transaction_dict, user_id=user_id)
+    db.add(db_transaction)
+    db.commit()
+    db.refresh(db_transaction)
+    return db_transaction
+
+# Legacy endpoint for backward compatibility
+@app.post("/transactions/legacy/", response_model=TransactionResponse)
+def create_transaction_legacy(
+    transaction: LegacyTransactionCreate,
+    db: Session = Depends(get_db)
+):
+    # Verify user exists
+    user = db.query(User).filter(User.id == transaction.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get or create security
+    security = get_or_create_security(
+        db, 
+        transaction.security_name, 
+        transaction.isin or "", 
+        transaction.security_symbol or ""
+    )
+    
+    # Create transaction with security_id
+    db_transaction = Transaction(
+        user_id=transaction.user_id,
+        security_id=security.id,
+        transaction_type=transaction.transaction_type,
+        quantity=transaction.quantity,
+        price_per_unit=transaction.price_per_unit,
+        total_amount=transaction.total_amount,
+        transaction_date=transaction.transaction_date,
+        order_date=transaction.order_date,
+        exchange=transaction.exchange,
+        broker_fees=transaction.broker_fees,
+        taxes=transaction.taxes
+    )
+    
     db.add(db_transaction)
     db.commit()
     db.refresh(db_transaction)
@@ -140,10 +263,10 @@ def get_transactions(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    query = db.query(Transaction).filter(Transaction.user_id == user_id)
+    query = db.query(Transaction).join(Security).filter(Transaction.user_id == user_id)
     
     if security_name:
-        query = query.filter(Transaction.security_name.ilike(f"%{security_name}%"))
+        query = query.filter(Security.security_name.ilike(f"%{security_name}%"))
     
     if transaction_type:
         query = query.filter(Transaction.transaction_type == transaction_type)
@@ -157,10 +280,10 @@ def get_all_transactions(
     db: Session = Depends(get_db)
 ):
     """Get transactions for all users"""
-    query = db.query(Transaction)
+    query = db.query(Transaction).join(Security)
     
     if security_name:
-        query = query.filter(Transaction.security_name.ilike(f"%{security_name}%"))
+        query = query.filter(Security.security_name.ilike(f"%{security_name}%"))
     
     if transaction_type:
         query = query.filter(Transaction.transaction_type == transaction_type)
@@ -169,6 +292,36 @@ def get_all_transactions(
 
 @app.put("/transactions/{transaction_id}", response_model=TransactionResponse)
 def update_transaction(
+    transaction_id: int,
+    transaction: TransactionUpdate,
+    db: Session = Depends(get_db)
+):
+    db_transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    if not db_transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    update_data = transaction.model_dump(exclude_unset=True)
+    
+    # If security_id is being updated, verify the security exists
+    if 'security_id' in update_data:
+        security = db.query(Security).filter(Security.id == update_data['security_id']).first()
+        if not security:
+            raise HTTPException(status_code=404, detail="Security not found")
+    
+    # Update transaction fields
+    for field, value in update_data.items():
+        setattr(db_transaction, field, value)
+    
+    # Update the updated_at timestamp
+    db_transaction.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(db_transaction)
+    return db_transaction
+
+# Legacy form-based update endpoint for backward compatibility
+@app.put("/transactions/{transaction_id}/legacy", response_model=TransactionResponse)
+def update_transaction_legacy(
     transaction_id: int,
     user_id: int = Form(...),
     security_name: Optional[str] = Form(None),
@@ -198,11 +351,19 @@ def update_transaction(
     if not db_transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     
-    # Create update dictionary from form fields
+    # Handle security updates - if security info is provided, update or create security
+    if security_name:
+        security = get_or_create_security(
+            db, 
+            security_name, 
+            isin or "", 
+            security_symbol or ""
+        )
+        # Update the transaction's security_id
+        db_transaction.security_id = security.id
+    
+    # Update other transaction fields
     update_fields = {
-        'security_name': security_name,
-        'security_symbol': security_symbol,
-        'isin': isin,
         'transaction_type': transaction_type,
         'quantity': quantity,
         'price_per_unit': price_per_unit,
@@ -237,6 +398,9 @@ def update_transaction(
     # Recalculate total_amount if quantity or price was updated (and total_amount wasn't explicitly provided)
     if (quantity_updated or price_updated) and total_amount is None:
         db_transaction.total_amount = db_transaction.quantity * db_transaction.price_per_unit
+    
+    # Update the updated_at timestamp
+    db_transaction.updated_at = datetime.utcnow()
     
     db.commit()
     db.refresh(db_transaction)
@@ -286,7 +450,25 @@ async def upload_contract_notes(
                     transactions = parse_contract_note(content, password)
                     for trans_data in transactions:
                         try:
-                            db_transaction = Transaction(**trans_data, user_id=user_id)
+                            # Extract security information
+                            security_name = trans_data.pop('security_name')
+                            security_symbol = trans_data.pop('security_symbol', '')
+                            isin = trans_data.pop('isin', '')
+                            
+                            # Get or create security
+                            security = get_or_create_security(
+                                db, 
+                                security_name, 
+                                isin, 
+                                security_symbol
+                            )
+                            
+                            # Create transaction with security_id
+                            db_transaction = Transaction(
+                                user_id=user_id,
+                                security_id=security.id,
+                                **trans_data
+                            )
                             db.add(db_transaction)
                             db.commit()
                             db.refresh(db_transaction)
@@ -359,13 +541,13 @@ def get_portfolio_summary(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    transactions = db.query(Transaction).filter(Transaction.user_id == user_id).all()
+    transactions = db.query(Transaction).join(Security).filter(Transaction.user_id == user_id).all()
     
     portfolio = {}
     realized_gains = 0
     
     for trans in transactions:
-        symbol = trans.security_name
+        symbol = trans.security.security_name
         if symbol not in portfolio:
             portfolio[symbol] = {"quantity": 0, "total_invested": 0, "transactions": []}
         
@@ -385,10 +567,14 @@ def get_portfolio_summary(
     for symbol, data in portfolio.items():
         if data["quantity"] > 0:
             try:
-                # Get the first transaction to extract the security_symbol and isin
+                # Get the first transaction to extract the security information
                 first_transaction = data["transactions"][0] if data["transactions"] else None
-                security_symbol = first_transaction.security_symbol if first_transaction else symbol
-                isin = first_transaction.isin if first_transaction else None
+                if first_transaction:
+                    security_symbol = first_transaction.security.security_ticker
+                    isin = first_transaction.security.security_ISIN
+                else:
+                    security_symbol = symbol
+                    isin = None
                 
                 # Add ISIN to portfolio data for frontend use
                 data["isin"] = isin
