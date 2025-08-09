@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Modal, Form, Alert, Badge, InputGroup } from 'react-bootstrap';
+import { Card, Table, Button, Modal, Form, Alert, Badge, InputGroup, OverlayTrigger, Tooltip, Spinner } from 'react-bootstrap';
 import { apiService } from '../services/apiService';
 import { toast } from 'react-toastify';
 
@@ -18,6 +18,8 @@ const SecurityMaster = () => {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [priceData, setPriceData] = useState({});
+  const [loadingPrice, setLoadingPrice] = useState({});
 
   useEffect(() => {
     loadSecurities();
@@ -130,27 +132,131 @@ const SecurityMaster = () => {
     });
   };
 
-  const generatePriceURL = (security) => {
-    // Priority 1: Use ISIN for more accurate results
-    if (security.security_ISIN && security.security_ISIN.length === 12) {
-      // Yahoo Finance with ISIN (works for Indian stocks)
-      return `https://finance.yahoo.com/quote/${security.security_ticker}.NS/`;
-    }
+  const fetchSecurityPrice = async (security) => {
+    const securityId = security.id;
     
-    // Priority 2: Use ticker symbol  
-    if (security.security_ticker) {
-      // Yahoo Finance with NSE suffix for Indian stocks
-      return `https://finance.yahoo.com/quote/${security.security_ticker}.NS/`;
+    // Don't fetch if already loading
+    if (loadingPrice[securityId]) {
+      return;
     }
+
+    setLoadingPrice(prev => ({ ...prev, [securityId]: true }));
     
-    // Fallback: Google search for security price
-    const searchQuery = encodeURIComponent(`${security.security_name} stock price NSE`);
-    return `https://www.google.com/search?q=${searchQuery}`;
+    try {
+      let price = null;
+      let method = '';
+      let timestamp = new Date().toLocaleString('en-IN');
+
+      // Try waterfall price fetching: TICKER → ISIN → Security Name
+      if (security.security_ticker) {
+        try {
+          const response = await fetch(`http://localhost:8000/stock-price/${security.security_ticker}`);
+          if (response.ok) {
+            const data = await response.json();
+            price = data.price;
+            method = 'TICKER';
+          }
+        } catch (error) {
+          console.log('Ticker price fetch failed:', error);
+        }
+      }
+
+      // Fallback to ISIN if ticker failed
+      if (!price && security.security_ISIN) {
+        try {
+          const response = await fetch(`http://localhost:8000/stock-price-isin/${security.security_ISIN}`);
+          if (response.ok) {
+            const data = await response.json();
+            price = data.price;
+            method = 'ISIN';
+          }
+        } catch (error) {
+          console.log('ISIN price fetch failed:', error);
+        }
+      }
+
+      // Store the price data
+      setPriceData(prev => ({
+        ...prev,
+        [securityId]: {
+          price: price || 'N/A',
+          method,
+          timestamp,
+          symbol: security.security_ticker || 'N/A',
+          error: !price
+        }
+      }));
+
+    } catch (error) {
+      console.error('Error fetching price:', error);
+      setPriceData(prev => ({
+        ...prev,
+        [securityId]: {
+          price: 'Error',
+          method: 'ERROR',
+          timestamp: new Date().toLocaleString('en-IN'),
+          symbol: security.security_ticker || 'N/A',
+          error: true
+        }
+      }));
+    } finally {
+      setLoadingPrice(prev => ({ ...prev, [securityId]: false }));
+    }
   };
 
   const handleSecurityNameClick = (security) => {
-    const priceURL = generatePriceURL(security);
-    window.open(priceURL, '_blank', 'noopener,noreferrer');
+    fetchSecurityPrice(security);
+  };
+
+  const renderPriceTooltip = (security) => {
+    const securityId = security.id;
+    const loading = loadingPrice[securityId];
+    const data = priceData[securityId];
+
+    if (loading) {
+      return (
+        <Tooltip id={`price-tooltip-${securityId}`}>
+          <div className="text-center">
+            <Spinner animation="border" size="sm" className="me-2" />
+            Fetching price...
+          </div>
+        </Tooltip>
+      );
+    }
+
+    if (!data) {
+      return (
+        <Tooltip id={`price-tooltip-${securityId}`}>
+          <div>
+            <strong>📈 Click to fetch latest price</strong>
+            <br />
+            <small>Price will be fetched using waterfall method:<br />
+            1. Ticker Symbol ({security.security_ticker || 'N/A'})<br />
+            2. ISIN Code ({security.security_ISIN || 'N/A'})<br />
+            3. Fallback pricing</small>
+          </div>
+        </Tooltip>
+      );
+    }
+
+    return (
+      <Tooltip id={`price-tooltip-${securityId}`}>
+        <div>
+          <strong>💰 Latest Price Information</strong>
+          <hr className="my-2" style={{borderColor: '#fff'}} />
+          <div><strong>Security:</strong> {security.security_name}</div>
+          <div><strong>Symbol:</strong> {data.symbol}</div>
+          <div><strong>Price:</strong> {data.error ? '❌ Unable to fetch' : `₹${parseFloat(data.price).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}</div>
+          <div><strong>Method:</strong> {data.method || 'FALLBACK'}</div>
+          <div><strong>Updated:</strong> {data.timestamp}</div>
+          {!data.error && (
+            <small className="text-light">
+              <br />💡 Click again to refresh price
+            </small>
+          )}
+        </div>
+      </Tooltip>
+    );
   };
 
   const filteredSecurities = securities.filter(security => 
@@ -197,7 +303,7 @@ const SecurityMaster = () => {
             <strong>Security Master:</strong> Manage the master list of securities for accurate transaction recording. 
             Each security has a unique name, ISIN code, and ticker symbol for precise identification.
             <br />
-            <strong>💡 Tip:</strong> Click on any security name to view its latest market price on Yahoo Finance.
+            <strong>💡 Tip:</strong> Click on any security name to fetch its latest price, or hover to see price tooltip with waterfall fetching details.
           </Alert>
 
           <div className="table-responsive">
@@ -220,19 +326,34 @@ const SecurityMaster = () => {
                       <Badge bg="secondary">{security.id}</Badge>
                     </td>
                     <td>
-                      <strong 
-                        style={{ 
-                          color: '#0d6efd', 
-                          cursor: 'pointer', 
-                          textDecoration: 'underline' 
-                        }}
-                        onClick={() => handleSecurityNameClick(security)}
-                        title={`Click to view latest price for ${security.security_name}`}
-                        onMouseEnter={(e) => e.target.style.textDecoration = 'underline'}
-                        onMouseLeave={(e) => e.target.style.textDecoration = 'underline'}
+                      <OverlayTrigger
+                        placement="top"
+                        delay={{ show: 250, hide: 400 }}
+                        overlay={renderPriceTooltip(security)}
+                        trigger={['hover', 'focus']}
                       >
-                        {security.security_name} 🔗
-                      </strong>
+                        <strong 
+                          style={{ 
+                            color: '#0d6efd', 
+                            cursor: 'pointer', 
+                            textDecoration: 'underline',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                          onClick={() => handleSecurityNameClick(security)}
+                          title={`Click to fetch latest price for ${security.security_name}`}
+                          onMouseEnter={(e) => e.target.style.color = '#0a58ca'}
+                          onMouseLeave={(e) => e.target.style.color = '#0d6efd'}
+                        >
+                          {security.security_name}
+                          {loadingPrice[security.id] ? (
+                            <Spinner animation="border" size="sm" />
+                          ) : (
+                            '📈'
+                          )}
+                        </strong>
+                      </OverlayTrigger>
                     </td>
                     <td>
                       <code>{security.security_ISIN}</code>
