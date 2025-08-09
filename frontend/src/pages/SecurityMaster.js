@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Modal, Form, Alert, Badge, InputGroup, OverlayTrigger, Tooltip, Spinner } from 'react-bootstrap';
 import { apiService } from '../services/apiService';
 import { toast } from 'react-toastify';
+import { fetchStockPriceBySymbol, fetchStockPriceByIsin } from '../utils/apiUtils';
 
 const SecurityMaster = () => {
   const [securities, setSecurities] = useState([]);
@@ -150,7 +151,7 @@ const SecurityMaster = () => {
       // Try waterfall price fetching: TICKER → ISIN → Security Name
       if (security.security_ticker) {
         try {
-          const response = await fetch(`http://localhost:8000/stock-price/${security.security_ticker}`);
+          const response = await fetchStockPriceBySymbol(security.security_ticker);
           if (response.ok) {
             const data = await response.json();
             price = data.price;
@@ -164,7 +165,7 @@ const SecurityMaster = () => {
       // Fallback to ISIN if ticker failed
       if (!price && security.security_ISIN) {
         try {
-          const response = await fetch(`http://localhost:8000/stock-price-isin/${security.security_ISIN}`);
+          const response = await fetchStockPriceByIsin(security.security_ISIN);
           if (response.ok) {
             const data = await response.json();
             price = data.price;

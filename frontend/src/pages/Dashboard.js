@@ -5,6 +5,7 @@ import { Doughnut, Bar } from 'react-chartjs-2';
 import { apiService } from '../services/apiService';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
+import { fetchStockPriceBySymbol, fetchStockPriceByIsin } from '../utils/apiUtils';
 
 ChartJS.register(ArcElement, ChartTooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
@@ -33,7 +34,7 @@ const Dashboard = () => {
       // Try waterfall price fetching: TICKER → ISIN → Security Name
       if (symbol) {
         try {
-          const response = await fetch(`http://localhost:8000/stock-price/${symbol}`);
+          const response = await fetchStockPriceBySymbol(symbol);
           if (response.ok) {
             const data = await response.json();
             price = data.price;
@@ -47,7 +48,7 @@ const Dashboard = () => {
       // Fallback to ISIN if ticker failed
       if (!price && isin) {
         try {
-          const response = await fetch(`http://localhost:8000/stock-price-isin/${isin}`);
+          const response = await fetchStockPriceByIsin(isin);
           if (response.ok) {
             const data = await response.json();
             price = data.price;

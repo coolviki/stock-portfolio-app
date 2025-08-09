@@ -8,6 +8,7 @@ import { format } from 'date-fns';
 import { apiService } from '../services/apiService';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
+import { fetchStockPriceBySymbol, fetchStockPriceByIsin } from '../utils/apiUtils';
 import 'react-datepicker/dist/react-datepicker.css';
 
 // Helper function to get current Indian Financial Year dates
@@ -236,7 +237,7 @@ const Transactions = () => {
       // Try waterfall price fetching: TICKER → ISIN → Security Name
       if (transaction.security_symbol) {
         try {
-          const response = await fetch(`http://localhost:8000/stock-price/${transaction.security_symbol}`);
+          const response = await fetchStockPriceBySymbol(transaction.security_symbol);
           if (response.ok) {
             const data = await response.json();
             price = data.price;
@@ -250,7 +251,7 @@ const Transactions = () => {
       // Fallback to ISIN if ticker failed
       if (!price && transaction.isin) {
         try {
-          const response = await fetch(`http://localhost:8000/stock-price-isin/${transaction.isin}`);
+          const response = await fetchStockPriceByIsin(transaction.isin);
           if (response.ok) {
             const data = await response.json();
             price = data.price;

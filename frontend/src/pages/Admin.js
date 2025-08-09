@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Container, Row, Col, Card, Button, Form, Alert, Spinner } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import { apiService } from '../services/apiService';
+import { fetchAdminExport, fetchAdminImport } from '../utils/apiUtils';
 
 const Admin = () => {
   const [exportLoading, setExportLoading] = useState(false);
@@ -13,7 +14,7 @@ const Admin = () => {
   const handleExport = async () => {
     setExportLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/admin/export');
+      const response = await fetchAdminExport();
       
       if (!response.ok) {
         throw new Error('Export failed');
@@ -70,10 +71,7 @@ const Admin = () => {
       formData.append('file', importFile);
       formData.append('replace_existing', replaceExisting.toString());
 
-      const response = await fetch('http://localhost:8000/admin/import', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await fetchAdminImport(formData);
 
       if (!response.ok) {
         const errorData = await response.json();

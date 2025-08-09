@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-// In production (monorepo), use relative URL. In development, use localhost.
-const API_URL = process.env.NODE_ENV === 'production' ? '' : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+// API URL configuration for different environments
+const API_URL = process.env.REACT_APP_API_URL || 
+  (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:8000');
 
 const api = axios.create({
   baseURL: API_URL,
