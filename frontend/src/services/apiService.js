@@ -135,5 +135,35 @@ export const apiService = {
     
     const response = await api.get(`/capital-gains/available-years?${params}`);
     return response.data;
+  },
+
+  // Security APIs
+  async getSecurities(skip = 0, limit = 100) {
+    const params = new URLSearchParams();
+    params.append('skip', skip);
+    params.append('limit', limit);
+    
+    const response = await api.get(`/securities/?${params}`);
+    return response.data;
+  },
+
+  async getSecurity(securityId) {
+    const response = await api.get(`/securities/${securityId}`);
+    return response.data;
+  },
+
+  async createSecurity(security) {
+    const response = await api.post('/securities/', security);
+    return response.data;
+  },
+
+  async updateSecurity(securityId, security) {
+    const response = await api.put(`/securities/${securityId}`, security);
+    return response.data;
+  },
+
+  async deleteSecurity(securityId) {
+    const response = await api.delete(`/securities/${securityId}`);
+    return response.data;
   }
 };

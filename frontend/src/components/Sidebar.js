@@ -12,6 +12,7 @@ const Sidebar = () => {
     { path: '/upload', icon: '📤', label: 'Upload Contract Notes' },
     { path: '/manual-entry', icon: '✏️', label: 'Manual Entry' },
     { path: '/capital-gains', icon: '💰', label: 'Capital Gains' },
+    { path: '/security-master', icon: '🔐', label: 'Security Master' },
     { path: '/users', icon: '👥', label: 'Manage Users' },
     { path: '/admin', icon: '⚙️', label: 'Admin' }
   ];
