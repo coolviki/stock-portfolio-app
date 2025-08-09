@@ -14,6 +14,7 @@ import ManualEntry from './pages/ManualEntry';
 import Users from './pages/Users';
 import Admin from './pages/Admin';
 import CapitalGains from './pages/CapitalGains';
+import SecurityMaster from './pages/SecurityMaster';
 
 function App() {
   const { user, loading } = useAuth();
@@ -56,6 +57,7 @@ function App() {
                 <Route path="/upload" element={<Upload />} />
                 <Route path="/manual-entry" element={<ManualEntry />} />
                 <Route path="/capital-gains" element={<CapitalGains />} />
+                <Route path="/security-master" element={<SecurityMaster />} />
                 <Route path="/users" element={<Users />} />
                 <Route path="/admin" element={<Admin />} />
                 <Route path="*" element={<Navigate to="/dashboard" />} />
