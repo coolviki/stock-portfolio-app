@@ -1,0 +1,13 @@
+[build]
+  nixpkgs = ["python39", "pip"]
+
+[variables]
+  PYTHONPATH = "/app"
+
+[phases.build]
+  cmds = [
+    "pip install -r requirements.txt"
+  ]
+
+[phases.start]
+  cmd = "python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT"

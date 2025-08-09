@@ -24,7 +24,9 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Stock Portfolio API", version="1.0.0")
 
 # Get CORS origins from environment variable, default to localhost for development
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+# Railway automatically provides frontend URLs, so we include both local and Railway domains
+default_origins = "http://localhost:3000,https://*.railway.app,https://*.up.railway.app"
+cors_origins = os.getenv("CORS_ORIGINS", default_origins).split(",")
 
 app.add_middleware(
     CORSMiddleware,

@@ -1,26 +1,14 @@
-#!/bin/bash
-set -e
+#\!/bin/bash
+# Railway startup script for stock portfolio application
 
-echo "🚀 Starting Stock Portfolio App (Monorepo)"
+echo "🚀 Starting Stock Portfolio Backend on Railway..."
+echo "📍 Working directory: $(pwd)"
+echo "📂 Contents: $(ls -la)"
+echo "🔌 Port: ${PORT:-8000}"
 
-# Install backend dependencies
-echo "📦 Installing backend dependencies..."
-cd backend
-pip install --upgrade pip
-pip install -r requirements.txt
-cd ..
+# Ensure backend module is accessible
+export PYTHONPATH="/app:${PYTHONPATH}"
 
-# Install frontend dependencies and build
-echo "📦 Installing frontend dependencies..."
-cd frontend
-npm ci
-echo "🔨 Building frontend..."
-npm run build
-cd ..
-
-echo "✅ Build complete!"
-
-# Start backend server
-echo "🌟 Starting backend server on port ${PORT:-8000}..."
-cd backend
-exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Start the server
+exec python -m uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}
+EOF < /dev/null
