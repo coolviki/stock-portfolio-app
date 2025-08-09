@@ -130,6 +130,29 @@ const SecurityMaster = () => {
     });
   };
 
+  const generatePriceURL = (security) => {
+    // Priority 1: Use ISIN for more accurate results
+    if (security.security_ISIN && security.security_ISIN.length === 12) {
+      // Yahoo Finance with ISIN (works for Indian stocks)
+      return `https://finance.yahoo.com/quote/${security.security_ticker}.NS/`;
+    }
+    
+    // Priority 2: Use ticker symbol  
+    if (security.security_ticker) {
+      // Yahoo Finance with NSE suffix for Indian stocks
+      return `https://finance.yahoo.com/quote/${security.security_ticker}.NS/`;
+    }
+    
+    // Fallback: Google search for security price
+    const searchQuery = encodeURIComponent(`${security.security_name} stock price NSE`);
+    return `https://www.google.com/search?q=${searchQuery}`;
+  };
+
+  const handleSecurityNameClick = (security) => {
+    const priceURL = generatePriceURL(security);
+    window.open(priceURL, '_blank', 'noopener,noreferrer');
+  };
+
   const filteredSecurities = securities.filter(security => 
     security.security_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     security.security_ISIN.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -173,6 +196,8 @@ const SecurityMaster = () => {
           <Alert variant="info">
             <strong>Security Master:</strong> Manage the master list of securities for accurate transaction recording. 
             Each security has a unique name, ISIN code, and ticker symbol for precise identification.
+            <br />
+            <strong>💡 Tip:</strong> Click on any security name to view its latest market price on Yahoo Finance.
           </Alert>
 
           <div className="table-responsive">
@@ -195,7 +220,19 @@ const SecurityMaster = () => {
                       <Badge bg="secondary">{security.id}</Badge>
                     </td>
                     <td>
-                      <strong>{security.security_name}</strong>
+                      <strong 
+                        style={{ 
+                          color: '#0d6efd', 
+                          cursor: 'pointer', 
+                          textDecoration: 'underline' 
+                        }}
+                        onClick={() => handleSecurityNameClick(security)}
+                        title={`Click to view latest price for ${security.security_name}`}
+                        onMouseEnter={(e) => e.target.style.textDecoration = 'underline'}
+                        onMouseLeave={(e) => e.target.style.textDecoration = 'underline'}
+                      >
+                        {security.security_name} 🔗
+                      </strong>
                     </td>
                     <td>
                       <code>{security.security_ISIN}</code>
