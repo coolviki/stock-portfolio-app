@@ -73,6 +73,16 @@ export const apiService = {
     return response.data;
   },
 
+  async enrichSecurityData(securityName, ticker, isin) {
+    const params = new URLSearchParams();
+    if (securityName) params.append('security_name', securityName);
+    if (ticker) params.append('ticker', ticker);
+    if (isin) params.append('isin', isin);
+    
+    const response = await api.get(`/securities/enrich?${params}`);
+    return response.data;
+  },
+
   // Portfolio APIs
   async getPortfolioSummary(userId) {
     if (!userId) {

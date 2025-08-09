@@ -3,6 +3,7 @@ import re
 from datetime import datetime
 from typing import List, Dict
 import io
+from stock_api import enrich_security_data
 
 def extract_isin_from_text(text: str, security_name: str) -> str:
     """
@@ -169,10 +170,17 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
                     # Extract ISIN for this security
                     isin = extract_isin_from_text(full_text, security_name)
                     
+                    # Enrich security data - fetch ticker when ISIN is available
+                    enriched_data = enrich_security_data(
+                        security_name=security_name,
+                        ticker=security_symbol,
+                        isin=isin
+                    )
+                    
                     transaction = {
-                        'security_name': security_name,
-                        'security_symbol': security_symbol,
-                        'isin': isin,
+                        'security_name': enriched_data.get('security_name', security_name),
+                        'security_symbol': enriched_data.get('ticker', security_symbol),
+                        'isin': enriched_data.get('isin', isin),
                         'transaction_type': transaction_type,
                         'quantity': quantity,
                         'price_per_unit': average_rate,
@@ -254,10 +262,17 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
             # Extract ISIN for this security
             isin = extract_isin_from_text(full_text, security_name)
             
+            # Enrich security data - fetch ticker when ISIN is available
+            enriched_data = enrich_security_data(
+                security_name=security_name,
+                ticker=security_symbol,
+                isin=isin
+            )
+            
             transaction = {
-                'security_name': security_name,
-                'security_symbol': security_symbol,
-                'isin': isin,
+                'security_name': enriched_data.get('security_name', security_name),
+                'security_symbol': enriched_data.get('ticker', security_symbol),
+                'isin': enriched_data.get('isin', isin),
                 'transaction_type': transaction_type,
                 'quantity': quantity,
                 'price_per_unit': average_rate,
@@ -359,10 +374,17 @@ def parse_tabular_format(summary_text, order_date):
                             # Extract ISIN for this security
                             isin = extract_isin_from_text(full_text, security_name)
                             
+                            # Enrich security data - fetch ticker when ISIN is available
+                            enriched_data = enrich_security_data(
+                                security_name=security_name,
+                                ticker=security_symbol,
+                                isin=isin
+                            )
+                            
                             transaction = {
-                                'security_name': security_name,
-                                'security_symbol': security_symbol,
-                                'isin': isin,
+                                'security_name': enriched_data.get('security_name', security_name),
+                                'security_symbol': enriched_data.get('ticker', security_symbol),
+                                'isin': enriched_data.get('isin', isin),
                                 'transaction_type': transaction_type,
                                 'quantity': quantity,
                                 'price_per_unit': price,

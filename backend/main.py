@@ -14,7 +14,7 @@ from database import get_db, engine, Base
 from models import User, Transaction, Security
 from schemas import UserCreate, UserResponse, TransactionCreate, TransactionResponse, TransactionUpdate, CapitalGainsResponse, CapitalGainsQuery, SecurityCreate, SecurityResponse, SecurityUpdate, LegacyTransactionCreate
 from pdf_parser import parse_contract_note
-from stock_api import get_current_price, get_current_price_with_fallback, search_stocks
+from stock_api import get_current_price, get_current_price_with_fallback, search_stocks, enrich_security_data, get_current_price_with_waterfall
 from capital_gains import get_capital_gains_for_financial_year, get_available_financial_years, get_current_financial_year
 
 load_dotenv()
@@ -530,6 +530,26 @@ def search_securities(query: str):
         return {"results": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+@app.get("/securities/enrich")
+def enrich_security_endpoint(
+    security_name: Optional[str] = None,
+    ticker: Optional[str] = None,
+    isin: Optional[str] = None
+):
+    """Enrich security data by fetching missing ISIN/ticker information"""
+    try:
+        if not any([security_name, ticker, isin]):
+            raise HTTPException(status_code=400, detail="At least one parameter (security_name, ticker, or isin) must be provided")
+        
+        result = enrich_security_data(
+            security_name=security_name,
+            ticker=ticker,
+            isin=isin
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Enrichment failed: {str(e)}")
 
 @app.get("/portfolio-summary/")
 def get_portfolio_summary(
