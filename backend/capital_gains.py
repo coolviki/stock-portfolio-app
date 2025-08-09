@@ -2,8 +2,8 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional
 from sqlalchemy.orm import Session
 from decimal import Decimal, ROUND_HALF_UP
-from models import Transaction
-from schemas import CapitalGainsResponse, SecurityCapitalGains, CapitalGainDetail, TransactionResponse
+from models import Transaction, Security
+from schemas import CapitalGainsResponse, SecurityCapitalGains, CapitalGainDetail, TransactionResponse, SecurityResponse
 import logging
 
 logger = logging.getLogger(__name__)
@@ -49,9 +49,10 @@ def calculate_capital_gains_for_security(transactions: List[Transaction]) -> Sec
     if not buy_transactions or not sell_transactions:
         return None
     
-    security_name = transactions[0].security_name
-    security_symbol = transactions[0].security_symbol
-    isin = transactions[0].isin
+    security = transactions[0].security
+    security_name = security.security_name
+    security_symbol = security.security_ticker
+    isin = security.security_ISIN
     
     # FIFO calculation
     buy_queue = []  # (transaction, remaining_quantity)
@@ -89,10 +90,17 @@ def calculate_capital_gains_for_security(transactions: List[Transaction]) -> Sec
             is_long_term = is_long_term_capital_gain(buy_tx.transaction_date, sell_tx.transaction_date)
             
             # Create detail record
-            detail = CapitalGainDetail(
+            security_response = SecurityResponse(
+                id=security.id,
                 security_name=security_name,
-                security_symbol=security_symbol,
-                isin=isin,
+                security_ISIN=isin,
+                security_ticker=security_symbol,
+                created_at=security.created_at,
+                updated_at=security.updated_at
+            )
+            
+            detail = CapitalGainDetail(
+                security=security_response,
                 buy_transaction=TransactionResponse.model_validate(buy_tx),
                 sell_transaction=TransactionResponse.model_validate(sell_tx),
                 quantity_sold=quantity_to_match,
@@ -128,10 +136,17 @@ def calculate_capital_gains_for_security(transactions: List[Transaction]) -> Sec
                 f"This may indicate short selling or data inconsistency."
             )
     
-    return SecurityCapitalGains(
+    security_response = SecurityResponse(
+        id=security.id,
         security_name=security_name,
-        security_symbol=security_symbol,
-        isin=isin,
+        security_ISIN=isin,
+        security_ticker=security_symbol,
+        created_at=security.created_at,
+        updated_at=security.updated_at
+    )
+    
+    return SecurityCapitalGains(
+        security=security_response,
         total_gain_loss=total_gain_loss,
         short_term_gain_loss=short_term_gain_loss,
         long_term_gain_loss=long_term_gain_loss,
@@ -174,7 +189,7 @@ def get_capital_gains_for_financial_year(
     securities_map = {}
     for sell_tx in sell_transactions:
         # Use ISIN as primary key, fallback to security_name
-        security_key = sell_tx.isin if sell_tx.isin else sell_tx.security_name
+        security_key = sell_tx.security.security_ISIN if sell_tx.security.security_ISIN else sell_tx.security.security_name
         
         if security_key not in securities_map:
             securities_map[security_key] = []
@@ -191,20 +206,20 @@ def get_capital_gains_for_financial_year(
     
     for security_key, security_sells in securities_map.items():
         first_sell = security_sells[0]
-        if first_sell.isin:
+        if first_sell.security.security_ISIN:
             isin_keys.append(security_key)
         else:
             name_keys.append(security_key)
     
     # Build optimized query for all securities at once
-    all_transactions_query = db.query(Transaction)
+    all_transactions_query = db.query(Transaction).join(Security)
     
     if isin_keys or name_keys:
         conditions = []
         if isin_keys:
-            conditions.append(Transaction.isin.in_(isin_keys))
+            conditions.append(Security.security_ISIN.in_(isin_keys))
         if name_keys:
-            conditions.append(Transaction.security_name.in_(name_keys))
+            conditions.append(Security.security_name.in_(name_keys))
         
         if len(conditions) == 1:
             all_transactions_query = all_transactions_query.filter(conditions[0])
@@ -220,7 +235,7 @@ def get_capital_gains_for_financial_year(
     # Group transactions by security key for processing
     transactions_by_security = {}
     for tx in all_transactions:
-        security_key = tx.isin if tx.isin else tx.security_name
+        security_key = tx.security.security_ISIN if tx.security.security_ISIN else tx.security.security_name
         if security_key not in transactions_by_security:
             transactions_by_security[security_key] = []
         transactions_by_security[security_key].append(tx)

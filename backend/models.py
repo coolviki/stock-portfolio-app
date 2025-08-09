@@ -12,14 +12,24 @@ class User(Base):
     
     transactions = relationship("Transaction", back_populates="user")
 
+class Security(Base):
+    __tablename__ = "securities"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    security_name = Column(String, nullable=False, index=True)
+    security_ISIN = Column(String, nullable=False, index=True)
+    security_ticker = Column(String, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    transactions = relationship("Transaction", back_populates="security")
+
 class Transaction(Base):
     __tablename__ = "transactions"
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    security_name = Column(String, nullable=False, index=True)
-    security_symbol = Column(String, index=True)
-    isin = Column(String, index=True)  # International Securities Identification Number
+    security_id = Column(Integer, ForeignKey("securities.id"), nullable=False)
     transaction_type = Column(String, nullable=False)  # BUY or SELL
     quantity = Column(Float, nullable=False)
     price_per_unit = Column(Float, nullable=False)
@@ -33,3 +43,4 @@ class Transaction(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     user = relationship("User", back_populates="transactions")
+    security = relationship("Security", back_populates="transactions")
