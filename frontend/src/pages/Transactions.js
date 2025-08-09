@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Row, Col, Card, Table, Button, Form, Modal, Badge, 
-  InputGroup, FormControl, Dropdown, ListGroup 
+  FormControl, Dropdown, ListGroup, OverlayTrigger, Tooltip, Spinner 
 } from 'react-bootstrap';
 import DatePicker from 'react-datepicker';
 import { format } from 'date-fns';
@@ -54,6 +54,10 @@ const Transactions = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const searchTimeoutRef = useRef(null);
   const suggestionRefs = useRef([]);
+
+  // Price tooltip state
+  const [priceData, setPriceData] = useState({});
+  const [loadingPrice, setLoadingPrice] = useState({});
 
   const { selectedUserId } = useAuth();
 
@@ -214,6 +218,156 @@ const Transactions = () => {
     }
   };
 
+  const fetchSecurityPrice = async (transaction) => {
+    const transactionId = transaction.id;
+    
+    // Don't fetch if already loading
+    if (loadingPrice[transactionId]) {
+      return;
+    }
+
+    setLoadingPrice(prev => ({ ...prev, [transactionId]: true }));
+    
+    try {
+      let price = null;
+      let method = '';
+      let timestamp = new Date().toLocaleString('en-IN');
+
+      // Try waterfall price fetching: TICKER → ISIN → Security Name
+      if (transaction.security_symbol) {
+        try {
+          const response = await fetch(`http://localhost:8000/stock-price/${transaction.security_symbol}`);
+          if (response.ok) {
+            const data = await response.json();
+            price = data.price;
+            method = 'TICKER';
+          }
+        } catch (error) {
+          console.log('Ticker price fetch failed:', error);
+        }
+      }
+
+      // Fallback to ISIN if ticker failed
+      if (!price && transaction.isin) {
+        try {
+          const response = await fetch(`http://localhost:8000/stock-price-isin/${transaction.isin}`);
+          if (response.ok) {
+            const data = await response.json();
+            price = data.price;
+            method = 'ISIN';
+          }
+        } catch (error) {
+          console.log('ISIN price fetch failed:', error);
+        }
+      }
+
+      // Store the price data
+      setPriceData(prev => ({
+        ...prev,
+        [transactionId]: {
+          price: price || 'N/A',
+          method,
+          timestamp,
+          symbol: transaction.security_symbol || 'N/A',
+          error: !price,
+          transactionPrice: transaction.price_per_unit,
+          priceChange: price ? ((price - transaction.price_per_unit) / transaction.price_per_unit * 100) : null
+        }
+      }));
+
+    } catch (error) {
+      console.error('Error fetching price:', error);
+      setPriceData(prev => ({
+        ...prev,
+        [transactionId]: {
+          price: 'Error',
+          method: 'ERROR',
+          timestamp: new Date().toLocaleString('en-IN'),
+          symbol: transaction.security_symbol || 'N/A',
+          error: true,
+          transactionPrice: transaction.price_per_unit,
+          priceChange: null
+        }
+      }));
+    } finally {
+      setLoadingPrice(prev => ({ ...prev, [transactionId]: false }));
+    }
+  };
+
+  const handleSecurityNameClick = (transaction) => {
+    fetchSecurityPrice(transaction);
+  };
+
+  const renderPriceTooltip = (transaction) => {
+    const transactionId = transaction.id;
+    const loading = loadingPrice[transactionId];
+    const data = priceData[transactionId];
+
+    if (loading) {
+      return (
+        <Tooltip id={`price-tooltip-${transactionId}`}>
+          <div className="text-center">
+            <Spinner animation="border" size="sm" className="me-2" />
+            Fetching current price...
+          </div>
+        </Tooltip>
+      );
+    }
+
+    if (!data) {
+      return (
+        <Tooltip id={`price-tooltip-${transactionId}`}>
+          <div>
+            <strong>📈 Click to fetch current price</strong>
+            <br />
+            <small>
+              Transaction Price: ₹{transaction.price_per_unit.toFixed(2)}
+              <br />
+              Date: {format(new Date(transaction.transaction_date), 'dd/MM/yyyy')}
+              <br />
+              Symbol: {transaction.security_symbol || 'N/A'}
+            </small>
+          </div>
+        </Tooltip>
+      );
+    }
+
+    const priceChangeColor = data.priceChange > 0 ? '#28a745' : data.priceChange < 0 ? '#dc3545' : '#6c757d';
+    const priceChangeIcon = data.priceChange > 0 ? '📈' : data.priceChange < 0 ? '📉' : '➡️';
+
+    return (
+      <Tooltip id={`price-tooltip-${transactionId}`}>
+        <div>
+          <strong>💰 Price Comparison</strong>
+          <hr className="my-2" style={{borderColor: '#fff'}} />
+          <div><strong>Security:</strong> {transaction.security_name}</div>
+          <div><strong>Symbol:</strong> {data.symbol}</div>
+          
+          <hr className="my-2" style={{borderColor: '#fff'}} />
+          <div><strong>Transaction Price:</strong> ₹{data.transactionPrice.toFixed(2)}</div>
+          <div><strong>Current Price:</strong> {data.error ? '❌ Unable to fetch' : `₹${parseFloat(data.price).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}</div>
+          
+          {!data.error && data.priceChange !== null && (
+            <div style={{color: priceChangeColor}}>
+              <strong>Change:</strong> {priceChangeIcon} {data.priceChange.toFixed(2)}%
+            </div>
+          )}
+          
+          <hr className="my-2" style={{borderColor: '#fff'}} />
+          <div><strong>Method:</strong> {data.method || 'FALLBACK'}</div>
+          <div><strong>Updated:</strong> {data.timestamp}</div>
+          <div><strong>Transaction Date:</strong> {format(new Date(transaction.transaction_date), 'dd/MM/yyyy')}</div>
+          
+          {!data.error && (
+            <small className="text-light">
+              <br />💡 Click again to refresh price
+            </small>
+          )}
+        </div>
+      </Tooltip>
+    );
+  };
+
   const exportToCSV = () => {
     const csvContent = [
       ['Date', 'Security', 'Type', 'Quantity', 'Price', 'Total Amount'],
@@ -258,7 +412,10 @@ const Transactions = () => {
       {/* Filters */}
       <Card className="mb-4">
         <Card.Header>
-          <h5>Filters</h5>
+          <div className="d-flex justify-content-between align-items-center">
+            <h5>Filters</h5>
+            <small className="text-muted">💡 Click on security names in the table to see current prices</small>
+          </div>
         </Card.Header>
         <Card.Body>
           <Row>
@@ -391,10 +548,39 @@ const Transactions = () => {
                   <tr key={transaction.id} className="transaction-row">
                     <td>{format(new Date(transaction.transaction_date), 'dd/MM/yyyy')}</td>
                     <td>
-                      <strong>{transaction.security_name}</strong>
-                      {transaction.security_symbol && (
-                        <small className="text-muted d-block">{transaction.security_symbol}</small>
-                      )}
+                      <OverlayTrigger
+                        placement="top"
+                        delay={{ show: 250, hide: 400 }}
+                        overlay={renderPriceTooltip(transaction)}
+                        trigger={['hover', 'focus']}
+                      >
+                        <div>
+                          <strong 
+                            style={{ 
+                              color: '#0d6efd', 
+                              cursor: 'pointer', 
+                              textDecoration: 'underline',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                            onClick={() => handleSecurityNameClick(transaction)}
+                            title={`Click to fetch current price for ${transaction.security_name}`}
+                            onMouseEnter={(e) => e.target.style.color = '#0a58ca'}
+                            onMouseLeave={(e) => e.target.style.color = '#0d6efd'}
+                          >
+                            {transaction.security_name}
+                            {loadingPrice[transaction.id] ? (
+                              <Spinner animation="border" size="sm" />
+                            ) : (
+                              '📈'
+                            )}
+                          </strong>
+                          {transaction.security_symbol && (
+                            <small className="text-muted d-block">{transaction.security_symbol}</small>
+                          )}
+                        </div>
+                      </OverlayTrigger>
                     </td>
                     <td>
                       <Badge bg={transaction.transaction_type === 'BUY' ? 'success' : 'danger'}>
