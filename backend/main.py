@@ -12,10 +12,11 @@ from dotenv import load_dotenv
 
 from database import get_db, engine, Base
 from models import User, Transaction, Security
-from schemas import UserCreate, UserResponse, TransactionCreate, TransactionResponse, TransactionUpdate, CapitalGainsResponse, CapitalGainsQuery, SecurityCreate, SecurityResponse, SecurityUpdate, LegacyTransactionCreate
+from schemas import UserCreate, UserResponse, FirebaseUserCreate, TransactionCreate, TransactionResponse, TransactionUpdate, CapitalGainsResponse, CapitalGainsQuery, SecurityCreate, SecurityResponse, SecurityUpdate, LegacyTransactionCreate
 from pdf_parser import parse_contract_note
 from stock_api import get_current_price, get_current_price_with_fallback, search_stocks, enrich_security_data, get_current_price_with_waterfall
 from capital_gains import get_capital_gains_for_financial_year, get_available_financial_years, get_current_financial_year
+from firebase_config import verify_firebase_token
 
 load_dotenv()
 
@@ -61,6 +62,61 @@ def select_or_create_user(username: str = Form(...), db: Session = Depends(get_d
         # Create new user
         db_user = User(username=username)
         db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+        return db_user
+
+@app.post("/auth/firebase", response_model=UserResponse)
+def firebase_auth(user_data: FirebaseUserCreate, db: Session = Depends(get_db)):
+    """Authenticate or create user with Firebase"""
+    # Verify the Firebase ID token
+    verified_data = verify_firebase_token(user_data.id_token)
+    if not verified_data:
+        raise HTTPException(status_code=401, detail="Invalid Firebase token")
+    
+    # Check if user exists by Firebase UID
+    db_user = db.query(User).filter(User.firebase_uid == user_data.firebase_uid).first()
+    
+    if db_user:
+        # Update user information if needed
+        db_user.full_name = user_data.name
+        db_user.picture_url = user_data.picture
+        db_user.email_verified = user_data.email_verified
+        db.commit()
+        db.refresh(db_user)
+        return db_user
+    else:
+        # Check if user exists by email (for migration purposes)
+        db_user = db.query(User).filter(User.email == user_data.email).first()
+        
+        if db_user:
+            # Update existing user with Firebase info
+            db_user.firebase_uid = user_data.firebase_uid
+            db_user.full_name = user_data.name
+            db_user.picture_url = user_data.picture
+            db_user.is_firebase_user = True
+            db_user.email_verified = user_data.email_verified
+        else:
+            # Create new user
+            username = user_data.email.split('@')[0]
+            # Ensure username is unique
+            base_username = username
+            counter = 1
+            while db.query(User).filter(User.username == username).first():
+                username = f"{base_username}_{counter}"
+                counter += 1
+            
+            db_user = User(
+                username=username,
+                email=user_data.email,
+                full_name=user_data.name,
+                picture_url=user_data.picture,
+                firebase_uid=user_data.firebase_uid,
+                is_firebase_user=True,
+                email_verified=user_data.email_verified
+            )
+            db.add(db_user)
+        
         db.commit()
         db.refresh(db_user)
         return db_user

@@ -1,0 +1,22 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "npm start"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+
+[env]
+NODE_ENV = "production"
+GENERATE_SOURCEMAP = "false"
+CI = "false"
+PORT = "3000"
+
+# These will be set via Railway dashboard or CLI
+# REACT_APP_FIREBASE_API_KEY = "${{REACT_APP_FIREBASE_API_KEY}}"
+# REACT_APP_FIREBASE_AUTH_DOMAIN = "${{REACT_APP_FIREBASE_AUTH_DOMAIN}}"
+# REACT_APP_FIREBASE_PROJECT_ID = "${{REACT_APP_FIREBASE_PROJECT_ID}}"
+# REACT_APP_FIREBASE_STORAGE_BUCKET = "${{REACT_APP_FIREBASE_STORAGE_BUCKET}}"
+# REACT_APP_FIREBASE_MESSAGING_SENDER_ID = "${{REACT_APP_FIREBASE_MESSAGING_SENDER_ID}}"
+# REACT_APP_FIREBASE_APP_ID = "${{REACT_APP_FIREBASE_APP_ID}}"
+# REACT_APP_API_URL = "${{REACT_APP_API_URL}}"

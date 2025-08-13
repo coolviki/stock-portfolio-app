@@ -23,6 +23,11 @@ export const apiService = {
     return response.data;
   },
 
+  async createTransactionLegacy(transaction) {
+    const response = await api.post('/transactions/legacy/', transaction);
+    return response.data;
+  },
+
   async updateTransaction(id, transaction, userId) {
     const formData = new FormData();
     formData.append('user_id', userId);

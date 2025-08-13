@@ -17,6 +17,11 @@ export const authService = {
     return { user_data: response.data };
   },
 
+  async firebaseLogin(userData) {
+    const response = await api.post('/auth/firebase', userData);
+    return { user_data: response.data };
+  },
+
   async getAllUsers() {
     const response = await api.get('/users/');
     return response.data;

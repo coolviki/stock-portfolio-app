@@ -183,3 +183,8 @@ SECRET_KEY=your-secret-key-here
 - Currently uses simplified user system (username-only)
 - Contract note passwords handled in-memory only
 - ISIN data improves price accuracy and reduces API dependencies
+
+## Monorepo Considerations
+- Make all the code changes compatible with Railways monorepo design
+- Ensure consistent project structure across different services
+- Implement modular architecture to support monorepo workflow

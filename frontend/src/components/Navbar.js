@@ -33,9 +33,18 @@ const Navbar = () => {
 
   const getCurrentUserName = () => {
     if (showAllUsers) return 'All Users';
-    if (selectedUserId === user?.id) return user?.username;
+    if (selectedUserId === user?.id) {
+      return user?.full_name || user?.username;
+    }
     const selectedUser = users.find(u => u.id === selectedUserId);
-    return selectedUser?.username || user?.username;
+    return selectedUser?.full_name || selectedUser?.username || user?.username;
+  };
+
+  const getCurrentUserPicture = () => {
+    if (showAllUsers) return null;
+    if (selectedUserId === user?.id) return user?.picture_url;
+    const selectedUser = users.find(u => u.id === selectedUserId);
+    return selectedUser?.picture_url;
   };
 
   return (
@@ -47,22 +56,51 @@ const Navbar = () => {
       <Nav className="ms-auto align-items-center">
         <Dropdown className="me-3">
           <Dropdown.Toggle variant="outline-primary" id="user-dropdown">
-            👤 {getCurrentUserName()}
+            {getCurrentUserPicture() ? (
+              <img 
+                src={getCurrentUserPicture()} 
+                alt="Profile" 
+                className="rounded-circle me-2" 
+                width="24" 
+                height="24"
+              />
+            ) : (
+              '👤 '
+            )}
+            {getCurrentUserName()}
           </Dropdown.Toggle>
           
           <Dropdown.Menu>
             <Dropdown.Item onClick={() => handleUserSwitch(user.id)}>
-              {user.username} (Me)
+              {user.picture_url && (
+                <img 
+                  src={user.picture_url} 
+                  alt="Profile" 
+                  className="rounded-circle me-2" 
+                  width="20" 
+                  height="20"
+                />
+              )}
+              {user.full_name || user.username} (Me)
             </Dropdown.Item>
             <Dropdown.Divider />
             {users.filter(u => u.id !== user.id).map(u => (
               <Dropdown.Item key={u.id} onClick={() => handleUserSwitch(u.id)}>
-                {u.username}
+                {u.picture_url && (
+                  <img 
+                    src={u.picture_url} 
+                    alt="Profile" 
+                    className="rounded-circle me-2" 
+                    width="20" 
+                    height="20"
+                  />
+                )}
+                {u.full_name || u.username}
               </Dropdown.Item>
             ))}
             <Dropdown.Divider />
             <Dropdown.Item onClick={() => handleUserSwitch('all')}>
-              All Users
+              👥 All Users
             </Dropdown.Item>
           </Dropdown.Menu>
         </Dropdown>

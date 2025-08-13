@@ -57,27 +57,38 @@ const ManualEntry = () => {
 
   const handleStockSelect = async (stock) => {
     try {
+      // Validate and clean ISIN (should be exactly 12 characters, alphanumeric)
+      let cleanIsin = '';
+      if (stock.isin) {
+        cleanIsin = stock.isin.replace(/[^A-Z0-9]/g, '').substring(0, 12);
+      }
+      
       // First, enrich the security data to get missing ISIN/ticker info
       const enrichedData = await apiService.enrichSecurityData(
         stock.name,
         stock.symbol,
-        stock.isin
+        cleanIsin
       );
       
       setFormData(prev => ({
         ...prev,
         security_name: enrichedData.security_name || stock.name,
         security_symbol: enrichedData.ticker || stock.symbol,
-        isin: enrichedData.isin || stock.isin || ''
+        isin: enrichedData.isin || cleanIsin
       }));
     } catch (error) {
       console.error('Error enriching security data:', error);
       // Fallback to original data if enrichment fails
+      let cleanIsin = '';
+      if (stock.isin) {
+        cleanIsin = stock.isin.replace(/[^A-Z0-9]/g, '').substring(0, 12);
+      }
+      
       setFormData(prev => ({
         ...prev,
         security_name: stock.name,
         security_symbol: stock.symbol,
-        isin: stock.isin || ''
+        isin: cleanIsin
       }));
     }
     
@@ -118,6 +129,7 @@ const ManualEntry = () => {
     try {
       const transactionData = {
         ...formData,
+        user_id: selectedUserId,
         quantity: parseFloat(formData.quantity),
         price_per_unit: parseFloat(formData.price_per_unit),
         total_amount: parseFloat(formData.total_amount),
@@ -128,17 +140,7 @@ const ManualEntry = () => {
       };
 
       // Use legacy endpoint for backward compatibility with new security model
-      const response = await fetch('/api/transactions/legacy/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(transactionData)
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to create transaction');
-      }
+      const response = await apiService.createTransactionLegacy(transactionData)
       toast.success('Transaction added successfully!');
       
       // Reset form

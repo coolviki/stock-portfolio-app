@@ -8,8 +8,22 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     pass
 
+class FirebaseUserCreate(BaseModel):
+    firebase_uid: str
+    email: str
+    name: str
+    picture: str
+    email_verified: bool
+    id_token: str
+
 class UserResponse(UserBase):
     id: int
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    picture_url: Optional[str] = None
+    firebase_uid: Optional[str] = None
+    is_firebase_user: bool = False
+    email_verified: bool = False
     created_at: datetime
     
     class Config:

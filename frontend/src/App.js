@@ -5,6 +5,7 @@ import { useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import ErrorBoundary from './components/ErrorBoundary';
+import FirebaseAuth from './components/FirebaseAuth';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -33,9 +34,10 @@ function App() {
     return (
       <div className="App">
         <Routes>
+          <Route path="/firebase-auth" element={<FirebaseAuth />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="*" element={<Navigate to="/login" />} />
+          <Route path="*" element={<Navigate to="/firebase-auth" />} />
         </Routes>
         <ToastContainer position="top-right" autoClose={3000} />
       </div>
