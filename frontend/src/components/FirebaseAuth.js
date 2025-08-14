@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Card, Container, Row, Col, Alert, Button, Spinner } from 'react-bootstrap';
+import { Card, Alert, Button, Spinner } from 'react-bootstrap';
 import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from 'firebase/auth';
-import { getAuth, getGoogleProvider, isFirebaseAvailable, FIREBASE_AVAILABLE_PROMISE } from '../config/firebase';
+import { getAuthInstance, getGoogleProviderInstance, isFirebaseAvailable } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
 import { toast } from 'react-toastify';
@@ -24,7 +24,7 @@ const FirebaseAuth = () => {
         setFirebaseAvailable(available);
         
         if (available) {
-          const auth = await getAuth();
+          const auth = await getAuthInstance();
           if (auth) {
             const result = await getRedirectResult(auth);
             if (result && result.user) {
@@ -73,7 +73,7 @@ const FirebaseAuth = () => {
       
       // Sign out from Firebase if backend auth failed
       try {
-        const auth = await getAuth();
+        const auth = await getAuthInstance();
         if (auth) {
           await signOut(auth);
         }
@@ -94,8 +94,8 @@ const FirebaseAuth = () => {
     setError(null);
 
     try {
-      const auth = await getAuth();
-      const googleProvider = await getGoogleProvider();
+      const auth = await getAuthInstance();
+      const googleProvider = await getGoogleProviderInstance();
       
       if (!auth || !googleProvider) {
         throw new Error('Firebase services not available');

@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth as getFirebaseAuth, GoogleAuthProvider } from 'firebase/auth';
 
 // Get API base URL
 const getApiBaseUrl = () => {
@@ -70,7 +70,7 @@ const initializeFirebaseWithConfig = (config) => {
     }
 
     app = initializeApp(config);
-    auth = getAuth(app);
+    auth = getFirebaseAuth(app);
     googleProvider = new GoogleAuthProvider();
     
     // Configure Google Auth Provider
@@ -138,12 +138,12 @@ const initializeFirebase = async () => {
 initializeFirebase();
 
 // Export async getter functions
-export const getAuth = async () => {
+export const getAuthInstance = async () => {
   await initializeFirebase();
   return auth;
 };
 
-export const getGoogleProvider = async () => {
+export const getGoogleProviderInstance = async () => {
   await initializeFirebase();
   return googleProvider;
 };
