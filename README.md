@@ -65,8 +65,25 @@ Experience the full application with all features including admin capabilities, 
 - Python 3.8+
 - Node.js 16+
 - npm or yarn
+- Firebase account (for authentication)
 
-### Backend Setup
+### Quick Start (Using Helper Scripts)
+
+**Start Backend:**
+```bash
+./start-backend.sh
+```
+
+**Start Frontend:**
+```bash
+./start-frontend.sh
+```
+
+These scripts handle virtual environment setup, dependency installation, and server startup automatically.
+
+### Manual Setup
+
+#### Backend Setup
 
 1. Navigate to the backend directory:
 ```bash
@@ -194,6 +211,8 @@ The application can process password-protected PDF contract notes from Indian st
 ## Configuration
 
 ### Environment Variables
+
+#### Local Development
 Create a `.env` file in the backend directory:
 
 ```env
@@ -203,9 +222,35 @@ DATABASE_URL=sqlite:///./stock_portfolio.db
 # Security
 SECRET_KEY=your-secret-key-here
 
+# Firebase Backend Configuration (optional for local development)
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_PRIVATE_KEY_ID=your-private-key-id
+FIREBASE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nYour private key\n-----END PRIVATE KEY-----
+FIREBASE_CLIENT_EMAIL=your-service-account@project.iam.gserviceaccount.com
+FIREBASE_CLIENT_ID=your-client-id
+
 # API Keys (optional)
 ALPHA_VANTAGE_API_KEY=your-api-key
 ```
+
+#### Frontend Environment Variables
+Create a `.env` file in the frontend directory:
+
+```env
+# API Configuration
+REACT_APP_API_URL=http://localhost:8000
+
+# Firebase Frontend Configuration
+REACT_APP_FIREBASE_API_KEY=your-frontend-api-key
+REACT_APP_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+REACT_APP_FIREBASE_PROJECT_ID=your-project-id
+REACT_APP_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=123456789
+REACT_APP_FIREBASE_APP_ID=1:123456789:web:abcdef123456
+```
+
+#### Production Environment Variables (Railway)
+Set these in Railway dashboard under Variables section. See the [Railway Deployment Setup](#railway-deployment-setup) section for complete list.
 
 ### Database Configuration
 - **SQLite**: Default option, good for development
@@ -249,24 +294,141 @@ stock-portfolio-app/
 
 The application is deployed on **Railway** and accessible at: [https://stock-portfolio-app-production.up.railway.app/](https://stock-portfolio-app-production.up.railway.app/)
 
-### Railway Deployment (Current)
-- **Backend**: Deployed using Railway's Python buildpack
-- **Frontend**: Built and served as static files by FastAPI
-- **Database**: Railway PostgreSQL addon
-- **Automatic Deployments**: Connected to GitHub for CI/CD
+### Railway Deployment Setup
 
-### Manual Deployment Options
+#### Step 1: Project Setup
+1. **Fork/Clone the repository** to your GitHub account
+2. **Connect to Railway**: 
+   - Go to [railway.app](https://railway.app) and login with GitHub
+   - Click "New Project" → "Deploy from GitHub repo"
+   - Select your forked repository
 
-#### Backend Deployment
+#### Step 2: Configure Build Settings
+Railway should automatically detect the project structure. If needed, configure:
+- **Root Directory**: Leave empty (monorepo setup)
+- **Build Command**: `cd frontend && npm run build`
+- **Start Command**: `cd backend && python main.py`
+
+#### Step 3: Environment Variables Setup
+
+**Required Environment Variables in Railway:**
+
+**Firebase Configuration:**
+```bash
+FIREBASE_PROJECT_ID=your-firebase-project-id
+FIREBASE_PRIVATE_KEY_ID=your-private-key-id
+FIREBASE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nYour private key here\n-----END PRIVATE KEY-----
+FIREBASE_CLIENT_EMAIL=your-service-account@project.iam.gserviceaccount.com
+FIREBASE_CLIENT_ID=your-client-id
+FIREBASE_AUTH_URI=https://accounts.google.com/o/oauth2/auth
+FIREBASE_TOKEN_URI=https://oauth2.googleapis.com/token
+
+# Frontend Firebase Config (for client-side)
+REACT_APP_FIREBASE_API_KEY=your-frontend-api-key
+REACT_APP_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+REACT_APP_FIREBASE_PROJECT_ID=your-firebase-project-id
+REACT_APP_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=123456789
+REACT_APP_FIREBASE_APP_ID=1:123456789:web:abcdef123456
+```
+
+**Application Configuration:**
+```bash
+# Database (Railway provides this automatically)
+DATABASE_URL=postgresql://user:pass@host:port/db
+
+# Security
+SECRET_KEY=your-secret-key-here-make-it-long-and-random
+
+# API Configuration
+REACT_APP_API_URL=https://your-app-name.up.railway.app
+```
+
+#### Step 4: Firebase Setup
+
+**Backend Firebase (Service Account):**
+1. Go to [Firebase Console](https://console.firebase.google.com)
+2. Select your project → Project Settings → Service Accounts
+3. Click "Generate new private key" and download the JSON file
+4. Extract the values and set them as Railway environment variables above
+
+**Frontend Firebase (Web App):**
+1. In Firebase Console → Project Settings → General
+2. Scroll to "Your apps" section
+3. Click "Web app" icon or add a new web app
+4. Copy the config values and set them as REACT_APP_* variables in Railway
+
+#### Step 5: Database Migration
+Railway automatically provisions a PostgreSQL database. The app will create tables on first run.
+
+#### Step 6: Admin User Setup
+1. After deployment, access the app
+2. Login with Google using your email
+3. SSH into Railway container or use Railway CLI:
+   ```bash
+   railway shell
+   ```
+4. Add your email to admin whitelist:
+   ```bash
+   cd backend
+   python -c "
+   import json
+   with open('admin_whitelist.json', 'w') as f:
+       json.dump(['your-email@gmail.com'], f, indent=2)
+   "
+   ```
+
+#### Step 7: Deploy and Verify
+1. Railway automatically deploys when you push to GitHub
+2. Check the deployment logs in Railway dashboard
+3. Visit your app URL to verify everything works
+4. Test admin features and Firebase authentication
+
+### Common Railway Deployment Issues
+
+**Build Failures:**
+- Check that `frontend/package.json` and `backend/requirements.txt` exist
+- Verify environment variables are set correctly
+- Check Railway logs for specific error messages
+
+**Firebase Authentication Errors:**
+- Ensure all FIREBASE_* variables are set with correct values
+- Verify REACT_APP_* variables are set (Railway needs the REACT_APP_ prefix)
+- Check that Firebase project allows your Railway domain
+
+**Admin Access Issues:**
+- Verify your email is in `backend/admin_whitelist.json`
+- Check that admin endpoints return correct permissions
+- Test admin API endpoints using the `/docs` interface
+
+### Alternative Deployment Options
+
+#### Manual Deployment
+
+**Backend Deployment:**
 1. Set up a production database (PostgreSQL recommended)
 2. Configure environment variables for production
-3. Use a WSGI server like Gunicorn
+3. Use a WSGI server like Gunicorn:
+   ```bash
+   gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app
+   ```
 4. Set up reverse proxy with Nginx
 
-#### Frontend Deployment
+**Frontend Deployment:**
 1. Build the React app: `npm run build`
 2. Serve static files with a web server
 3. Configure API endpoint for production
+
+#### Docker Deployment
+```dockerfile
+# Example Dockerfile for backend
+FROM python:3.9
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+CMD ["python", "main.py"]
+```
 
 ## Contributing
 
