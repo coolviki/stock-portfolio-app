@@ -214,10 +214,11 @@ def firebase_auth(user_data: FirebaseUserCreate, db: Session = Depends(get_db)):
         logger.error("=== Firebase Authentication Failed ===")
         raise HTTPException(status_code=500, detail=f"Authentication error: {str(e)}")
 
-@app.get("/users/", response_model=List[UserResponse])
-def get_users(db: Session = Depends(get_db)):
-    users = db.query(User).all()
-    return users
+# Endpoint removed for security - users should not be able to view other users
+# @app.get("/users/", response_model=List[UserResponse])
+# def get_users(db: Session = Depends(get_db)):
+#     users = db.query(User).all()
+#     return users
 
 @app.get("/users/{username}", response_model=UserResponse)
 def get_user_by_username(username: str, db: Session = Depends(get_db)):

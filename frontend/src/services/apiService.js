@@ -99,11 +99,7 @@ export const apiService = {
     return response.data;
   },
 
-  // User APIs
-  async getUsers() {
-    const response = await api.get('/users/');
-    return response.data;
-  },
+  // User APIs - getUsers removed for security (users can't view other users)
 
   async createUser(userData) {
     const response = await api.post('/users/', userData);

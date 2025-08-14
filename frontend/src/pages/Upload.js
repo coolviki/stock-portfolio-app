@@ -14,7 +14,7 @@ const Upload = () => {
   const [editMode, setEditMode] = useState(false);
   const [editedTransactions, setEditedTransactions] = useState({});
   const [savingChanges, setSavingChanges] = useState(false);
-  const { selectedUserId } = useAuth();
+  const { user } = useAuth();
 
   const handleFileSelect = (e) => {
     const selectedFiles = Array.from(e.target.files);
@@ -50,14 +50,14 @@ const Upload = () => {
       return;
     }
 
-    if (!selectedUserId) {
-      toast.error('Please select a user first');
+    if (!user?.id) {
+      toast.error('Please log in first');
       return;
     }
 
     setUploading(true);
     try {
-      const result = await apiService.uploadContractNotes(files, password, selectedUserId);
+      const result = await apiService.uploadContractNotes(files, password, user.id);
       setUploadResults(result);
       setShowPreview(true);
       toast.success(`Successfully processed ${result.uploaded_transactions} transactions`);
@@ -170,7 +170,7 @@ const Upload = () => {
           }
           
           // Call backend API to update the transaction
-          const updatedTransaction = await apiService.updateTransaction(transactionId, updateData, selectedUserId);
+          const updatedTransaction = await apiService.updateTransaction(transactionId, updateData, user.id);
           
           // Update the local results with the backend response
           updatedResults[transactionIndex] = {

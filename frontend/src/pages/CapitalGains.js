@@ -5,7 +5,7 @@ import { apiService } from '../services/apiService';
 import { toast } from 'react-toastify';
 
 const CapitalGains = () => {
-  const { selectedUserId, isAllUsers } = useAuth();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [availableYears, setAvailableYears] = useState([]);
   const [selectedYear, setSelectedYear] = useState('');
@@ -14,18 +14,18 @@ const CapitalGains = () => {
 
   useEffect(() => {
     loadAvailableYears();
-  }, [selectedUserId, isAllUsers]);
+  }, [user]);
 
   useEffect(() => {
     if (selectedYear) {
       loadCapitalGains();
     }
-  }, [selectedYear, selectedUserId, isAllUsers]);
+  }, [selectedYear, user]);
 
   const loadAvailableYears = async () => {
     try {
       setLoading(true);
-      const userId = isAllUsers ? null : selectedUserId;
+      const userId = user?.id;
       const response = await apiService.getCapitalGainsAvailableYears(userId);
       setAvailableYears(response.available_years || []);
       
@@ -50,7 +50,7 @@ const CapitalGains = () => {
     
     try {
       setLoading(true);
-      const userId = isAllUsers ? null : selectedUserId;
+      const userId = user?.id;
       const response = await apiService.getCapitalGains(parseInt(selectedYear), userId);
       setCapitalGains(response);
     } catch (error) {
