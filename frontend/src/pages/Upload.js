@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, Form, Button, Alert, Table, Modal, Badge } from 'react-bootstrap';
 import { apiService } from '../services/apiService';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
+import { BROKERS, DEFAULT_BROKER_ID } from '../constants/brokers';
 
 const Upload = () => {
   const [files, setFiles] = useState([]);
@@ -14,7 +15,14 @@ const Upload = () => {
   const [editMode, setEditMode] = useState(false);
   const [editedTransactions, setEditedTransactions] = useState({});
   const [savingChanges, setSavingChanges] = useState(false);
+  const [selectedBroker, setSelectedBroker] = useState(DEFAULT_BROKER_ID);
   const { user, selectedUserId } = useAuth();
+
+  // Memoized broker lookup for performance optimization
+  const selectedBrokerData = useMemo(() => 
+    BROKERS.find(b => b.id === selectedBroker), 
+    [selectedBroker]
+  );
 
   const handleFileSelect = (e) => {
     const selectedFiles = Array.from(e.target.files);
@@ -55,6 +63,12 @@ const Upload = () => {
       return;
     }
 
+    // Check if broker is supported
+    if (!selectedBrokerData?.supported) {
+      toast.error(`${selectedBrokerData?.name || 'Selected broker'} is not yet supported. Please select HDFC Securities for now.`);
+      return;
+    }
+
     setUploading(true);
     try {
       const result = await apiService.uploadContractNotes(files, password, selectedUserId);
@@ -78,6 +92,7 @@ const Upload = () => {
     setPassword('');
     setUploadResults(null);
     setShowPreview(false);
+    setSelectedBroker(DEFAULT_BROKER_ID);
   };
 
   // Function to aggregate transactions by security and transaction type
@@ -240,12 +255,59 @@ const Upload = () => {
           <Alert variant="info">
             <strong>Instructions:</strong>
             <ul className="mb-0 mt-2">
+              <li>Select your broker from the dropdown below</li>
               <li>Upload password-protected PDF contract notes from your broker</li>
               <li>The system will automatically extract transaction details</li>
               <li>You can review and confirm the extracted data before saving</li>
               <li>Supported formats: PDF files with tabular transaction data</li>
             </ul>
           </Alert>
+
+          {/* Broker Selection */}
+          <div className="mb-4">
+            <Form.Group>
+              <Form.Label className="fw-bold">Select Your Broker</Form.Label>
+              <Form.Select
+                value={selectedBroker}
+                onChange={(e) => setSelectedBroker(e.target.value)}
+                disabled={uploading}
+                className="mb-3"
+                aria-label="Select your broker for contract note processing"
+              >
+                {BROKERS.map((broker) => (
+                  <option key={broker.id} value={broker.id}>
+                    {broker.icon} {broker.name} {!broker.supported ? '(Coming Soon)' : ''}
+                  </option>
+                ))}
+              </Form.Select>
+              
+              {/* Broker Status Alert */}
+              {selectedBrokerData && (
+                <Alert 
+                  variant={selectedBrokerData.supported ? 'success' : 'warning'} 
+                  className="mb-0"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div className="d-flex align-items-center">
+                    <span className="fs-4 me-2" role="img" aria-label={selectedBrokerData.name}>
+                      {selectedBrokerData.icon}
+                    </span>
+                    <div>
+                      <strong>{selectedBrokerData.name}</strong>
+                      <div className="small">{selectedBrokerData.description}</div>
+                      {!selectedBrokerData.supported && (
+                        <div className="small text-muted mt-1">
+                          Currently only HDFC Securities contract notes can be processed. 
+                          Support for other brokers is coming soon!
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Alert>
+              )}
+            </Form.Group>
+          </div>
 
           {/* File Drop Area */}
           <div
@@ -266,6 +328,7 @@ const Upload = () => {
               accept=".pdf"
               onChange={handleFileSelect}
               style={{ display: 'none' }}
+              aria-label="Select PDF contract note files"
             />
           </div>
 
@@ -313,7 +376,7 @@ const Upload = () => {
             <Button
               variant="primary"
               onClick={handleUpload}
-              disabled={uploading || files.length === 0 || !password}
+              disabled={uploading || files.length === 0 || !password || !selectedBrokerData?.supported}
             >
               {uploading ? 'Processing...' : 'Upload and Process'}
             </Button>
