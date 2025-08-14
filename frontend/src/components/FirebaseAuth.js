@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
 import { Card, Container, Row, Col, Alert, Button, Spinner } from 'react-bootstrap';
 import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from 'firebase/auth';
-import { auth, googleProvider } from '../config/firebase';
+import { auth, googleProvider, FIREBASE_AVAILABLE } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 
 const FirebaseAuth = () => {
   const { login } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   // Handle redirect result on component mount
   React.useEffect(() => {
+    if (!FIREBASE_AVAILABLE) return;
+    
     const handleRedirectResult = async () => {
       try {
         const result = await getRedirectResult(auth);
@@ -66,6 +70,12 @@ const FirebaseAuth = () => {
   };
 
   const handleGoogleSignIn = async () => {
+    if (!FIREBASE_AVAILABLE) {
+      setError('Firebase authentication is not available. Redirecting to alternative login...');
+      setTimeout(() => navigate('/login'), 2000);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -114,6 +124,10 @@ const FirebaseAuth = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFallbackLogin = () => {
+    navigate('/login');
   };
 
   return (
@@ -180,6 +194,15 @@ const FirebaseAuth = () => {
                 <p className="text-muted">Sign in to access your investment dashboard</p>
               </div>
 
+              {!FIREBASE_AVAILABLE && (
+                <Alert variant="warning" className="mb-4">
+                  <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                  <strong>Firebase authentication is not configured.</strong>
+                  <br />
+                  <small>You can still access the application using the alternative login method.</small>
+                </Alert>
+              )}
+
               {error && (
                 <Alert variant="danger" className="mb-4">
                   <i className="bi bi-exclamation-triangle-fill me-2"></i>
@@ -215,10 +238,25 @@ const FirebaseAuth = () => {
                 </Button>
               </div>
 
+              {!FIREBASE_AVAILABLE && (
+                <div className="mb-4">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    onClick={handleFallbackLogin}
+                    className="w-100 d-flex align-items-center justify-content-center py-3"
+                    style={{borderRadius: '12px', fontSize: '1.1rem'}}
+                  >
+                    <i className="bi bi-box-arrow-in-right me-3"></i>
+                    Continue with Alternative Login
+                  </Button>
+                </div>
+              )}
+
               <div className="text-center mb-4">
                 <small className="text-muted d-flex align-items-center justify-content-center">
                   <i className="bi bi-shield-check me-2"></i>
-                  Secured by Firebase Authentication
+                  {FIREBASE_AVAILABLE ? 'Secured by Firebase Authentication' : 'Secure Authentication Available'}
                 </small>
               </div>
 
