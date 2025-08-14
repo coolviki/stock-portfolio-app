@@ -16,6 +16,8 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [isAllUsers, setIsAllUsers] = useState(false);
 
   useEffect(() => {
     const initializeUser = async () => {
@@ -24,6 +26,7 @@ export const AuthProvider = ({ children }) => {
       if (userData) {
         const user = JSON.parse(userData);
         setUser(user);
+        setSelectedUserId(user.id); // Set selectedUserId to current user's ID
         
         // Check admin status if user has email
         if (user.email) {
@@ -61,6 +64,7 @@ export const AuthProvider = ({ children }) => {
       
       localStorage.setItem('user', JSON.stringify(user));
       setUser(user);
+      setSelectedUserId(user.id); // Set selectedUserId to current user's ID
       
       // Check admin status
       if (user.email) {
@@ -90,6 +94,7 @@ export const AuthProvider = ({ children }) => {
       
       localStorage.setItem('user', JSON.stringify(user));
       setUser(user);
+      setSelectedUserId(user.id); // Set selectedUserId to current user's ID
       
       // Check admin status
       if (user.email) {
@@ -110,14 +115,29 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('user');
     setUser(null);
     setIsAdmin(false);
+    setSelectedUserId(null);
+    setIsAllUsers(false);
+  };
+
+  const switchUser = (userId) => {
+    if (userId === 'all') {
+      setIsAllUsers(true);
+      setSelectedUserId(null);
+    } else {
+      setIsAllUsers(false);
+      setSelectedUserId(parseInt(userId));
+    }
   };
 
   const value = {
     user,
     loading,
     isAdmin,
+    selectedUserId,
+    isAllUsers,
     login,
-    logout
+    logout,
+    switchUser
   };
 
   return (

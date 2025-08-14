@@ -7,7 +7,7 @@ import { toast } from 'react-toastify';
 import 'react-datepicker/dist/react-datepicker.css';
 
 const ManualEntry = () => {
-  const { user } = useAuth();
+  const { user, selectedUserId } = useAuth();
   const [formData, setFormData] = useState({
     security_name: '',
     security_symbol: '',
@@ -129,7 +129,7 @@ const ManualEntry = () => {
     try {
       const transactionData = {
         ...formData,
-        user_id: user.id,
+        user_id: selectedUserId,
         quantity: parseFloat(formData.quantity),
         price_per_unit: parseFloat(formData.price_per_unit),
         total_amount: parseFloat(formData.total_amount),
