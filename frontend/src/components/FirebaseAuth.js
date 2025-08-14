@@ -171,21 +171,21 @@ const FirebaseAuth = () => {
           <div className="row text-center mt-4">
             <div className="col-md-4 mb-3">
               <div className="bg-white bg-opacity-20 p-4 rounded-3 backdrop-blur h-100 d-flex flex-column justify-content-center" style={{minHeight: '160px'}}>
-                <img src="/images/analytics.svg" alt="Analytics" style={{width: '4rem', height: '4rem'}} className="mb-3" />
+                <img src="/images/analytics.svg" alt="Analytics" style={{width: '6rem', height: '6rem'}} className="mb-3" />
                 <h5 className="fw-bold mb-2" style={{fontSize: '1.1rem'}}>Advanced Analytics</h5>
                 <p className="small mb-0" style={{fontSize: '0.9rem', lineHeight: '1.3'}}>Real-time portfolio performance tracking</p>
               </div>
             </div>
             <div className="col-md-4 mb-3">
               <div className="bg-white bg-opacity-20 p-4 rounded-3 backdrop-blur h-100 d-flex flex-column justify-content-center" style={{minHeight: '160px'}}>
-                <img src="/images/document.svg" alt="PDF Import" style={{width: '4rem', height: '4rem'}} className="mb-3" />
+                <img src="/images/document.svg" alt="PDF Import" style={{width: '6rem', height: '6rem'}} className="mb-3" />
                 <h5 className="fw-bold mb-2" style={{fontSize: '1.1rem'}}>PDF Import</h5>
                 <p className="small mb-0" style={{fontSize: '0.9rem', lineHeight: '1.3'}}>Automated contract note processing</p>
               </div>
             </div>
             <div className="col-md-4 mb-3">
               <div className="bg-white bg-opacity-20 p-4 rounded-3 backdrop-blur h-100 d-flex flex-column justify-content-center" style={{minHeight: '160px'}}>
-                <img src="/images/money.svg" alt="Tax Optimization" style={{width: '4rem', height: '4rem'}} className="mb-3" />
+                <img src="/images/money.svg" alt="Tax Optimization" style={{width: '6rem', height: '6rem'}} className="mb-3" />
                 <h5 className="fw-bold mb-2" style={{fontSize: '1.1rem'}}>Tax Optimization</h5>
                 <p className="small mb-0" style={{fontSize: '0.9rem', lineHeight: '1.3'}}>Capital gains calculation & reporting</p>
               </div>
