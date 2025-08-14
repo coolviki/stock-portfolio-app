@@ -52,6 +52,21 @@ async def api_root():
 async def health():
     return {"status": "healthy"}
 
+@app.get("/config/firebase")
+def get_firebase_config():
+    """Get Firebase configuration for frontend"""
+    # Only return public Firebase configuration (never private keys)
+    config = {
+        "apiKey": os.getenv('FIREBASE_API_KEY', ''),
+        "authDomain": os.getenv('FIREBASE_AUTH_DOMAIN', '') or f"{os.getenv('FIREBASE_PROJECT_ID', '')}.firebaseapp.com",
+        "projectId": os.getenv('FIREBASE_PROJECT_ID', ''),
+        "storageBucket": os.getenv('FIREBASE_STORAGE_BUCKET', '') or f"{os.getenv('FIREBASE_PROJECT_ID', '')}.appspot.com", 
+        "messagingSenderId": os.getenv('FIREBASE_MESSAGING_SENDER_ID', ''),
+        "appId": os.getenv('FIREBASE_APP_ID', ''),
+        "available": bool(os.getenv('FIREBASE_API_KEY') and os.getenv('FIREBASE_PROJECT_ID'))
+    }
+    return config
+
 @app.post("/users/select-or-create", response_model=UserResponse)
 def select_or_create_user(username: str = Form(...), db: Session = Depends(get_db)):
     """Select existing user or create new user with just username"""
