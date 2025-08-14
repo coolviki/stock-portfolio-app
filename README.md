@@ -2,6 +2,12 @@
 
 A comprehensive stock portfolio management application built with Python (FastAPI) backend and React frontend. The app allows users to track their stock transactions, upload contract notes, and view portfolio analytics.
 
+## 🌐 Live Demo
+
+**[View Live Application](https://stock-portfolio-app-production.up.railway.app/)**
+
+Experience the full application with all features including admin capabilities, portfolio analytics, and transaction management.
+
 ## Features
 
 ### 🚀 Core Features
@@ -12,6 +18,14 @@ A comprehensive stock portfolio management application built with Python (FastAP
 - **Transaction Management**: Filter, edit, and export transaction history
 - **Real-time Stock Prices**: Integration with stock market APIs for current prices
 - **User Switching**: Switch between different user portfolios or view all users' data
+- **Firebase Authentication**: Secure user authentication with Google Firebase
+
+### 👑 Admin Features
+- **🔐 Security Master**: Complete securities database management with CRUD operations
+- **👥 Manager Users**: Admin user management with whitelist-based access control
+- **⚙️ Admin Panel**: Database export/import functionality with admin verification
+- **🎯 Role-based Access**: Conditional navigation and access control for admin features
+- **📊 Admin Analytics**: Statistics and insights for system administrators
 
 ### 📊 Dashboard Features
 - Portfolio allocation pie chart
@@ -33,7 +47,9 @@ A comprehensive stock portfolio management application built with Python (FastAP
 - **PostgreSQL/SQLite**: Database options
 - **PyPDF2**: PDF processing for contract notes
 - **Pydantic**: Data validation
-- **JWT**: Authentication and authorization
+- **JWT & Firebase**: Authentication and authorization
+- **Firebase Admin**: User management and token verification
+- **Admin Utils**: Role-based access control and user management
 
 ### Frontend
 - **React 18**: Modern React with hooks
@@ -169,6 +185,12 @@ The application can process password-protected PDF contract notes from Indian st
 - Switch between user portfolios using the top navigation
 - View system-wide statistics
 
+### Admin Access
+- **Admin users** have access to Security Master, Manager Users, and Admin Panel
+- Admin access is controlled by email whitelist (`admin_whitelist.json`)
+- Admin-only features are marked with crown icons (👑) in the navigation
+- Non-admin users see appropriate access denied messages for restricted features
+
 ## Configuration
 
 ### Environment Variables
@@ -225,13 +247,23 @@ stock-portfolio-app/
 
 ## Deployment
 
-### Backend Deployment
+The application is deployed on **Railway** and accessible at: [https://stock-portfolio-app-production.up.railway.app/](https://stock-portfolio-app-production.up.railway.app/)
+
+### Railway Deployment (Current)
+- **Backend**: Deployed using Railway's Python buildpack
+- **Frontend**: Built and served as static files by FastAPI
+- **Database**: Railway PostgreSQL addon
+- **Automatic Deployments**: Connected to GitHub for CI/CD
+
+### Manual Deployment Options
+
+#### Backend Deployment
 1. Set up a production database (PostgreSQL recommended)
 2. Configure environment variables for production
 3. Use a WSGI server like Gunicorn
 4. Set up reverse proxy with Nginx
 
-### Frontend Deployment
+#### Frontend Deployment
 1. Build the React app: `npm run build`
 2. Serve static files with a web server
 3. Configure API endpoint for production
