@@ -5,7 +5,7 @@ import { apiService } from '../services/apiService';
 import { toast } from 'react-toastify';
 
 const CapitalGains = () => {
-  const { user, selectedUserId, isAllUsers } = useAuth();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [availableYears, setAvailableYears] = useState([]);
   const [selectedYear, setSelectedYear] = useState('');
@@ -14,18 +14,18 @@ const CapitalGains = () => {
 
   useEffect(() => {
     loadAvailableYears();
-  }, [user, selectedUserId]);
+  }, [user]);
 
   useEffect(() => {
     if (selectedYear) {
       loadCapitalGains();
     }
-  }, [selectedYear, user, selectedUserId]);
+  }, [selectedYear, user]);
 
   const loadAvailableYears = async () => {
     try {
       setLoading(true);
-      const userId = selectedUserId;
+      const userId = user?.id;
       const response = await apiService.getCapitalGainsAvailableYears(userId);
       setAvailableYears(response.available_years || []);
       
@@ -50,7 +50,7 @@ const CapitalGains = () => {
     
     try {
       setLoading(true);
-      const userId = selectedUserId;
+      const userId = user?.id;
       const response = await apiService.getCapitalGains(parseInt(selectedYear), userId);
       setCapitalGains(response);
     } catch (error) {
@@ -149,7 +149,7 @@ const CapitalGains = () => {
                 </Col>
                 <Col md={6}>
                   <p className="text-muted mb-0">
-                    {isAllUsers ? 'Showing data for all users' : `Showing data for selected user`}
+                    {`Showing data for ${user?.username || 'current user'}`}
                   </p>
                 </Col>
               </Row>

@@ -14,7 +14,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [priceData, setPriceData] = useState({});
   const [loadingPrice, setLoadingPrice] = useState({});
-  const { user, selectedUserId, isAllUsers } = useAuth();
+  const { user } = useAuth();
 
   const fetchSecurityPrice = async (symbol, isin) => {
     const securityKey = symbol;
@@ -145,16 +145,16 @@ const Dashboard = () => {
 
   useEffect(() => {
     loadPortfolioData();
-  }, [user, selectedUserId]);
+  }, [user]);
 
   const loadPortfolioData = async () => {
     try {
       setLoading(true);
-      if (!selectedUserId) {
-        toast.error('Please select a user first');
+      if (!user?.id) {
+        toast.error('User not logged in');
         return;
       }
-      const data = await apiService.getPortfolioSummary(selectedUserId);
+      const data = await apiService.getPortfolioSummary(user.id);
       setPortfolio(data);
     } catch (error) {
       toast.error('Unable to load Portfolio Data');
