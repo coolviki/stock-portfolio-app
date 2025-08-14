@@ -14,7 +14,96 @@ const Upload = () => {
   const [editMode, setEditMode] = useState(false);
   const [editedTransactions, setEditedTransactions] = useState({});
   const [savingChanges, setSavingChanges] = useState(false);
+  const [selectedBroker, setSelectedBroker] = useState('hdfc-securities');
   const { user, selectedUserId } = useAuth();
+
+  // Popular Indian stock brokers list
+  const brokers = [
+    {
+      id: 'hdfc-securities',
+      name: 'HDFC Securities',
+      icon: '🏦',
+      supported: true,
+      description: 'Fully supported - PDF parsing available'
+    },
+    {
+      id: 'zerodha',
+      name: 'Zerodha',
+      icon: '⚡',
+      supported: false,
+      description: 'Coming soon'
+    },
+    {
+      id: 'upstox',
+      name: 'Upstox',
+      icon: '📈',
+      supported: false,
+      description: 'Coming soon'
+    },
+    {
+      id: 'angel-one',
+      name: 'Angel One (Angel Broking)',
+      icon: '👼',
+      supported: false,
+      description: 'Coming soon'
+    },
+    {
+      id: 'icici-direct',
+      name: 'ICICI Direct',
+      icon: '🏛️',
+      supported: false,
+      description: 'Coming soon'
+    },
+    {
+      id: 'kotak-securities',
+      name: 'Kotak Securities',
+      icon: '🏢',
+      supported: false,
+      description: 'Coming soon'
+    },
+    {
+      id: 'sharekhan',
+      name: 'Sharekhan',
+      icon: '📊',
+      supported: false,
+      description: 'Coming soon'
+    },
+    {
+      id: 'motilal-oswal',
+      name: 'Motilal Oswal',
+      icon: '🔷',
+      supported: false,
+      description: 'Coming soon'
+    },
+    {
+      id: 'edelweiss',
+      name: 'Edelweiss',
+      icon: '❄️',
+      supported: false,
+      description: 'Coming soon'
+    },
+    {
+      id: '5paisa',
+      name: '5paisa',
+      icon: '5️⃣',
+      supported: false,
+      description: 'Coming soon'
+    },
+    {
+      id: 'groww',
+      name: 'Groww',
+      icon: '🌱',
+      supported: false,
+      description: 'Coming soon'
+    },
+    {
+      id: 'paytm-money',
+      name: 'Paytm Money',
+      icon: '💰',
+      supported: false,
+      description: 'Coming soon'
+    }
+  ];
 
   const handleFileSelect = (e) => {
     const selectedFiles = Array.from(e.target.files);
@@ -55,6 +144,13 @@ const Upload = () => {
       return;
     }
 
+    // Check if broker is supported
+    const broker = brokers.find(b => b.id === selectedBroker);
+    if (!broker?.supported) {
+      toast.error(`${broker?.name || 'Selected broker'} is not yet supported. Please select HDFC Securities for now.`);
+      return;
+    }
+
     setUploading(true);
     try {
       const result = await apiService.uploadContractNotes(files, password, selectedUserId);
@@ -78,6 +174,7 @@ const Upload = () => {
     setPassword('');
     setUploadResults(null);
     setShowPreview(false);
+    setSelectedBroker('hdfc-securities');
   };
 
   // Function to aggregate transactions by security and transaction type
@@ -240,12 +337,59 @@ const Upload = () => {
           <Alert variant="info">
             <strong>Instructions:</strong>
             <ul className="mb-0 mt-2">
+              <li>Select your broker from the dropdown below</li>
               <li>Upload password-protected PDF contract notes from your broker</li>
               <li>The system will automatically extract transaction details</li>
               <li>You can review and confirm the extracted data before saving</li>
               <li>Supported formats: PDF files with tabular transaction data</li>
             </ul>
           </Alert>
+
+          {/* Broker Selection */}
+          <div className="mb-4">
+            <Form.Group>
+              <Form.Label className="fw-bold">Select Your Broker</Form.Label>
+              <Form.Select
+                value={selectedBroker}
+                onChange={(e) => setSelectedBroker(e.target.value)}
+                disabled={uploading}
+                className="mb-3"
+              >
+                {brokers.map((broker) => (
+                  <option key={broker.id} value={broker.id}>
+                    {broker.icon} {broker.name} {!broker.supported ? '(Coming Soon)' : ''}
+                  </option>
+                ))}
+              </Form.Select>
+              
+              {/* Broker Status Alert */}
+              {(() => {
+                const selectedBrokerData = brokers.find(b => b.id === selectedBroker);
+                if (!selectedBrokerData) return null;
+                
+                return (
+                  <Alert 
+                    variant={selectedBrokerData.supported ? 'success' : 'warning'} 
+                    className="mb-0"
+                  >
+                    <div className="d-flex align-items-center">
+                      <span className="fs-4 me-2">{selectedBrokerData.icon}</span>
+                      <div>
+                        <strong>{selectedBrokerData.name}</strong>
+                        <div className="small">{selectedBrokerData.description}</div>
+                        {!selectedBrokerData.supported && (
+                          <div className="small text-muted mt-1">
+                            Currently only HDFC Securities contract notes can be processed. 
+                            Support for other brokers is coming soon!
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Alert>
+                );
+              })()}
+            </Form.Group>
+          </div>
 
           {/* File Drop Area */}
           <div
@@ -313,7 +457,7 @@ const Upload = () => {
             <Button
               variant="primary"
               onClick={handleUpload}
-              disabled={uploading || files.length === 0 || !password}
+              disabled={uploading || files.length === 0 || !password || !brokers.find(b => b.id === selectedBroker)?.supported}
             >
               {uploading ? 'Processing...' : 'Upload and Process'}
             </Button>
