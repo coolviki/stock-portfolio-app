@@ -233,7 +233,10 @@ const Dashboard = () => {
 
   return (
     <div>
-      <h2 className="mb-4">📊 Portfolio Dashboard</h2>
+      <h2 className="mb-4 d-flex align-items-center">
+        <img src="/images/analytics.svg" alt="Portfolio Analytics" style={{width: '2.5rem', height: '2.5rem', marginRight: '0.5rem'}} />
+        Portfolio Dashboard
+      </h2>
       
       {/* Summary Cards */}
       <Row className="mb-4">
