@@ -7,6 +7,7 @@ from typing import List, Optional
 import os
 import json
 import tempfile
+import logging
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -21,9 +22,23 @@ from admin_utils import is_admin_user, get_admin_users, add_admin_user, remove_a
 
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Stock Portfolio API", version="1.0.0")
+
+# Print environment variables on startup (excluding secrets)
+from firebase_config import print_environment_variables
+try:
+    print_environment_variables()
+except Exception as e:
+    logger.error(f"Failed to print environment variables: {e}")
 
 # CORS configuration for Railway deployment
 # Use regex to allow all Railway domains and localhost
@@ -55,6 +70,8 @@ async def health():
 @app.get("/config/firebase")
 def get_firebase_config():
     """Get Firebase configuration for frontend"""
+    logger.info("Frontend requesting Firebase configuration")
+    
     # Only return public Firebase configuration (never private keys)
     config = {
         "apiKey": os.getenv('FIREBASE_API_KEY', ''),
@@ -65,6 +82,14 @@ def get_firebase_config():
         "appId": os.getenv('FIREBASE_APP_ID', ''),
         "available": bool(os.getenv('FIREBASE_API_KEY') and os.getenv('FIREBASE_PROJECT_ID'))
     }
+    
+    # Log configuration status (without exposing secrets)
+    logger.info(f"Firebase configuration - Available: {config['available']}")
+    logger.info(f"Project ID: {config['projectId'] or 'NOT SET'}")
+    logger.info(f"Auth Domain: {config['authDomain'] or 'NOT SET'}")
+    logger.info(f"API Key set: {'Yes' if config['apiKey'] else 'No'}")
+    logger.info(f"App ID set: {'Yes' if config['appId'] else 'No'}")
+    
     return config
 
 @app.post("/users/select-or-create", response_model=UserResponse)
@@ -85,71 +110,109 @@ def select_or_create_user(username: str = Form(...), db: Session = Depends(get_d
 @app.post("/auth/firebase", response_model=UserResponse)
 def firebase_auth(user_data: FirebaseUserCreate, db: Session = Depends(get_db)):
     """Authenticate or create user with Firebase"""
-    # Verify the Firebase ID token
-    verified_data = verify_firebase_token(user_data.id_token)
-    if not verified_data:
-        raise HTTPException(status_code=401, detail="Invalid Firebase token")
+    logger.info("=== Firebase Authentication Request ===")
+    logger.info(f"Received auth request for email: {user_data.email}")
+    logger.info(f"Firebase UID: {user_data.firebase_uid}")
+    logger.info(f"Name: {user_data.name}")
+    logger.info(f"Email verified: {user_data.email_verified}")
     
-    # Check if user exists by Firebase UID
-    db_user = db.query(User).filter(User.firebase_uid == user_data.firebase_uid).first()
-    
-    if db_user:
-        # Update user information if needed
-        db_user.full_name = user_data.name
-        db_user.picture_url = user_data.picture
-        db_user.email_verified = user_data.email_verified
-        db.commit()
-        db.refresh(db_user)
+    try:
+        # Verify the Firebase ID token
+        logger.info("Verifying Firebase ID token...")
+        verified_data = verify_firebase_token(user_data.id_token)
         
-        # Create response with admin status
-        user_response = UserResponse(
-            id=db_user.id,
-            username=db_user.username,
-            email=db_user.email,
-            full_name=db_user.full_name,
-            picture_url=db_user.picture_url,
-            firebase_uid=db_user.firebase_uid,
-            is_firebase_user=db_user.is_firebase_user,
-            email_verified=db_user.email_verified,
-            is_admin=is_admin_user(db_user.email),
-            created_at=db_user.created_at
-        )
-        return user_response
-    else:
-        # Check if user exists by email (for migration purposes)
-        db_user = db.query(User).filter(User.email == user_data.email).first()
+        if not verified_data:
+            logger.error("Firebase token verification failed")
+            raise HTTPException(status_code=401, detail="Invalid Firebase token")
+        
+        logger.info(f"Token verification successful for UID: {verified_data.get('firebase_uid')}")
+        logger.info(f"Verified email: {verified_data.get('email')}")
+        logger.info(f"Provider: {verified_data.get('provider')}")
+        
+        # Check if user exists by Firebase UID
+        logger.info(f"Checking for existing user with Firebase UID: {user_data.firebase_uid}")
+        db_user = db.query(User).filter(User.firebase_uid == user_data.firebase_uid).first()
         
         if db_user:
-            # Update existing user with Firebase info
-            db_user.firebase_uid = user_data.firebase_uid
+            logger.info(f"Found existing user: {db_user.email} (ID: {db_user.id})")
+            # Update user information if needed
             db_user.full_name = user_data.name
             db_user.picture_url = user_data.picture
-            db_user.is_firebase_user = True
             db_user.email_verified = user_data.email_verified
-        else:
-            # Create new user
-            username = user_data.email.split('@')[0]
-            # Ensure username is unique
-            base_username = username
-            counter = 1
-            while db.query(User).filter(User.username == username).first():
-                username = f"{base_username}_{counter}"
-                counter += 1
+            db.commit()
+            db.refresh(db_user)
             
-            db_user = User(
-                username=username,
-                email=user_data.email,
-                full_name=user_data.name,
-                picture_url=user_data.picture,
-                firebase_uid=user_data.firebase_uid,
-                is_firebase_user=True,
-                email_verified=user_data.email_verified
+            logger.info(f"Updated existing user: {db_user.email}")
+            
+            # Create response with admin status
+            user_response = UserResponse(
+                id=db_user.id,
+                username=db_user.username,
+                email=db_user.email,
+                full_name=db_user.full_name,
+                picture_url=db_user.picture_url,
+                firebase_uid=db_user.firebase_uid,
+                is_firebase_user=db_user.is_firebase_user,
+                email_verified=db_user.email_verified,
+                is_admin=is_admin_user(db_user.email),
+                created_at=db_user.created_at
             )
-            db.add(db_user)
-        
-        db.commit()
-        db.refresh(db_user)
-        return db_user
+            
+            logger.info(f"Returning existing user response for: {db_user.email}")
+            return user_response
+        else:
+            logger.info("No user found with Firebase UID, checking by email...")
+            # Check if user exists by email (for migration purposes)
+            db_user = db.query(User).filter(User.email == user_data.email).first()
+            
+            if db_user:
+                logger.info(f"Found existing user by email: {db_user.email} (ID: {db_user.id})")
+                # Update existing user with Firebase info
+                db_user.firebase_uid = user_data.firebase_uid
+                db_user.full_name = user_data.name
+                db_user.picture_url = user_data.picture
+                db_user.is_firebase_user = True
+                db_user.email_verified = user_data.email_verified
+                
+                logger.info(f"Updated existing user with Firebase info: {db_user.email}")
+            else:
+                logger.info("No existing user found, creating new user...")
+                # Create new user
+                username = user_data.email.split('@')[0]
+                # Ensure username is unique
+                base_username = username
+                counter = 1
+                while db.query(User).filter(User.username == username).first():
+                    username = f"{base_username}_{counter}"
+                    counter += 1
+                
+                logger.info(f"Creating new user with username: {username}")
+                
+                db_user = User(
+                    username=username,
+                    email=user_data.email,
+                    full_name=user_data.name,
+                    picture_url=user_data.picture,
+                    firebase_uid=user_data.firebase_uid,
+                    is_firebase_user=True,
+                    email_verified=user_data.email_verified
+                )
+                db.add(db_user)
+            
+            db.commit()
+            db.refresh(db_user)
+            
+            logger.info(f"Successfully created/updated user: {db_user.email} (ID: {db_user.id})")
+            logger.info("=== Firebase Authentication Successful ===")
+            return db_user
+            
+    except HTTPException:
+        logger.error("Firebase authentication failed - re-raising HTTP exception")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during Firebase authentication: {e}")
+        logger.error("=== Firebase Authentication Failed ===")
+        raise HTTPException(status_code=500, detail=f"Authentication error: {str(e)}")
 
 @app.get("/users/", response_model=List[UserResponse])
 def get_users(db: Session = Depends(get_db)):
@@ -1017,4 +1080,6 @@ if IS_PRODUCTION:
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    logger.info(f"Starting server on port {port}")
+    logger.info("Server startup complete - ready to handle requests")
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
