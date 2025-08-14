@@ -157,18 +157,62 @@ export const apiService = {
     return response.data;
   },
 
-  async createSecurity(security) {
-    const response = await api.post('/securities/', security);
+  async createSecurity(security, adminEmail) {
+    const formData = new FormData();
+    formData.append('admin_email', adminEmail);
+    Object.keys(security).forEach(key => {
+      formData.append(key, security[key]);
+    });
+    
+    const response = await api.post('/securities/', formData);
     return response.data;
   },
 
-  async updateSecurity(securityId, security) {
-    const response = await api.put(`/securities/${securityId}`, security);
+  async updateSecurity(securityId, security, adminEmail) {
+    const formData = new FormData();
+    formData.append('admin_email', adminEmail);
+    Object.keys(security).forEach(key => {
+      formData.append(key, security[key]);
+    });
+    
+    const response = await api.put(`/securities/${securityId}`, formData);
     return response.data;
   },
 
-  async deleteSecurity(securityId) {
-    const response = await api.delete(`/securities/${securityId}`);
+  async deleteSecurity(securityId, adminEmail) {
+    const formData = new FormData();
+    formData.append('admin_email', adminEmail);
+    
+    const response = await api.delete(`/securities/${securityId}`, { data: formData });
+    return response.data;
+  },
+
+  // Admin APIs
+  async checkAdminAccess(userEmail) {
+    const response = await api.get('/admin/check-access', {
+      params: { user_email: userEmail }
+    });
+    return response.data;
+  },
+
+  async getAdminUsers() {
+    const response = await api.get('/admin/users/list');
+    return response.data;
+  },
+
+  async addAdminUser(email) {
+    const formData = new FormData();
+    formData.append('email', email);
+    
+    const response = await api.post('/admin/users/add', formData);
+    return response.data;
+  },
+
+  async removeAdminUser(email) {
+    const formData = new FormData();
+    formData.append('email', email);
+    
+    const response = await api.delete('/admin/users/remove', { data: formData });
     return response.data;
   }
 };

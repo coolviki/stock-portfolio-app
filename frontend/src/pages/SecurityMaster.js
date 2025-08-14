@@ -3,8 +3,10 @@ import { Card, Table, Button, Modal, Form, Alert, Badge, InputGroup, OverlayTrig
 import { apiService } from '../services/apiService';
 import { toast } from 'react-toastify';
 import { fetchStockPriceBySymbol, fetchStockPriceByIsin } from '../utils/apiUtils';
+import { useAuth } from '../context/AuthContext';
 
 const SecurityMaster = () => {
+  const { user, isAdmin } = useAuth();
   const [securities, setSecurities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -53,9 +55,14 @@ const SecurityMaster = () => {
       return;
     }
 
+    if (!user?.email) {
+      toast.error('User email is required for admin operations');
+      return;
+    }
+
     setSaving(true);
     try {
-      await apiService.createSecurity(formData);
+      await apiService.createSecurity(formData, user.email);
       toast.success('Security created successfully!');
       setShowCreateModal(false);
       resetForm();
@@ -74,9 +81,14 @@ const SecurityMaster = () => {
       return;
     }
 
+    if (!user?.email) {
+      toast.error('User email is required for admin operations');
+      return;
+    }
+
     setSaving(true);
     try {
-      await apiService.updateSecurity(selectedSecurity.id, formData);
+      await apiService.updateSecurity(selectedSecurity.id, formData, user.email);
       toast.success('Security updated successfully!');
       setShowEditModal(false);
       setSelectedSecurity(null);
@@ -93,9 +105,14 @@ const SecurityMaster = () => {
   const handleDeleteSecurity = async () => {
     if (!selectedSecurity) return;
 
+    if (!user?.email) {
+      toast.error('User email is required for admin operations');
+      return;
+    }
+
     setDeleting(true);
     try {
-      await apiService.deleteSecurity(selectedSecurity.id);
+      await apiService.deleteSecurity(selectedSecurity.id, user.email);
       toast.success(`Security '${selectedSecurity.security_name}' deleted successfully!`);
       setShowDeleteModal(false);
       setSelectedSecurity(null);
@@ -272,6 +289,25 @@ const SecurityMaster = () => {
         <div className="spinner-border text-primary" role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="d-flex justify-content-center align-items-center" style={{ height: '400px' }}>
+        <Alert variant="danger" className="text-center">
+          <Alert.Heading>🔒 Access Denied</Alert.Heading>
+          <p>
+            You do not have admin privileges to access the Security Master.
+            <br />
+            Please contact an administrator if you need access.
+          </p>
+          <hr />
+          <p className="mb-0">
+            <strong>Current user:</strong> {user?.email || user?.username || 'Unknown'}
+          </p>
+        </Alert>
       </div>
     );
   }

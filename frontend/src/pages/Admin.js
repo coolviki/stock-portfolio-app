@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Container, Row, Col, Card, Button, Form, Alert, Spinner } from 'react-bootstrap';
 import { toast } from 'react-toastify';
-import { apiService } from '../services/apiService';
 import { fetchAdminExport, fetchAdminImport } from '../utils/apiUtils';
+import { useAuth } from '../context/AuthContext';
 
 const Admin = () => {
+  const { user, isAdmin } = useAuth();
   const [exportLoading, setExportLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
   const [importFile, setImportFile] = useState(null);
@@ -12,9 +13,14 @@ const Admin = () => {
   const [importResult, setImportResult] = useState(null);
 
   const handleExport = async () => {
+    if (!user?.email) {
+      toast.error('User email is required for admin operations');
+      return;
+    }
+
     setExportLoading(true);
     try {
-      const response = await fetchAdminExport();
+      const response = await fetchAdminExport(user.email);
       
       if (!response.ok) {
         throw new Error('Export failed');
@@ -63,6 +69,11 @@ const Admin = () => {
       return;
     }
 
+    if (!user?.email) {
+      toast.error('User email is required for admin operations');
+      return;
+    }
+
     setImportLoading(true);
     setImportResult(null);
     
@@ -70,6 +81,7 @@ const Admin = () => {
       const formData = new FormData();
       formData.append('file', importFile);
       formData.append('replace_existing', replaceExisting.toString());
+      formData.append('admin_email', user.email);
 
       const response = await fetchAdminImport(formData);
 
@@ -99,14 +111,40 @@ const Admin = () => {
     }
   };
 
+  if (!isAdmin) {
+    return (
+      <Container fluid className="p-4">
+        <div className="d-flex justify-content-center align-items-center" style={{ height: '400px' }}>
+          <Alert variant="danger" className="text-center">
+            <Alert.Heading>🔒 Access Denied</Alert.Heading>
+            <p>
+              You do not have admin privileges to access the Admin panel.
+              <br />
+              Please contact an administrator if you need access.
+            </p>
+            <hr />
+            <p className="mb-0">
+              <strong>Current user:</strong> {user?.email || user?.username || 'Unknown'}
+            </p>
+          </Alert>
+        </div>
+      </Container>
+    );
+  }
+
   return (
     <Container fluid className="p-4">
       <Row>
         <Col>
-          <h2 className="mb-4">Admin Panel</h2>
+          <h2 className="mb-4">⚙️ Admin Panel</h2>
           <p className="text-muted mb-4">
             Manage database operations including export and import functionality.
           </p>
+          <Alert variant="success" className="mb-4">
+            <strong>Welcome, Admin!</strong> You have full administrative access to manage the system.
+            <br />
+            <strong>Current admin:</strong> {user?.email || user?.username}
+          </Alert>
         </Col>
       </Row>
 

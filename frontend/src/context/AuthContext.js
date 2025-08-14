@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from '../services/authService';
+import { apiService } from '../services/apiService';
 
 const AuthContext = createContext();
 
@@ -15,17 +16,33 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedUserId, setSelectedUserId] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const userData = localStorage.getItem('user');
+    const initializeUser = async () => {
+      const userData = localStorage.getItem('user');
+      
+      if (userData) {
+        const user = JSON.parse(userData);
+        setUser(user);
+        setSelectedUserId(user.id);
+        
+        // Check admin status if user has email
+        if (user.email) {
+          try {
+            const adminCheck = await apiService.checkAdminAccess(user.email);
+            setIsAdmin(adminCheck.is_admin);
+          } catch (error) {
+            console.error('Error checking admin status:', error);
+            setIsAdmin(false);
+          }
+        }
+      }
+      
+      setLoading(false);
+    };
     
-    if (userData) {
-      const user = JSON.parse(userData);
-      setUser(user);
-      setSelectedUserId(user.id);
-    }
-    
-    setLoading(false);
+    initializeUser();
   }, []);
 
   const login = async (userData) => {
@@ -47,6 +64,18 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('user', JSON.stringify(user));
       setUser(user);
       setSelectedUserId(user.id);
+      
+      // Check admin status
+      if (user.email) {
+        try {
+          const adminCheck = await apiService.checkAdminAccess(user.email);
+          setIsAdmin(adminCheck.is_admin);
+        } catch (error) {
+          console.error('Error checking admin status:', error);
+          setIsAdmin(false);
+        }
+      }
+      
       return response;
     } else {
       // Firebase auth login (user object passed directly)
@@ -65,6 +94,18 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('user', JSON.stringify(user));
       setUser(user);
       setSelectedUserId(user.id);
+      
+      // Check admin status
+      if (user.email) {
+        try {
+          const adminCheck = await apiService.checkAdminAccess(user.email);
+          setIsAdmin(adminCheck.is_admin);
+        } catch (error) {
+          console.error('Error checking admin status:', error);
+          setIsAdmin(false);
+        }
+      }
+      
       return { user_data: user };
     }
   };
@@ -73,6 +114,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('user');
     setUser(null);
     setSelectedUserId(null);
+    setIsAdmin(false);
   };
 
   const switchUser = (userId) => {
@@ -83,6 +125,7 @@ export const AuthProvider = ({ children }) => {
     user,
     selectedUserId,
     loading,
+    isAdmin,
     login,
     logout,
     switchUser

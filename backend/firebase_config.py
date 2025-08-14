@@ -1,12 +1,24 @@
 import os
 import json
 import base64
-import firebase_admin
-from firebase_admin import credentials, auth
 from typing import Dict, Optional
+
+# Optional Firebase imports - handle gracefully if not available
+try:
+    import firebase_admin
+    from firebase_admin import credentials, auth
+    FIREBASE_AVAILABLE = True
+except ImportError:
+    print("Warning: firebase_admin not available. Firebase authentication will be disabled.")
+    FIREBASE_AVAILABLE = False
+    firebase_admin = None
+    credentials = None
+    auth = None
 
 def get_firebase_credentials():
     """Get Firebase credentials from environment variables or file"""
+    if not FIREBASE_AVAILABLE:
+        return None
     # Method 1: Individual environment variables (Production recommended)
     if os.getenv('FIREBASE_PRIVATE_KEY'):
         cred_dict = {
@@ -54,6 +66,10 @@ def get_firebase_credentials():
 # Initialize Firebase Admin SDK
 def initialize_firebase():
     """Initialize Firebase Admin SDK"""
+    if not FIREBASE_AVAILABLE:
+        print("Firebase not available - skipping initialization")
+        return False
+    
     if not firebase_admin._apps:
         cred = get_firebase_credentials()
         
@@ -63,11 +79,17 @@ def initialize_firebase():
         firebase_admin.initialize_app(cred, {
             'projectId': os.getenv('FIREBASE_PROJECT_ID')
         })
+    
+    return True
 
 def verify_firebase_token(id_token: str) -> Optional[Dict]:
     """
     Verify Firebase ID token and return user information
     """
+    if not FIREBASE_AVAILABLE:
+        print("Firebase not available - cannot verify token")
+        return None
+    
     try:
         # Initialize Firebase if not already done
         initialize_firebase()
@@ -98,6 +120,10 @@ def get_firebase_user(uid: str) -> Optional[Dict]:
     """
     Get user information from Firebase by UID
     """
+    if not FIREBASE_AVAILABLE:
+        print("Firebase not available - cannot get user")
+        return None
+    
     try:
         initialize_firebase()
         user_record = auth.get_user(uid)

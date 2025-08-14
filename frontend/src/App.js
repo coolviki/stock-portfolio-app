@@ -12,7 +12,7 @@ import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import Upload from './pages/Upload';
 import ManualEntry from './pages/ManualEntry';
-import Users from './pages/Users';
+import ManageUsers from './pages/ManageUsers';
 import Admin from './pages/Admin';
 import CapitalGains from './pages/CapitalGains';
 import SecurityMaster from './pages/SecurityMaster';
@@ -60,7 +60,7 @@ function App() {
                 <Route path="/manual-entry" element={<ManualEntry />} />
                 <Route path="/capital-gains" element={<CapitalGains />} />
                 <Route path="/security-master" element={<SecurityMaster />} />
-                <Route path="/users" element={<Users />} />
+                <Route path="/users" element={<ManageUsers />} />
                 <Route path="/admin" element={<Admin />} />
                 <Route path="*" element={<Navigate to="/dashboard" />} />
               </Routes>

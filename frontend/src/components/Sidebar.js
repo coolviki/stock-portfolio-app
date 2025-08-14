@@ -1,20 +1,30 @@
 import React from 'react';
 import { Nav } from 'react-bootstrap';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
 
-  const menuItems = [
+  const baseMenuItems = [
     { path: '/dashboard', icon: '📊', label: 'Dashboard' },
     { path: '/transactions', icon: '📋', label: 'Transactions' },
     { path: '/upload', icon: '📤', label: 'Upload Contract Notes' },
     { path: '/manual-entry', icon: '✏️', label: 'Manual Entry' },
-    { path: '/capital-gains', icon: '💰', label: 'Capital Gains' },
-    { path: '/security-master', icon: '🔐', label: 'Security Master' },
-    { path: '/users', icon: '👥', label: 'Manage Users' },
-    { path: '/admin', icon: '⚙️', label: 'Admin' }
+    { path: '/capital-gains', icon: '💰', label: 'Capital Gains' }
+  ];
+
+  const adminMenuItems = [
+    { path: '/security-master', icon: '🔐', label: 'Security Master', adminOnly: true },
+    { path: '/users', icon: '👥', label: 'Manage Users', adminOnly: true },
+    { path: '/admin', icon: '⚙️', label: 'Admin', adminOnly: true }
+  ];
+
+  const menuItems = [
+    ...baseMenuItems,
+    ...(isAdmin ? adminMenuItems : [])
   ];
 
   return (
@@ -27,12 +37,20 @@ const Sidebar = () => {
               key={item.path}
               className={`text-white mb-2 rounded ${
                 location.pathname === item.path ? 'bg-primary' : ''
-              }`}
+              } ${item.adminOnly ? 'admin-item' : ''}`}
               onClick={() => navigate(item.path)}
-              style={{ cursor: 'pointer' }}
+              style={{ 
+                cursor: 'pointer',
+                ...(item.adminOnly ? { 
+                  borderLeft: '3px solid #ffc107',
+                  paddingLeft: '12px'
+                } : {})
+              }}
+              title={item.adminOnly ? 'Admin Only' : ''}
             >
               <span className="me-2">{item.icon}</span>
               {item.label}
+              {item.adminOnly && <span className="ms-2 text-warning" style={{ fontSize: '0.8em' }}>👑</span>}
             </Nav.Link>
           ))}
         </Nav>

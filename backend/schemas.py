@@ -24,6 +24,7 @@ class UserResponse(UserBase):
     firebase_uid: Optional[str] = None
     is_firebase_user: bool = False
     email_verified: bool = False
+    is_admin: bool = False
     created_at: datetime
     
     class Config:

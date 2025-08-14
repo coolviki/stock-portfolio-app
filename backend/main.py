@@ -17,6 +17,7 @@ from pdf_parser import parse_contract_note
 from stock_api import get_current_price, get_current_price_with_fallback, search_stocks, enrich_security_data, get_current_price_with_waterfall
 from capital_gains import get_capital_gains_for_financial_year, get_available_financial_years, get_current_financial_year
 from firebase_config import verify_firebase_token
+from admin_utils import is_admin_user, get_admin_users, add_admin_user, remove_admin_user
 
 load_dotenv()
 
@@ -84,7 +85,21 @@ def firebase_auth(user_data: FirebaseUserCreate, db: Session = Depends(get_db)):
         db_user.email_verified = user_data.email_verified
         db.commit()
         db.refresh(db_user)
-        return db_user
+        
+        # Create response with admin status
+        user_response = UserResponse(
+            id=db_user.id,
+            username=db_user.username,
+            email=db_user.email,
+            full_name=db_user.full_name,
+            picture_url=db_user.picture_url,
+            firebase_uid=db_user.firebase_uid,
+            is_firebase_user=db_user.is_firebase_user,
+            email_verified=db_user.email_verified,
+            is_admin=is_admin_user(db_user.email),
+            created_at=db_user.created_at
+        )
+        return user_response
     else:
         # Check if user exists by email (for migration purposes)
         db_user = db.query(User).filter(User.email == user_data.email).first()
@@ -192,7 +207,14 @@ def get_or_create_security(db: Session, security_name: str, isin: str = "", tick
 
 # Security endpoints
 @app.post("/securities/", response_model=SecurityResponse)
-def create_security(security: SecurityCreate, db: Session = Depends(get_db)):
+def create_security(security: SecurityCreate, admin_email: str = Form(...), db: Session = Depends(get_db)):
+    # Check admin access
+    if not is_admin_user(admin_email):
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Admin privileges required."
+        )
+    
     db_security = Security(**security.model_dump())
     db.add(db_security)
     db.commit()
@@ -212,7 +234,14 @@ def get_security(security_id: int, db: Session = Depends(get_db)):
     return security
 
 @app.put("/securities/{security_id}", response_model=SecurityResponse)
-def update_security(security_id: int, security: SecurityUpdate, db: Session = Depends(get_db)):
+def update_security(security_id: int, security: SecurityUpdate, admin_email: str = Form(...), db: Session = Depends(get_db)):
+    # Check admin access
+    if not is_admin_user(admin_email):
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Admin privileges required."
+        )
+    
     db_security = db.query(Security).filter(Security.id == security_id).first()
     if db_security is None:
         raise HTTPException(status_code=404, detail="Security not found")
@@ -227,7 +256,14 @@ def update_security(security_id: int, security: SecurityUpdate, db: Session = De
     return db_security
 
 @app.delete("/securities/{security_id}")
-def delete_security(security_id: int, db: Session = Depends(get_db)):
+def delete_security(security_id: int, admin_email: str = Form(...), db: Session = Depends(get_db)):
+    # Check admin access
+    if not is_admin_user(admin_email):
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Admin privileges required."
+        )
+    
     db_security = db.query(Security).filter(Security.id == security_id).first()
     if db_security is None:
         raise HTTPException(status_code=404, detail="Security not found")
@@ -672,8 +708,15 @@ def get_portfolio_summary(
     }
 
 @app.get("/admin/export")
-def export_database(db: Session = Depends(get_db)):
+def export_database(user_email: str = Query(...), db: Session = Depends(get_db)):
     """Export all database data to JSON format"""
+    # Check admin access
+    if not is_admin_user(user_email):
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Admin privileges required."
+        )
+    
     try:
         # Export users
         users = db.query(User).all()
@@ -736,9 +779,17 @@ def export_database(db: Session = Depends(get_db)):
 async def import_database(
     file: UploadFile = File(...),
     replace_existing: bool = Form(False),
+    admin_email: str = Form(...),
     db: Session = Depends(get_db)
 ):
     """Import database data from JSON file"""
+    # Check admin access
+    if not is_admin_user(admin_email):
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Admin privileges required."
+        )
+    
     try:
         if not file.filename.lower().endswith('.json'):
             raise HTTPException(status_code=400, detail="Only JSON files are supported")
@@ -889,6 +940,47 @@ def get_capital_gains_available_years(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get available years: {str(e)}")
+
+# Admin endpoints
+@app.get("/admin/check-access")
+def check_admin_access(user_email: str = Query(...)):
+    """Check if a user has admin access"""
+    is_admin = is_admin_user(user_email)
+    return {"is_admin": is_admin, "email": user_email}
+
+@app.get("/admin/users/list")
+def get_admin_users_list():
+    """Get list of all admin users"""
+    admin_users = get_admin_users()
+    return {"admin_users": admin_users}
+
+@app.post("/admin/users/add")
+def add_admin_user_endpoint(email: str = Form(...)):
+    """Add a user to the admin whitelist"""
+    success = add_admin_user(email)
+    if success:
+        return {"message": f"User {email} added to admin whitelist", "success": True}
+    else:
+        return {"message": f"User {email} is already in the admin whitelist", "success": False}
+
+@app.delete("/admin/users/remove")
+def remove_admin_user_endpoint(email: str = Form(...)):
+    """Remove a user from the admin whitelist"""
+    success = remove_admin_user(email)
+    if success:
+        return {"message": f"User {email} removed from admin whitelist", "success": True}
+    else:
+        raise HTTPException(status_code=404, detail=f"User {email} not found in admin whitelist")
+
+# Dependency to check admin access
+def require_admin_access(user_email: str = Query(...)):
+    """Dependency to ensure only admin users can access certain endpoints"""
+    if not is_admin_user(user_email):
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Admin privileges required."
+        )
+    return user_email
 
 # SPA routing - serve frontend for all non-API routes (production only)
 if IS_PRODUCTION:

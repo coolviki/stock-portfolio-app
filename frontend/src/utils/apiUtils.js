@@ -23,9 +23,11 @@ export const fetchStockPriceByIsin = (isin) => {
 };
 
 // Export admin functions
-export const fetchAdminExport = () => {
+export const fetchAdminExport = (adminEmail) => {
   const baseUrl = getApiBaseUrl();
-  return fetch(`${baseUrl}/admin/export`);
+  const params = new URLSearchParams();
+  params.append('user_email', adminEmail);
+  return fetch(`${baseUrl}/admin/export?${params}`);
 };
 
 export const fetchAdminImport = (formData) => {
