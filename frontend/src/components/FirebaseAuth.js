@@ -155,7 +155,7 @@ const FirebaseAuth = () => {
       <div className="col-md-7 d-none d-md-flex flex-column justify-content-center align-items-center text-white p-5">
         <div className="text-center">
           <div className="mb-4">
-            <span style={{fontSize: '5rem', textShadow: '2px 2px 4px rgba(0,0,0,0.3)'}}>📈</span>
+            <img src="/images/stock-chart.svg" alt="Stock Chart" style={{width: '5rem', height: '5rem', filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.3))'}} />
           </div>
           <h1 className="display-3 fw-bold mb-4" style={{textShadow: '2px 2px 4px rgba(0,0,0,0.3)'}}>
             Stock Portfolio
@@ -171,21 +171,21 @@ const FirebaseAuth = () => {
           <div className="row text-center mt-4">
             <div className="col-md-4 mb-3">
               <div className="bg-white bg-opacity-20 p-4 rounded-3 backdrop-blur h-100 d-flex flex-column justify-content-center" style={{minHeight: '160px'}}>
-                <div style={{fontSize: '4rem'}} className="mb-3">📊</div>
+                <img src="/images/analytics.svg" alt="Analytics" style={{width: '4rem', height: '4rem'}} className="mb-3" />
                 <h5 className="fw-bold mb-2" style={{fontSize: '1.1rem'}}>Advanced Analytics</h5>
                 <p className="small mb-0" style={{fontSize: '0.9rem', lineHeight: '1.3'}}>Real-time portfolio performance tracking</p>
               </div>
             </div>
             <div className="col-md-4 mb-3">
               <div className="bg-white bg-opacity-20 p-4 rounded-3 backdrop-blur h-100 d-flex flex-column justify-content-center" style={{minHeight: '160px'}}>
-                <div style={{fontSize: '4rem'}} className="mb-3">📄</div>
+                <img src="/images/document.svg" alt="PDF Import" style={{width: '4rem', height: '4rem'}} className="mb-3" />
                 <h5 className="fw-bold mb-2" style={{fontSize: '1.1rem'}}>PDF Import</h5>
                 <p className="small mb-0" style={{fontSize: '0.9rem', lineHeight: '1.3'}}>Automated contract note processing</p>
               </div>
             </div>
             <div className="col-md-4 mb-3">
               <div className="bg-white bg-opacity-20 p-4 rounded-3 backdrop-blur h-100 d-flex flex-column justify-content-center" style={{minHeight: '160px'}}>
-                <div style={{fontSize: '4rem'}} className="mb-3">💰</div>
+                <img src="/images/money.svg" alt="Tax Optimization" style={{width: '4rem', height: '4rem'}} className="mb-3" />
                 <h5 className="fw-bold mb-2" style={{fontSize: '1.1rem'}}>Tax Optimization</h5>
                 <p className="small mb-0" style={{fontSize: '0.9rem', lineHeight: '1.3'}}>Capital gains calculation & reporting</p>
               </div>
@@ -202,7 +202,7 @@ const FirebaseAuth = () => {
               
               {/* Mobile Header (only visible on small screens) */}
               <div className="d-md-none text-center mb-4">
-                <span style={{fontSize: '3rem', color: '#667eea'}}>📈</span>
+                <img src="/images/stock-chart.svg" alt="Stock Portfolio" style={{width: '3rem', height: '3rem'}} />
                 <h2 className="fw-bold text-primary mt-2 mb-3">Stock Portfolio</h2>
               </div>
 
