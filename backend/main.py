@@ -442,22 +442,6 @@ def get_transactions(
     
     return query.all()
 
-@app.get("/transactions/all", response_model=List[TransactionResponse])
-def get_all_transactions(
-    security_name: Optional[str] = None,
-    transaction_type: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
-    """Get transactions for all users"""
-    query = db.query(Transaction).join(Security)
-    
-    if security_name:
-        query = query.filter(Security.security_name.ilike(f"%{security_name}%"))
-    
-    if transaction_type:
-        query = query.filter(Transaction.transaction_type == transaction_type)
-    
-    return query.all()
 
 @app.put("/transactions/{transaction_id}", response_model=TransactionResponse)
 def update_transaction(
