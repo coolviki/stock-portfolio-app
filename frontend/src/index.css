@@ -91,3 +91,25 @@ code {
 .btn-primary:hover {
   background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
 }
+
+.broker-select {
+  border: 2px solid #007bff;
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 1.1rem;
+}
+
+.broker-select:focus {
+  border-color: #0056b3;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.broker-status-supported {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.broker-status-coming-soon {
+  color: #ffc107;
+  font-weight: 600;
+}
