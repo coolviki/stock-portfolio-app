@@ -85,8 +85,7 @@ const FirebaseAuth = () => {
 
   const handleGoogleSignIn = async () => {
     if (!firebaseAvailable) {
-      setError('Firebase authentication is not available. Redirecting to alternative login...');
-      setTimeout(() => navigate('/login'), 2000);
+      setError('Google authentication is temporarily unavailable. Please try again later or contact support.');
       return;
     }
 
@@ -147,9 +146,6 @@ const FirebaseAuth = () => {
     }
   };
 
-  const handleFallbackLogin = () => {
-    navigate('/login');
-  };
 
   return (
     <div className="min-vh-100 d-flex" 
@@ -225,11 +221,11 @@ const FirebaseAuth = () => {
               )}
 
               {!checkingFirebase && !firebaseAvailable && (
-                <Alert variant="warning" className="mb-4">
+                <Alert variant="danger" className="mb-4">
                   <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                  <strong>Firebase authentication is not configured.</strong>
+                  <strong>Google authentication is temporarily unavailable.</strong>
                   <br />
-                  <small>You can still access the application using the alternative login method.</small>
+                  <small>Please try again later or contact support if the issue persists.</small>
                 </Alert>
               )}
 
@@ -270,27 +266,15 @@ const FirebaseAuth = () => {
                 </div>
               )}
 
-              {!checkingFirebase && !firebaseAvailable && (
-                <div className="mb-4">
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    onClick={handleFallbackLogin}
-                    className="w-100 d-flex align-items-center justify-content-center py-3"
-                    style={{borderRadius: '12px', fontSize: '1.1rem'}}
-                  >
-                    <i className="bi bi-box-arrow-in-right me-3"></i>
-                    Continue with Alternative Login
-                  </Button>
+
+              {firebaseAvailable && (
+                <div className="text-center mb-4">
+                  <small className="text-muted d-flex align-items-center justify-content-center">
+                    <i className="bi bi-shield-check me-2"></i>
+                    Secured by Firebase Authentication
+                  </small>
                 </div>
               )}
-
-              <div className="text-center mb-4">
-                <small className="text-muted d-flex align-items-center justify-content-center">
-                  <i className="bi bi-shield-check me-2"></i>
-                  {!checkingFirebase && firebaseAvailable ? 'Secured by Firebase Authentication' : 'Secure Authentication Available'}
-                </small>
-              </div>
 
               {/* Benefits Section */}
               <div className="bg-light p-4 rounded-3 mb-4">
