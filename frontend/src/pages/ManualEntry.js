@@ -7,7 +7,7 @@ import { toast } from 'react-toastify';
 import 'react-datepicker/dist/react-datepicker.css';
 
 const ManualEntry = () => {
-  const { selectedUserId } = useAuth();
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     security_name: '',
     security_symbol: '',
@@ -119,7 +119,7 @@ const ManualEntry = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!selectedUserId) {
+    if (!user?.id) {
       toast.error('Please log in to add transactions');
       return;
     }
@@ -129,7 +129,7 @@ const ManualEntry = () => {
     try {
       const transactionData = {
         ...formData,
-        user_id: selectedUserId,
+        user_id: user.id,
         quantity: parseFloat(formData.quantity),
         price_per_unit: parseFloat(formData.price_per_unit),
         total_amount: parseFloat(formData.total_amount),

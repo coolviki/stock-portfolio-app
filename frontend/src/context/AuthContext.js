@@ -15,7 +15,6 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedUserId, setSelectedUserId] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
@@ -25,7 +24,6 @@ export const AuthProvider = ({ children }) => {
       if (userData) {
         const user = JSON.parse(userData);
         setUser(user);
-        setSelectedUserId(user.id);
         
         // Check admin status if user has email
         if (user.email) {
@@ -63,7 +61,6 @@ export const AuthProvider = ({ children }) => {
       
       localStorage.setItem('user', JSON.stringify(user));
       setUser(user);
-      setSelectedUserId(user.id);
       
       // Check admin status
       if (user.email) {
@@ -93,7 +90,6 @@ export const AuthProvider = ({ children }) => {
       
       localStorage.setItem('user', JSON.stringify(user));
       setUser(user);
-      setSelectedUserId(user.id);
       
       // Check admin status
       if (user.email) {
@@ -113,22 +109,15 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem('user');
     setUser(null);
-    setSelectedUserId(null);
     setIsAdmin(false);
-  };
-
-  const switchUser = (userId) => {
-    setSelectedUserId(userId);
   };
 
   const value = {
     user,
-    selectedUserId,
     loading,
     isAdmin,
     login,
-    logout,
-    switchUser
+    logout
   };
 
   return (
