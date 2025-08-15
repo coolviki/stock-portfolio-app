@@ -77,13 +77,25 @@ class YahooFinanceProvider(StockPriceProvider):
         
         try:
             clean_symbol = self._clean_symbol(symbol)
-            url = f"{self.base_url}/{clean_symbol}"
+            url = f"{self.base_url}/{clean_symbol}?interval=1d&range=1d"
+            
+            # Add proper headers to avoid blocking
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'application/json,text/plain,*/*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            }
             
             logger.info(f"Yahoo Finance: Fetching price for {clean_symbol}")
-            response = requests.get(url, timeout=self.timeout)
+            response = requests.get(url, headers=headers, timeout=self.timeout)
             
             if response.status_code == 200:
                 data = response.json()
+                logger.debug(f"Yahoo Finance response for {clean_symbol}: {str(data)[:200]}...")
                 
                 if 'chart' in data and 'result' in data['chart']:
                     results = data['chart']['result']
@@ -112,6 +124,14 @@ class YahooFinanceProvider(StockPriceProvider):
                                     provider=self.name,
                                     source_method="CHART_API"
                                 )
+                        else:
+                            logger.warning(f"Yahoo Finance: No regularMarketPrice in meta for {clean_symbol}. Meta keys: {list(result.get('meta', {}).keys())}")
+                    else:
+                        logger.warning(f"Yahoo Finance: No results in chart for {clean_symbol}")
+                else:
+                    logger.warning(f"Yahoo Finance: Invalid chart structure for {clean_symbol}. Response keys: {list(data.keys())}")
+            else:
+                logger.warning(f"Yahoo Finance: HTTP {response.status_code} for {clean_symbol}: {response.text[:200]}")
             
             # If we reach here, no valid price found
             logger.warning(f"Yahoo Finance: No price data found for {clean_symbol}")
