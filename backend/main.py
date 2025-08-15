@@ -19,6 +19,8 @@ from stock_api import get_current_price, get_current_price_with_fallback, search
 from capital_gains import get_capital_gains_for_financial_year, get_available_financial_years, get_current_financial_year
 from firebase_config import verify_firebase_token
 from admin_utils import is_admin_user, get_admin_users, add_admin_user, remove_admin_user
+from price_config import price_config
+from stock_providers.manager import stock_price_manager
 
 load_dotenv()
 
@@ -1029,6 +1031,202 @@ def remove_admin_user_endpoint(email: str = Form(...)):
         return {"message": f"User {email} removed from admin whitelist", "success": True}
     else:
         raise HTTPException(status_code=404, detail=f"User {email} not found in admin whitelist")
+
+# Price Provider Admin Endpoints
+@app.get("/admin/price-providers/status")
+def get_price_providers_status(user_email: str = Query(...)):
+    """Get status of all price providers"""
+    if not is_admin_user(user_email):
+        raise HTTPException(status_code=403, detail="Access denied. Admin privileges required.")
+    
+    try:
+        status = stock_price_manager.get_provider_status()
+        config = price_config.export_config()
+        
+        return {
+            "providers": status,
+            "configuration": config,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting provider status: {str(e)}")
+
+@app.post("/admin/price-providers/configure")
+def configure_price_provider(
+    provider_name: str = Form(...),
+    enabled: bool = Form(...),
+    priority: int = Form(...),
+    api_key: str = Form(""),
+    timeout: int = Form(10),
+    user_email: str = Form(...)
+):
+    """Configure a price provider"""
+    if not is_admin_user(user_email):
+        raise HTTPException(status_code=403, detail="Access denied. Admin privileges required.")
+    
+    try:
+        # Update provider configuration
+        provider_config = {
+            "enabled": enabled,
+            "priority": priority,
+            "config": {
+                "timeout": timeout
+            }
+        }
+        
+        # Add API key if provided and not empty
+        if api_key.strip():
+            provider_config["config"]["api_key"] = api_key.strip()
+        
+        price_config.update_provider_config(provider_name, provider_config)
+        
+        # Reload manager configuration
+        stock_price_manager.reload_configuration()
+        
+        return {
+            "success": True,
+            "message": f"Provider {provider_name} configured successfully",
+            "provider": provider_name,
+            "enabled": enabled,
+            "priority": priority
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error configuring provider: {str(e)}")
+
+@app.post("/admin/price-providers/test")
+def test_price_provider(
+    provider_name: str = Form(...),
+    test_symbol: str = Form("RELIANCE"),
+    user_email: str = Form(...)
+):
+    """Test a price provider with a sample symbol"""
+    if not is_admin_user(user_email):
+        raise HTTPException(status_code=403, detail="Access denied. Admin privileges required.")
+    
+    try:
+        result = stock_price_manager.test_provider(provider_name, test_symbol)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error testing provider: {str(e)}")
+
+@app.post("/admin/price-providers/waterfall/configure")
+def configure_waterfall(
+    enabled: bool = Form(...),
+    retry_disabled_after_minutes: int = Form(60),
+    max_retries_per_provider: int = Form(3),
+    return_zero_on_failure: bool = Form(True),
+    user_email: str = Form(...)
+):
+    """Configure waterfall logic settings"""
+    if not is_admin_user(user_email):
+        raise HTTPException(status_code=403, detail="Access denied. Admin privileges required.")
+    
+    try:
+        # Update waterfall configuration
+        waterfall_config = {
+            "enabled": enabled,
+            "retry_disabled_after_minutes": retry_disabled_after_minutes,
+            "max_retries_per_provider": max_retries_per_provider
+        }
+        price_config.update_waterfall_config(waterfall_config)
+        
+        # Update fallback configuration
+        fallback_config = {
+            "return_zero_on_failure": return_zero_on_failure,
+            "cache_duration_minutes": 5
+        }
+        price_config.config["fallback"] = fallback_config
+        price_config._save_config()
+        
+        return {
+            "success": True,
+            "message": "Waterfall configuration updated successfully",
+            "waterfall": waterfall_config,
+            "fallback": fallback_config
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error configuring waterfall: {str(e)}")
+
+@app.post("/admin/price-providers/reset")
+def reset_provider_configuration(user_email: str = Form(...)):
+    """Reset price provider configuration to defaults"""
+    if not is_admin_user(user_email):
+        raise HTTPException(status_code=403, detail="Access denied. Admin privileges required.")
+    
+    try:
+        price_config.reset_to_defaults()
+        stock_price_manager.reload_configuration()
+        
+        return {
+            "success": True,
+            "message": "Price provider configuration reset to defaults"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error resetting configuration: {str(e)}")
+
+@app.get("/admin/price-providers/export")
+def export_provider_configuration(user_email: str = Query(...)):
+    """Export price provider configuration"""
+    if not is_admin_user(user_email):
+        raise HTTPException(status_code=403, detail="Access denied. Admin privileges required.")
+    
+    try:
+        config = price_config.export_config()
+        
+        # Create temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp_file:
+            json.dump(config, tmp_file, indent=2)
+            tmp_file_path = tmp_file.name
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"price_provider_config_{timestamp}.json"
+        
+        return FileResponse(
+            path=tmp_file_path,
+            filename=filename,
+            media_type="application/json"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+@app.post("/admin/price-providers/import")
+async def import_provider_configuration(
+    file: UploadFile = File(...),
+    user_email: str = Form(...)
+):
+    """Import price provider configuration from JSON file"""
+    if not is_admin_user(user_email):
+        raise HTTPException(status_code=403, detail="Access denied. Admin privileges required.")
+    
+    try:
+        if not file.filename.lower().endswith('.json'):
+            raise HTTPException(status_code=400, detail="Only JSON files are supported")
+        
+        # Read and parse the uploaded file
+        content = await file.read()
+        import_data = json.loads(content.decode('utf-8'))
+        
+        # Import configuration
+        success = price_config.import_config(import_data)
+        
+        if success:
+            # Reload manager configuration
+            stock_price_manager.reload_configuration()
+            
+            return {
+                "success": True,
+                "message": "Configuration imported successfully"
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Failed to import configuration")
+    
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON file")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+    finally:
+        await file.close()
 
 # Dependency to check admin access
 def require_admin_access(user_email: str = Query(...)):

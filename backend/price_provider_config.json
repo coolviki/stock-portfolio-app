@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "providers": {
+    "alpha_vantage": {
+      "enabled": true,
+      "priority": 1,
+      "config": {
+        "timeout": 15,
+        "api_key": "demo"
+      }
+    },
+    "yahoo_finance": {
+      "enabled": true,
+      "priority": 2,
+      "config": {
+        "timeout": 10
+      }
+    }
+  },
+  "waterfall": {
+    "enabled": true,
+    "retry_disabled_after_minutes": 60,
+    "max_retries_per_provider": 3
+  },
+  "fallback": {
+    "return_zero_on_failure": true,
+    "cache_duration_minutes": 5
+  }
+}
