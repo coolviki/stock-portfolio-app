@@ -19,6 +19,7 @@ const Sidebar = () => {
   const adminMenuItems = [
     { path: '/security-master', icon: '🔐', label: 'Security Master', adminOnly: true },
     { path: '/users', icon: '👥', label: 'Manage Users', adminOnly: true },
+    { path: '/price-providers', icon: '🌐', label: 'Price Providers', adminOnly: true },
     { path: '/admin', icon: '⚙️', label: 'Admin', adminOnly: true }
   ];
 

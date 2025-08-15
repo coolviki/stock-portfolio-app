@@ -5,8 +5,8 @@
       "enabled": true,
       "priority": 1,
       "config": {
-        "timeout": 15,
-        "api_key": "demo"
+        "api_key": "",
+        "timeout": 10
       }
     },
     "yahoo_finance": {
