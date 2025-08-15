@@ -59,97 +59,66 @@ SYMBOL_TO_ISIN = {v: k for k, v in ISIN_TO_SYMBOL.items()}
 
 def get_current_price(symbol: str) -> float:
     """
-    Get current stock price using Alpha Vantage API (free tier)
-    You can replace this with any other free stock API
+    Get current stock price using Yahoo Finance API only
+    Returns 0 if price cannot be fetched
     """
     try:
-        # Using Alpha Vantage API (requires API key)
-        # For demo purposes, we'll simulate prices
-        # In production, you should use a real API
-        
-        # Simulated prices for common Indian stocks
-        mock_prices = {
-            'RELIANCE': 2450.50,
-            'TCS': 3850.75,
-            'INFY': 1650.25,
-            'HDFC': 1750.00,
-            'ICICIBANK': 950.50,
-            'ITC': 425.75,
-            'WIPRO': 580.25,
-            'BAJFINANCE': 7850.00,
-            'MARUTI': 10500.25,
-            'ADANIPORTS': 850.75,
-            'CMS': 452.00
-        }
-        
         # Clean symbol
         clean_symbol = symbol.upper().replace('.NS', '').replace('.BO', '')
         
-        if clean_symbol in mock_prices:
-            return mock_prices[clean_symbol]
+        # Try to fetch from Yahoo Finance API
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{clean_symbol}.NS"
+        response = requests.get(url, timeout=10)
         
-        # If not in mock data, try to fetch from a free API
-        # Using Yahoo Finance alternative API (free)
-        try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{clean_symbol}.NS"
-            response = requests.get(url, timeout=5)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if 'chart' in data and 'result' in data['chart']:
-                    result = data['chart']['result'][0]
-                    if 'meta' in result and 'regularMarketPrice' in result['meta']:
-                        return float(result['meta']['regularMarketPrice'])
-        except:
-            pass
+        if response.status_code == 200:
+            data = response.json()
+            if 'chart' in data and 'result' in data['chart']:
+                result = data['chart']['result'][0]
+                if 'meta' in result and 'regularMarketPrice' in result['meta']:
+                    price = result['meta']['regularMarketPrice']
+                    if price is not None:
+                        return float(price)
         
-        # Fallback: return a random price based on symbol hash
-        import hashlib
-        hash_value = int(hashlib.md5(clean_symbol.encode()).hexdigest()[:6], 16)
-        return float(100 + (hash_value % 5000))
+        # If Yahoo Finance fails, return 0
+        return 0.0
         
     except Exception as e:
-        raise ValueError(f"Could not fetch price for {symbol}: {str(e)}")
+        # Return 0 for any errors
+        return 0.0
 
 def get_price_by_isin(isin: str) -> float:
     """
     Get current stock price using ISIN
+    Returns 0 if ISIN not found or price cannot be fetched
     """
     if isin in ISIN_TO_SYMBOL:
         symbol = ISIN_TO_SYMBOL[isin]
         return get_current_price(symbol)
     else:
-        # Fallback to hash-based price if ISIN not found
-        import hashlib
-        hash_value = int(hashlib.md5(isin.encode()).hexdigest()[:6], 16)
-        return float(100 + (hash_value % 5000))
+        # Return 0 if ISIN not found
+        return 0.0
 
 def get_current_price_with_waterfall(ticker: str = None, isin: str = None, security_name: str = None) -> tuple:
     """
-    Get current stock price using waterfall model as per issue #18:
+    Get current stock price using waterfall model:
     1. First attempt: TICKER
     2. Second attempt: ISIN
     3. Third attempt: Security Name
+    4. If all fail: return 0
     
     Returns: (price, method_used)
     """
-    methods_tried = []
-    
     # Method 1: Try TICKER first
     if ticker:
-        try:
-            price = get_current_price(ticker)
+        price = get_current_price(ticker)
+        if price > 0:
             return price, "TICKER"
-        except Exception as e:
-            methods_tried.append(f"TICKER failed: {str(e)}")
     
     # Method 2: Try ISIN
     if isin:
-        try:
-            price = get_price_by_isin(isin)
+        price = get_price_by_isin(isin)
+        if price > 0:
             return price, "ISIN"
-        except Exception as e:
-            methods_tried.append(f"ISIN failed: {str(e)}")
     
     # Method 3: Try Security Name
     if security_name:
@@ -159,17 +128,13 @@ def get_current_price_with_waterfall(ticker: str = None, isin: str = None, secur
             for stock in search_stocks(security_name[:10]):  # Use first 10 chars for search
                 if stock['name'].upper() == name_upper or name_upper in stock['name'].upper():
                     price = get_current_price(stock['symbol'])
-                    return price, "SECURITY_NAME"
-        except Exception as e:
-            methods_tried.append(f"SECURITY_NAME failed: {str(e)}")
+                    if price > 0:
+                        return price, "SECURITY_NAME"
+        except Exception:
+            pass
     
-    # Ultimate fallback with hash-based price
-    identifier = ticker or isin or security_name or "UNKNOWN"
-    import hashlib
-    hash_value = int(hashlib.md5(identifier.encode()).hexdigest()[:6], 16)
-    fallback_price = float(100 + (hash_value % 5000))
-    
-    return fallback_price, "FALLBACK"
+    # All methods failed, return 0
+    return 0.0, "UNAVAILABLE"
 
 # Keep the old function for backward compatibility
 def get_current_price_with_fallback(symbol: str = None, isin: str = None) -> float:
@@ -182,22 +147,20 @@ def get_current_price_with_fallback(symbol: str = None, isin: str = None) -> flo
 def get_stock_info(symbol: str) -> Dict:
     """
     Get detailed stock information
+    Returns basic info with 0 values if price cannot be fetched
     """
-    try:
-        price = get_current_price(symbol)
-        
-        # Mock additional info
-        return {
-            'symbol': symbol,
-            'current_price': price,
-            'previous_close': price * 0.99,
-            'change': price * 0.01,
-            'change_percent': 1.0,
-            'volume': 1000000,
-            'market_cap': price * 1000000000
-        }
-    except Exception as e:
-        raise ValueError(f"Could not fetch info for {symbol}: {str(e)}")
+    price = get_current_price(symbol)
+    
+    # Return info with actual price or 0 if unavailable
+    return {
+        'symbol': symbol,
+        'current_price': price,
+        'previous_close': max(0, price * 0.99) if price > 0 else 0,
+        'change': max(0, price * 0.01) if price > 0 else 0,
+        'change_percent': 1.0 if price > 0 else 0,
+        'volume': 1000000 if price > 0 else 0,
+        'market_cap': price * 1000000000 if price > 0 else 0
+    }
 
 def get_isin_from_ticker(ticker: str) -> Optional[str]:
     """

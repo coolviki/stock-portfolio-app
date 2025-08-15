@@ -658,20 +658,16 @@ async def upload_contract_notes(
 
 @app.get("/stock-price/{symbol}")
 def get_stock_price(symbol: str):
-    try:
-        price = get_current_price(symbol)
-        return {"symbol": symbol, "price": price}
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Could not fetch price for {symbol}: {str(e)}")
+    """Get stock price - returns 0 if unavailable instead of error"""
+    price = get_current_price(symbol)
+    return {"symbol": symbol, "price": price}
 
 @app.get("/stock-price-isin/{isin}")
 def get_stock_price_by_isin(isin: str):
-    try:
-        from stock_api import get_price_by_isin
-        price = get_price_by_isin(isin)
-        return {"isin": isin, "price": price}
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Could not fetch price for ISIN {isin}: {str(e)}")
+    """Get stock price by ISIN - returns 0 if unavailable instead of error"""
+    from stock_api import get_price_by_isin
+    price = get_price_by_isin(isin)
+    return {"isin": isin, "price": price}
 
 @app.get("/search-stocks/{query}")
 def search_securities(query: str):
