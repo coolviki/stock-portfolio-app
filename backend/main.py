@@ -769,8 +769,14 @@ def get_portfolio_summary(
                 data["isin"] = isin
                 data["security_symbol"] = security_symbol
                 
-                # Use ISIN-aware price fetching with fallback
-                current_price = get_current_price_with_fallback(symbol=security_symbol, isin=isin)
+                # Use ISIN-aware price fetching with new provider system
+                current_price, method = stock_price_manager.get_price_with_waterfall(
+                    ticker=security_symbol, 
+                    isin=isin, 
+                    security_name=symbol
+                )
+                # Store the method for debugging
+                data["price_method"] = method
                 current_value = current_price * data["quantity"]
                 current_values[symbol] = current_value
                 unrealized_gains += current_value - data["total_invested"]
