@@ -194,43 +194,141 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
                     
                     transactions.append(transaction)
         
-        for company_name in equity_lines:
-            security_name = company_name.strip()
-            # Clean up security name
-            security_name = re.sub(r'\s+', ' ', security_name)  # Normalize spaces
+        # General robust pattern for HDFC table format with flexible line breaks
+        # This handles various scenarios where line breaks can occur anywhere in the data
+        def parse_flexible_table_format(text):
+            """Parse table format with flexible handling of line breaks and spacing"""
+            matches = []
             
-            # Try two different formats:
-            # Format 1: Sub Total after company name (BUY format)
-            company_pattern = re.escape(f'Equity{company_name}')
-            sub_total_match = re.search(f'{company_pattern}.*?Sub Total\\s+(\\d+)\\s+(\\d+)([\\d,\\.]+)\\s+([\\d,\\.]+)', summary_clean, re.IGNORECASE)
-            
-            # Format 2: Company name after transaction numbers (SELL format)  
-            sell_format_match = re.search(f'Equity(\\d+)\\s+(\\d+)\\s+([\\d,\\.]+)\\s+([\\d,\\.]+).*?{re.escape(company_name)}', summary_clean, re.IGNORECASE)
-            
-            if sub_total_match:
-                # Format 1: BUY transactions
-                quantity_bought = int(sub_total_match.group(1))
-                # Handle the concatenated quantity_sold + total_gross (like "0116344.30")
-                qty_sold_and_total = sub_total_match.group(2) + sub_total_match.group(3)
-                average_rate = float(sub_total_match.group(4))
+            # Multiple patterns to handle different line break scenarios
+            patterns = [
+                # Standard format: EquityCOMPANY-Cash-ISIN QTY QTY AMOUNT RATE
+                r'Equity([A-Z\s&\.\-\']+?)\s*-\s*Cash-\s*([A-Z0-9]{12})\s*(\d+)\s+(\d+)\s+([\d\.]+)\s+([\d\.]+)',
                 
-                # Split the concatenated string - qty sold is typically 1 digit, rest is total
-                if len(qty_sold_and_total) > 1:
-                    quantity_sold = int(qty_sold_and_total[0])  # First digit is qty sold
-                    total_gross = float(qty_sold_and_total[1:])  # Rest is total gross
-                else:
-                    quantity_sold = int(qty_sold_and_total)
-                    total_gross = 0.0
+                # Split ISIN format: EquityCOMPANY-Cash-ISIN_PART ISIN_PART+QTY QTY AMOUNT RATE
+                r'Equity([A-Z\s&\.\-\']+?)\s*-\s*Cash-\s*([A-Z0-9]{6,9})\s+([A-Z0-9]{3,6})(\d+)\s+(\d+)\s+([\d\.]+)\s+([\d\.]+)',
+                
+                # Company name with trailing dash: EquityCOMPANY- Cash-ISIN+QTY QTY AMOUNT RATE
+                r'Equity([A-Z\s&\.\-\']+?)-\s+Cash-\s*([A-Z0-9]{12})(\d+)\s+(\d+)\s+([\d\.]+)\s+([\d\.]+)',
+                
+                # Minimal spacing format: EquityCOMPANY-Cash-ISIN+QTY_QTY_AMOUNT_RATE (all concatenated)
+                r'Equity([A-Z\s&\.\-\']+?)\s*-\s*Cash-\s*([A-Z0-9]{12})(\d+)\s+(\d+)\s+([\d,\.]+)\s+([\d,\.]+)',
+                
+                # Individual trade format: B COMPANY LTD-Cash-ISIN+QTY PRICE (with flexible spacing)
+                r'[BS]\s+([A-Z\s&\.\-\']+?)\s*-\s*Cash\s*-\s*([A-Z0-9]{12})(\d+)\s+([\d\.]+)',
+            ]
+            
+            for pattern in patterns:
+                pattern_matches = re.findall(pattern, text, re.IGNORECASE)
+                for match in pattern_matches:
+                    # Process match based on pattern type
+                    if len(match) == 6:  # Standard or company-dash format
+                        security_name = match[0].strip()
+                        isin = match[1]
+                        quantity_bought = int(match[2])
+                        quantity_sold = int(match[3])
+                        total_gross = float(match[4].replace(',', ''))
+                        average_rate = float(match[5].replace(',', ''))
+                        
+                    elif len(match) == 7:  # Split ISIN format
+                        security_name = match[0].strip()
+                        isin_part1 = match[1]
+                        isin_part2_with_qty = match[2]
+                        qty_remainder = match[3]
+                        
+                        # Reconstruct ISIN and quantity
+                        if len(isin_part2_with_qty) >= 4:
+                            isin_part2 = isin_part2_with_qty[:4]
+                            quantity_start = isin_part2_with_qty[4:]
+                            isin = isin_part1 + isin_part2
+                            quantity_bought = int(quantity_start + qty_remainder) if quantity_start else int(qty_remainder)
+                        else:
+                            continue
+                            
+                        quantity_sold = int(match[4])
+                        total_gross = float(match[5].replace(',', ''))
+                        average_rate = float(match[6].replace(',', ''))
+                        
+                    elif len(match) == 4:  # Individual trade format: B COMPANY-Cash-ISIN+QTY PRICE
+                        security_name = match[0].strip()
+                        isin = match[1]
+                        quantity_str = match[2]
+                        price = float(match[3])
+                        
+                        # For individual trades, the quantity string is the full quantity  
+                        quantity_bought = int(quantity_str)
+                            
+                        quantity_sold = 0  # Individual trades are typically BUY
+                        average_rate = price
+                        total_gross = quantity_bought * price
+                        
+                    else:
+                        continue
                     
-            elif sell_format_match:
-                # Format 2: SELL transactions - numbers come before company name
-                quantity_bought = int(sell_format_match.group(1))
-                quantity_sold = int(sell_format_match.group(2))
-                total_gross = float(sell_format_match.group(3))
-                average_rate = float(sell_format_match.group(4))
-            else:
-                continue  # No valid format found
-                
+                    matches.append({
+                        'security_name': security_name,
+                        'isin': isin,
+                        'quantity_bought': quantity_bought,
+                        'quantity_sold': quantity_sold,
+                        'total_gross': total_gross,
+                        'average_rate': average_rate
+                    })
+            
+            # Aggregate individual trades by ISIN
+            aggregated_matches = {}
+            for match in matches:
+                isin = match['isin']
+                if isin in aggregated_matches:
+                    # Aggregate quantities and recalculate weighted average price
+                    existing = aggregated_matches[isin]
+                    total_qty = existing['quantity_bought'] + match['quantity_bought']
+                    total_value = existing['total_gross'] + match['total_gross']
+                    avg_rate = total_value / total_qty if total_qty > 0 else 0
+                    
+                    aggregated_matches[isin] = {
+                        'security_name': existing['security_name'],
+                        'isin': isin,
+                        'quantity_bought': total_qty,
+                        'quantity_sold': existing['quantity_sold'] + match['quantity_sold'],
+                        'total_gross': total_value,
+                        'average_rate': avg_rate
+                    }
+                else:
+                    aggregated_matches[isin] = match
+            
+            return list(aggregated_matches.values())
+        
+        # Use the flexible parser
+        flexible_matches = parse_flexible_table_format(summary_clean)
+        
+        # Deduplicate matches (same ISIN, quantity, price indicates duplicate)
+        seen_transactions = set()
+        unique_matches = []
+        for match_data in flexible_matches:
+            transaction_key = (
+                match_data['isin'], 
+                match_data['quantity_bought'], 
+                match_data['quantity_sold'],
+                match_data['total_gross']
+            )
+            if transaction_key not in seen_transactions:
+                seen_transactions.add(transaction_key)
+                unique_matches.append(match_data)
+        
+        # Process unique flexible matches with unified logic
+        for match_data in unique_matches:
+            security_name = match_data['security_name']
+            isin = match_data['isin']
+            quantity_bought = match_data['quantity_bought']
+            quantity_sold = match_data['quantity_sold']
+            total_gross = match_data['total_gross']
+            average_rate = match_data['average_rate']
+            
+            # Clean up security name
+            security_name = re.sub(r'\s+', ' ', security_name)
+            if not security_name.endswith('LIMITED') and not security_name.endswith('LTD'):
+                security_name += ' LIMITED'
+            
             # Determine transaction type and quantity
             if quantity_bought > 0:
                 transaction_type = "BUY"
@@ -242,25 +340,30 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
                 total_amount = total_gross
             else:
                 continue  # Skip if no quantity
-                
+            
             # Try to determine security symbol from company name
             security_symbol = None
-            if 'CMS' in security_name.upper() or 'INFO SYSTEMS' in security_name.upper():
-                security_symbol = 'CMS'
-            elif 'GREENPANEL' in security_name.upper():
+            if 'GREENPANEL' in security_name.upper():
                 security_symbol = 'GREENPANEL'
+            elif 'PVR' in security_name.upper() and 'INOX' in security_name.upper():
+                security_symbol = 'PVRINOX'
+            elif 'GLAXO' in security_name.upper():
+                security_symbol = 'GLAXO'
+            elif 'SBI CARDS' in security_name.upper() and 'PAYMENT' in security_name.upper():
+                security_symbol = 'SBICARD'
+            elif 'DIVI' in security_name.upper() and 'LABORATORIES' in security_name.upper():
+                security_symbol = 'DIVISLAB'
+            elif 'CMS' in security_name.upper() or 'INFO SYSTEMS' in security_name.upper():
+                security_symbol = 'CMS'
             elif 'MUTHOOT' in security_name.upper():
                 security_symbol = 'MUTHOOTFIN'
             elif 'WONDERLA' in security_name.upper():
                 security_symbol = 'WONDERLA'
-            elif 'LTD' in security_name.upper():
+            elif 'LTD' in security_name.upper() or 'LIMITED' in security_name.upper():
                 # Try to extract symbol from company name (first few letters)
                 words = security_name.split()
                 if len(words) > 0:
                     security_symbol = ''.join([word[0] for word in words[:3] if word.upper() not in ['LTD', 'LIMITED', 'INC', 'CORP']])
-            
-            # Extract ISIN for this security
-            isin = extract_isin_from_text(full_text, security_name)
             
             # Enrich security data - fetch ticker when ISIN is available
             enriched_data = enrich_security_data(
@@ -285,6 +388,181 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
             }
             
             transactions.append(transaction)
+        
+        # If no transactions found with flexible parser, try old table format and then equity_lines parsing
+        if not flexible_matches:
+            # Try old table format (legacy HDFC format with detailed columns)
+            old_format_pattern = r'(INE[A-Z0-9]{9})\s*([A-Z\s&\.\-]+?)\s*(\d+)\s+[\d\.]+\s+[\d\.]+\s+[\d\.]+\s+([\d\.]+)'
+            old_format_matches = re.findall(old_format_pattern, summary_clean, re.IGNORECASE)
+            
+            for match in old_format_matches:
+                isin = match[0]
+                security_name = match[1].strip()
+                quantity = int(match[2])
+                total_amount = float(match[3])
+                
+                # Calculate average price
+                average_rate = total_amount / quantity if quantity > 0 else 0
+                
+                # Clean up security name
+                security_name = re.sub(r'\s+', ' ', security_name)
+                # Remove symbol suffix pattern (like "LTD-INDGASEQ")
+                security_name = re.sub(r'-[A-Z]+$', '', security_name)
+                if not security_name.endswith('LIMITED') and not security_name.endswith('LTD'):
+                    if 'LTD' in security_name:
+                        security_name = re.sub(r'\bLT\b', 'LIMITED', security_name)
+                    else:
+                        security_name += ' LIMITED'
+                
+                # Determine transaction type (old format typically shows net position)
+                transaction_type = "BUY"  # Assume BUY for positive quantities
+                
+                # Try to determine security symbol from company name
+                security_symbol = None
+                if 'INDRAPRASTHA' in security_name.upper() and 'GAS' in security_name.upper():
+                    security_symbol = 'IGL'
+                elif 'GREENPANEL' in security_name.upper():
+                    security_symbol = 'GREENPANEL'
+                elif 'PVR' in security_name.upper() and 'INOX' in security_name.upper():
+                    security_symbol = 'PVRINOX'
+                elif 'GLAXO' in security_name.upper():
+                    security_symbol = 'GLAXO'
+                elif 'SBI CARDS' in security_name.upper() and 'PAYMENT' in security_name.upper():
+                    security_symbol = 'SBICARD'
+                elif 'DIVI' in security_name.upper() and 'LABORATORIES' in security_name.upper():
+                    security_symbol = 'DIVISLAB'
+                elif 'CMS' in security_name.upper() or 'INFO SYSTEMS' in security_name.upper():
+                    security_symbol = 'CMS'
+                elif 'MUTHOOT' in security_name.upper():
+                    security_symbol = 'MUTHOOTFIN'
+                elif 'WONDERLA' in security_name.upper():
+                    security_symbol = 'WONDERLA'
+                elif 'LTD' in security_name.upper() or 'LIMITED' in security_name.upper():
+                    # Try to extract symbol from company name (first few letters)
+                    words = security_name.split()
+                    if len(words) > 0:
+                        security_symbol = ''.join([word[0] for word in words[:3] if word.upper() not in ['LTD', 'LIMITED', 'INC', 'CORP']])
+                
+                # Enrich security data - fetch ticker when ISIN is available
+                enriched_data = enrich_security_data(
+                    security_name=security_name,
+                    ticker=security_symbol,
+                    isin=isin
+                )
+                
+                transaction = {
+                    'security_name': enriched_data.get('security_name', security_name),
+                    'security_symbol': enriched_data.get('ticker', security_symbol),
+                    'isin': enriched_data.get('isin', isin),
+                    'transaction_type': transaction_type,
+                    'quantity': quantity,
+                    'price_per_unit': average_rate,
+                    'total_amount': total_amount,
+                    'transaction_date': order_date,
+                    'order_date': order_date,
+                    'exchange': 'BSE',  # Old format was typically BSE
+                    'broker_fees': 0.0,
+                    'taxes': 0.0
+                }
+                
+                transactions.append(transaction)
+            
+            # If still no matches, fall back to original equity_lines parsing
+            if not old_format_matches:
+                # Look for company names and extract transaction data using old method  
+                equity_lines = re.findall(r'Equity([A-Z\s&\.\-]+?)(?=-Cash-|$)', summary_clean, re.IGNORECASE)
+            
+            for company_name in equity_lines:
+                security_name = company_name.strip()
+                # Clean up security name
+                security_name = re.sub(r'\s+', ' ', security_name)  # Normalize spaces
+            
+                # Try two different formats:
+                # Format 1: Sub Total after company name (BUY format)
+                company_pattern = re.escape(f'Equity{company_name}')
+                sub_total_match = re.search(f'{company_pattern}.*?Sub Total\\s+(\\d+)\\s+(\\d+)([\\d,\\.]+)\\s+([\\d,\\.]+)', summary_clean, re.IGNORECASE)
+                
+                # Format 2: Company name after transaction numbers (SELL format)  
+                sell_format_match = re.search(f'Equity(\\d+)\\s+(\\d+)\\s+([\\d,\\.]+)\\s+([\\d,\\.]+).*?{re.escape(company_name)}', summary_clean, re.IGNORECASE)
+                
+                if sub_total_match:
+                    # Format 1: BUY transactions
+                    quantity_bought = int(sub_total_match.group(1))
+                    # Handle the concatenated quantity_sold + total_gross (like "0116344.30")
+                    qty_sold_and_total = sub_total_match.group(2) + sub_total_match.group(3)
+                    average_rate = float(sub_total_match.group(4))
+                    
+                    # Split the concatenated string - qty sold is typically 1 digit, rest is total
+                    if len(qty_sold_and_total) > 1:
+                        quantity_sold = int(qty_sold_and_total[0])  # First digit is qty sold
+                        total_gross = float(qty_sold_and_total[1:])  # Rest is total gross
+                    else:
+                        quantity_sold = int(qty_sold_and_total)
+                        total_gross = 0.0
+                        
+                elif sell_format_match:
+                    # Format 2: SELL transactions - numbers come before company name
+                    quantity_bought = int(sell_format_match.group(1))
+                    quantity_sold = int(sell_format_match.group(2))
+                    total_gross = float(sell_format_match.group(3))
+                    average_rate = float(sell_format_match.group(4))
+                else:
+                    continue  # No valid format found
+                    
+                # Determine transaction type and quantity
+                if quantity_bought > 0:
+                    transaction_type = "BUY"
+                    quantity = quantity_bought
+                    total_amount = total_gross
+                elif quantity_sold > 0:
+                    transaction_type = "SELL"
+                    quantity = quantity_sold
+                    total_amount = total_gross
+                else:
+                    continue  # Skip if no quantity
+                    
+                # Try to determine security symbol from company name
+                security_symbol = None
+                if 'CMS' in security_name.upper() or 'INFO SYSTEMS' in security_name.upper():
+                    security_symbol = 'CMS'
+                elif 'GREENPANEL' in security_name.upper():
+                    security_symbol = 'GREENPANEL'
+                elif 'MUTHOOT' in security_name.upper():
+                    security_symbol = 'MUTHOOTFIN'
+                elif 'WONDERLA' in security_name.upper():
+                    security_symbol = 'WONDERLA'
+                elif 'LTD' in security_name.upper():
+                    # Try to extract symbol from company name (first few letters)
+                    words = security_name.split()
+                    if len(words) > 0:
+                        security_symbol = ''.join([word[0] for word in words[:3] if word.upper() not in ['LTD', 'LIMITED', 'INC', 'CORP']])
+                
+                # Extract ISIN for this security
+                isin = extract_isin_from_text(full_text, security_name)
+                
+                # Enrich security data - fetch ticker when ISIN is available
+                enriched_data = enrich_security_data(
+                    security_name=security_name,
+                    ticker=security_symbol,
+                    isin=isin
+                )
+                
+                transaction = {
+                    'security_name': enriched_data.get('security_name', security_name),
+                    'security_symbol': enriched_data.get('ticker', security_symbol),
+                    'isin': enriched_data.get('isin', isin),
+                    'transaction_type': transaction_type,
+                    'quantity': quantity,
+                    'price_per_unit': average_rate,
+                    'total_amount': total_amount,
+                    'transaction_date': order_date,
+                    'order_date': order_date,
+                    'exchange': 'NSE',
+                    'broker_fees': 0.0,
+                    'taxes': 0.0
+                }
+                
+                transactions.append(transaction)
     
     except Exception as e:
         raise ValueError(f"Error parsing PDF: {str(e)}")
@@ -401,5 +679,109 @@ def parse_tabular_format(summary_text, order_date, full_text):
                         break
                     j += 1
         i += 1
+    
+    # If no transactions found with the complex tabular parsing, try simple individual trade pattern
+    if not transactions:
+        # Use the same individual trade pattern from flexible parser
+        individual_pattern = r'[BS]\s+([A-Z\s&\.\-\']+?)\s*-\s*Cash\s*-\s*([A-Z0-9]{12})(\d+)\s+([\d\.]+)'
+        individual_matches = re.findall(individual_pattern, summary_clean, re.IGNORECASE)
+        
+        # Aggregate individual trades by ISIN
+        aggregated_matches = {}
+        for match in individual_matches:
+            security_name = match[0].strip()
+            isin = match[1]
+            quantity_str = match[2]
+            price = float(match[3])
+            
+            # For this specific pattern, the quantity string is the full quantity
+            quantity = int(quantity_str)
+            
+            total_value = quantity * price
+            
+            if isin in aggregated_matches:
+                # Aggregate quantities and recalculate weighted average price
+                existing = aggregated_matches[isin]
+                total_qty = existing['quantity'] + quantity
+                total_val = existing['total_value'] + total_value
+                avg_rate = total_val / total_qty if total_qty > 0 else 0
+                
+                aggregated_matches[isin] = {
+                    'security_name': existing['security_name'],
+                    'isin': isin,
+                    'quantity': total_qty,
+                    'total_value': total_val,
+                    'average_rate': avg_rate
+                }
+            else:
+                aggregated_matches[isin] = {
+                    'security_name': security_name,
+                    'isin': isin,
+                    'quantity': quantity,
+                    'total_value': total_value,
+                    'average_rate': price
+                }
+        
+        # Convert aggregated matches to transactions
+        for match_data in aggregated_matches.values():
+            security_name = match_data['security_name']
+            
+            # Clean up security name
+            security_name = re.sub(r'\s+', ' ', security_name)
+            if not security_name.endswith('LIMITED') and not security_name.endswith('LTD'):
+                if 'LTD' in security_name:
+                    security_name = re.sub(r'\bLT\b', 'LIMITED', security_name)
+                else:
+                    security_name += ' LIMITED'
+            
+            # Try to determine security symbol from company name
+            security_symbol = None
+            if 'INDRAPRASTHA' in security_name.upper() and 'GAS' in security_name.upper():
+                security_symbol = 'IGL'
+            elif 'GREENPANEL' in security_name.upper():
+                security_symbol = 'GREENPANEL'
+            elif 'PVR' in security_name.upper() and 'INOX' in security_name.upper():
+                security_symbol = 'PVRINOX'
+            elif 'GLAXO' in security_name.upper():
+                security_symbol = 'GLAXO'
+            elif 'SBI CARDS' in security_name.upper() and 'PAYMENT' in security_name.upper():
+                security_symbol = 'SBICARD'
+            elif 'DIVI' in security_name.upper() and 'LABORATORIES' in security_name.upper():
+                security_symbol = 'DIVISLAB'
+            elif 'CMS' in security_name.upper() or 'INFO SYSTEMS' in security_name.upper():
+                security_symbol = 'CMS'
+            elif 'MUTHOOT' in security_name.upper():
+                security_symbol = 'MUTHOOTFIN'
+            elif 'WONDERLA' in security_name.upper():
+                security_symbol = 'WONDERLA'
+            elif 'LTD' in security_name.upper() or 'LIMITED' in security_name.upper():
+                # Try to extract symbol from company name (first few letters)
+                words = security_name.split()
+                if len(words) > 0:
+                    security_symbol = ''.join([word[0] for word in words[:3] if word.upper() not in ['LTD', 'LIMITED', 'INC', 'CORP']])
+            
+            # Enrich security data - fetch ticker when ISIN is available
+            enriched_data = enrich_security_data(
+                security_name=security_name,
+                ticker=security_symbol,
+                isin=match_data['isin']
+            )
+            
+            transaction = {
+                'security_name': enriched_data.get('security_name', security_name),
+                'security_symbol': enriched_data.get('ticker', security_symbol),
+                'isin': enriched_data.get('isin', match_data['isin']),
+                'transaction_type': 'BUY',  # Individual trades are typically BUY
+                'quantity': match_data['quantity'],
+                'price_per_unit': match_data['average_rate'],
+                'total_amount': match_data['total_value'],
+                'transaction_date': order_date,
+                'order_date': order_date,
+                'exchange': 'BSE',  # This specific PDF was BSE
+                'broker_fees': 0.0,
+                'taxes': 0.0
+            }
+            
+            transactions.append(transaction)
     
     return transactions
