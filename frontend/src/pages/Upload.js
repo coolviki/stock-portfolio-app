@@ -192,7 +192,6 @@ const Upload = () => {
             ...transaction,
             ...updatedTransaction,
             transaction_date: updatedTransaction.transaction_date,
-            order_date: updatedTransaction.order_date,
             created_at: updatedTransaction.created_at,
             updated_at: updatedTransaction.updated_at
           };

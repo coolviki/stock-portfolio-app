@@ -84,7 +84,7 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
             r"(\d{2}[-/][a-z]{3}[-/]\d{4})"  # Handle dates like 31-jul-2024
         ]
         
-        order_date = None
+        transaction_date = None
         for pattern in date_patterns:
             match = re.search(pattern, full_text, re.IGNORECASE)
             if match:
@@ -92,19 +92,19 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
                 try:
                     # Try different date formats
                     if re.match(r'\d{2}[-/][a-z]{3}[-/]\d{4}', date_str, re.IGNORECASE):
-                        order_date = datetime.strptime(date_str, '%d-%b-%Y')
+                        transaction_date = datetime.strptime(date_str, '%d-%b-%Y')
                     else:
-                        order_date = datetime.strptime(date_str.replace('-', '/'), '%d/%m/%Y')
+                        transaction_date = datetime.strptime(date_str.replace('-', '/'), '%d/%m/%Y')
                     break
                 except:
                     continue
         
-        if not order_date:
-            order_date = datetime.now()
+        if not transaction_date:
+            transaction_date = datetime.now()
         
         # Handle tabular format (individual trades with Order No, Trade Time, etc.)
         if is_tabular_format:
-            return parse_tabular_format(summary_text, order_date, full_text)
+            return parse_tabular_format(summary_text, transaction_date, full_text)
         
         # Parse HDFC format transaction lines
         # Remove line breaks from summary text to make regex easier
@@ -185,8 +185,7 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
                         'quantity': quantity,
                         'price_per_unit': average_rate,
                         'total_amount': total_amount,
-                        'transaction_date': order_date,
-                        'order_date': order_date,
+                        'transaction_date': transaction_date,
                         'exchange': 'NSE',
                         'broker_fees': 0.0,
                         'taxes': 0.0
@@ -380,8 +379,7 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
                 'quantity': quantity,
                 'price_per_unit': average_rate,
                 'total_amount': total_amount,
-                'transaction_date': order_date,
-                'order_date': order_date,
+                'transaction_date': transaction_date,
                 'exchange': 'NSE',
                 'broker_fees': 0.0,
                 'taxes': 0.0
@@ -458,8 +456,7 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
                     'quantity': quantity,
                     'price_per_unit': average_rate,
                     'total_amount': total_amount,
-                    'transaction_date': order_date,
-                    'order_date': order_date,
+                    'transaction_date': transaction_date,
                     'exchange': 'BSE',  # Old format was typically BSE
                     'broker_fees': 0.0,
                     'taxes': 0.0
@@ -555,8 +552,7 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
                     'quantity': quantity,
                     'price_per_unit': average_rate,
                     'total_amount': total_amount,
-                    'transaction_date': order_date,
-                    'order_date': order_date,
+                    'transaction_date': transaction_date,
                     'exchange': 'NSE',
                     'broker_fees': 0.0,
                     'taxes': 0.0
@@ -570,7 +566,7 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
     return transactions
 
 
-def parse_tabular_format(summary_text, order_date, full_text):
+def parse_tabular_format(summary_text, transaction_date, full_text):
     """Parse tabular format PDFs with individual trade entries"""
     transactions = []
     
@@ -667,9 +663,8 @@ def parse_tabular_format(summary_text, order_date, full_text):
                                 'quantity': quantity,
                                 'price_per_unit': price,
                                 'total_amount': total_amount,
-                                'transaction_date': order_date,
-                                'order_date': order_date,
-                                'exchange': 'BSE',
+                                'transaction_date': transaction_date,
+                                        'exchange': 'BSE',
                                 'broker_fees': 0.0,
                                 'taxes': 0.0
                             }
@@ -775,8 +770,7 @@ def parse_tabular_format(summary_text, order_date, full_text):
                 'quantity': match_data['quantity'],
                 'price_per_unit': match_data['average_rate'],
                 'total_amount': match_data['total_value'],
-                'transaction_date': order_date,
-                'order_date': order_date,
+                'transaction_date': transaction_date,
                 'exchange': 'BSE',  # This specific PDF was BSE
                 'broker_fees': 0.0,
                 'taxes': 0.0

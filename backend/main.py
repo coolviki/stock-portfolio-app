@@ -411,7 +411,6 @@ def create_transaction_legacy(
         price_per_unit=transaction.price_per_unit,
         total_amount=transaction.total_amount,
         transaction_date=transaction.transaction_date,
-        order_date=transaction.order_date,
         exchange=transaction.exchange,
         broker_fees=transaction.broker_fees,
         taxes=transaction.taxes
@@ -487,7 +486,6 @@ def update_transaction_legacy(
     price_per_unit: Optional[float] = Form(None),
     total_amount: Optional[float] = Form(None),
     transaction_date: Optional[str] = Form(None),
-    order_date: Optional[str] = Form(None),
     exchange: Optional[str] = Form(None),
     broker_fees: Optional[float] = Form(None),
     taxes: Optional[float] = Form(None),
@@ -524,7 +522,6 @@ def update_transaction_legacy(
         'price_per_unit': price_per_unit,
         'total_amount': total_amount,
         'transaction_date': transaction_date,
-        'order_date': order_date,
         'exchange': exchange,
         'broker_fees': broker_fees,
         'taxes': taxes
@@ -536,7 +533,7 @@ def update_transaction_legacy(
     
     for field, value in update_fields.items():
         if value is not None:
-            if field in ['transaction_date', 'order_date'] and isinstance(value, str):
+            if field in ['transaction_date'] and isinstance(value, str):
                 # Handle date parsing if needed
                 try:
                     from datetime import datetime
@@ -640,7 +637,6 @@ async def upload_contract_notes(
                                 'price_per_unit': db_transaction.price_per_unit,
                                 'total_amount': db_transaction.total_amount,
                                 'transaction_date': db_transaction.transaction_date.isoformat() if db_transaction.transaction_date else None,
-                                'order_date': db_transaction.order_date.isoformat() if db_transaction.order_date else None,
                                 'exchange': db_transaction.exchange,
                                 'broker_fees': db_transaction.broker_fees,
                                 'taxes': db_transaction.taxes,
@@ -826,7 +822,6 @@ def export_database(user_email: str = Query(...), db: Session = Depends(get_db))
                 "price_per_unit": trans.price_per_unit,
                 "total_amount": trans.total_amount,
                 "transaction_date": trans.transaction_date.isoformat() if trans.transaction_date else None,
-                "order_date": trans.order_date.isoformat() if trans.order_date else None,
                 "exchange": trans.exchange,
                 "broker_fees": trans.broker_fees,
                 "taxes": trans.taxes,
@@ -948,8 +943,6 @@ async def import_database(
                 # Parse datetime strings back to datetime objects
                 if transaction_dict.get("transaction_date"):
                     transaction_dict["transaction_date"] = datetime.fromisoformat(transaction_dict["transaction_date"])
-                if transaction_dict.get("order_date"):
-                    transaction_dict["order_date"] = datetime.fromisoformat(transaction_dict["order_date"])
                 if transaction_dict.get("created_at"):
                     transaction_dict.pop("created_at")  # Let database set this
                 if transaction_dict.get("updated_at"):

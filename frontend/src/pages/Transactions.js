@@ -181,8 +181,7 @@ const Transactions = () => {
   const handleEdit = (transaction) => {
     setEditingTransaction({
       ...transaction,
-      transaction_date: new Date(transaction.transaction_date),
-      order_date: new Date(transaction.order_date)
+      transaction_date: new Date(transaction.transaction_date)
     });
     setShowEditModal(true);
   };
@@ -191,8 +190,7 @@ const Transactions = () => {
     try {
       const updatedTransaction = {
         ...editingTransaction,
-        transaction_date: editingTransaction.transaction_date.toISOString(),
-        order_date: editingTransaction.order_date.toISOString()
+        transaction_date: editingTransaction.transaction_date.toISOString()
       };
       
       await apiService.updateTransaction(editingTransaction.id, updatedTransaction, user?.id);

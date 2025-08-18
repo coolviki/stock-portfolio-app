@@ -17,7 +17,6 @@ const ManualEntry = () => {
     price_per_unit: '',
     total_amount: '',
     transaction_date: new Date(),
-    order_date: new Date(),
     exchange: 'NSE',
     broker_fees: '',
     taxes: ''
@@ -135,8 +134,7 @@ const ManualEntry = () => {
         total_amount: parseFloat(formData.total_amount),
         broker_fees: parseFloat(formData.broker_fees) || 0,
         taxes: parseFloat(formData.taxes) || 0,
-        transaction_date: formData.transaction_date.toISOString(),
-        order_date: formData.order_date.toISOString()
+        transaction_date: formData.transaction_date.toISOString()
       };
 
       // Use legacy endpoint for backward compatibility with new security model
@@ -153,7 +151,6 @@ const ManualEntry = () => {
         price_per_unit: '',
         total_amount: '',
         transaction_date: new Date(),
-        order_date: new Date(),
         exchange: 'NSE',
         broker_fees: '',
         taxes: ''
@@ -176,7 +173,6 @@ const ManualEntry = () => {
       price_per_unit: '',
       total_amount: '',
       transaction_date: new Date(),
-      order_date: new Date(),
       exchange: 'NSE',
       broker_fees: '',
       taxes: ''
@@ -403,18 +399,6 @@ const ManualEntry = () => {
                   />
                 </Form.Group>
               </Col>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Order Date *</Form.Label>
-                  <DatePicker
-                    selected={formData.order_date}
-                    onChange={(date) => handleChange('order_date', date)}
-                    className="form-control"
-                    dateFormat="dd/MM/yyyy"
-                    maxDate={new Date()}
-                  />
-                </Form.Group>
-              </Col>
             </Row>
 
             <Row>
@@ -489,7 +473,7 @@ const ManualEntry = () => {
                 <li>Use consistent security names for better tracking</li>
                 <li>Add security symbols for easier identification</li>
                 <li>Include broker fees and taxes for accurate P&L</li>
-                <li>Order date can be same as transaction date</li>
+                <li>Transaction date should be the actual trade date</li>
               </ul>
             </Col>
           </Row>

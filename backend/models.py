@@ -41,7 +41,6 @@ class Transaction(Base):
     price_per_unit = Column(Float, nullable=False)
     total_amount = Column(Float, nullable=False)
     transaction_date = Column(DateTime, nullable=False)
-    order_date = Column(DateTime, nullable=False)
     exchange = Column(String)
     broker_fees = Column(Float, default=0.0)
     taxes = Column(Float, default=0.0)

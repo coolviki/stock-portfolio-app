@@ -58,7 +58,6 @@ class TransactionBase(BaseModel):
     price_per_unit: float
     total_amount: float
     transaction_date: datetime
-    order_date: datetime
     exchange: Optional[str] = None
     broker_fees: Optional[float] = 0.0
     taxes: Optional[float] = 0.0
@@ -73,7 +72,6 @@ class TransactionUpdate(BaseModel):
     price_per_unit: Optional[float] = None
     total_amount: Optional[float] = None
     transaction_date: Optional[datetime] = None
-    order_date: Optional[datetime] = None
     exchange: Optional[str] = None
     broker_fees: Optional[float] = None
     taxes: Optional[float] = None
@@ -99,7 +97,6 @@ class LegacyTransactionCreate(BaseModel):
     price_per_unit: float
     total_amount: float
     transaction_date: datetime
-    order_date: datetime
     exchange: Optional[str] = None
     broker_fees: Optional[float] = 0.0
     taxes: Optional[float] = 0.0
