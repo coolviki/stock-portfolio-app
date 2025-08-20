@@ -159,7 +159,6 @@ Once the backend is running, you can access the interactive API documentation at
 - `price_per_unit`: Price per share
 - `total_amount`: Total transaction amount
 - `transaction_date`: Date of transaction
-- `order_date`: Date of order
 - `exchange`: Stock exchange (NSE, BSE, etc.)
 - `broker_fees`: Brokerage fees
 - `taxes`: Applicable taxes

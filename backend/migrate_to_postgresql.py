@@ -122,12 +122,11 @@ def migrate_sqlite_to_postgresql():
                     price_per_unit=trans_row[5],
                     total_amount=trans_row[6],
                     transaction_date=datetime.fromisoformat(trans_row[7]) if trans_row[7] else datetime.now(),
-                    order_date=datetime.fromisoformat(trans_row[8]) if trans_row[8] else datetime.now(),
-                    exchange=trans_row[9],
-                    broker_fees=trans_row[10] or 0.0,
-                    taxes=trans_row[11] or 0.0,
-                    created_at=datetime.fromisoformat(trans_row[12]) if trans_row[12] else datetime.now(),
-                    updated_at=datetime.fromisoformat(trans_row[13]) if trans_row[13] else datetime.now()
+                    exchange=trans_row[8],
+                    broker_fees=trans_row[9] or 0.0,
+                    taxes=trans_row[10] or 0.0,
+                    created_at=datetime.fromisoformat(trans_row[11]) if trans_row[11] else datetime.now(),
+                    updated_at=datetime.fromisoformat(trans_row[12]) if trans_row[12] else datetime.now()
                 )
                 pg_session.merge(transaction)
                 migrated_counts["transactions"] += 1

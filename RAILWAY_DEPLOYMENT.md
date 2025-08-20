@@ -49,6 +49,32 @@ The PostgreSQL database will be automatically created and connected. The FastAPI
 - Automatically create database tables on startup
 - Handle migrations through SQLAlchemy
 
+#### Order Date Column Removal (For Existing Deployments)
+
+If you have an existing Railway deployment that includes the old `order_date` column in the transactions table, you need to run the removal migration:
+
+1. Connect to your Railway project via Railway CLI:
+   ```bash
+   railway login
+   railway link [your-project-id]
+   ```
+
+2. Run the PostgreSQL migration script:
+   ```bash
+   railway run python backend/remove_order_date_postgresql.py
+   ```
+
+3. Or test the connection first:
+   ```bash
+   railway run python backend/remove_order_date_postgresql.py test
+   ```
+
+This migration will:
+- ✅ Remove the redundant `order_date` column from the transactions table
+- ✅ Preserve all other data and columns
+- ✅ Work safely with PostgreSQL (no downtime required)
+- ✅ Auto-verify the migration completed successfully
+
 ### 5. Custom Domains (Optional)
 
 1. Go to your Railway project dashboard
