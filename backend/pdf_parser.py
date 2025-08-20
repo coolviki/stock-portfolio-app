@@ -1,9 +1,14 @@
 import PyPDF2
 import re
+import logging
 from datetime import datetime
 from typing import List, Dict
 import io
 from stock_api import enrich_security_data
+
+# Configure logging for PDF parser
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 def extract_isin_from_text(text: str, security_name: str) -> str:
     """
@@ -561,17 +566,31 @@ def parse_contract_note(pdf_content: bytes, password: str) -> List[Dict]:
                 transactions.append(transaction)
     
     except Exception as e:
+        logger.error(f"Error parsing PDF: {str(e)}")
+        logger.exception("Full exception traceback:")
         raise ValueError(f"Error parsing PDF: {str(e)}")
+    
+    logger.info(f"PDF parsing completed successfully. Found {len(transactions)} transactions")
+    if transactions:
+        logger.info("Transaction summary:")
+        for i, t in enumerate(transactions[:5]):  # Log first 5 transactions
+            logger.info(f"  {i+1}. {t.get('security_name', 'N/A')} - {t.get('transaction_type', 'N/A')} - {t.get('quantity', 0)} @ {t.get('price_per_unit', 0)}")
+        if len(transactions) > 5:
+            logger.info(f"  ... and {len(transactions) - 5} more transactions")
+    else:
+        logger.warning("No transactions extracted from PDF")
     
     return transactions
 
 
 def parse_tabular_format(summary_text, transaction_date, full_text):
     """Parse tabular format PDFs with individual trade entries"""
+    logger.info("Starting tabular format parsing")
     transactions = []
     
     # Clean the text
     summary_clean = re.sub(r'\n+', ' ', summary_text)
+    logger.debug(f"Cleaned summary text length: {len(summary_clean)}")
     
     # Parse the specific tabular format where data spans multiple lines
     # Look for entries like: S COMPANY_NAME\nLIMITED\n-Cash-INE...\nQUANTITY PRICE
@@ -677,9 +696,11 @@ def parse_tabular_format(summary_text, transaction_date, full_text):
     
     # If no transactions found with the complex tabular parsing, try simple individual trade pattern
     if not transactions:
+        logger.warning("No transactions found with complex tabular parsing, trying simple individual trade pattern")
         # Use the same individual trade pattern from flexible parser
         individual_pattern = r'[BS]\s+([A-Z\s&\.\-\']+?)\s*-\s*Cash\s*-\s*([A-Z0-9]{12})(\d+)\s+([\d\.]+)'
         individual_matches = re.findall(individual_pattern, summary_clean, re.IGNORECASE)
+        logger.info(f"Individual trade pattern found {len(individual_matches)} matches")
         
         # Aggregate individual trades by ISIN
         aggregated_matches = {}
@@ -778,4 +799,5 @@ def parse_tabular_format(summary_text, transaction_date, full_text):
             
             transactions.append(transaction)
     
+    logger.info(f"Tabular format parsing completed. Found {len(transactions)} transactions")
     return transactions

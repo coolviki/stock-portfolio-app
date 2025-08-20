@@ -74,7 +74,21 @@ const Upload = () => {
       const result = await apiService.uploadContractNotes(files, password, user?.id);
       setUploadResults(result);
       setShowPreview(true);
-      toast.success(`Successfully processed ${result.uploaded_transactions} transactions`);
+      
+      // Enhanced success/error messaging
+      if (result.summary) {
+        const { successful_transactions, total_errors } = result.summary;
+        if (successful_transactions > 0 && total_errors === 0) {
+          toast.success(`Successfully processed ${successful_transactions} transactions`);
+        } else if (successful_transactions > 0 && total_errors > 0) {
+          toast.warning(`Processed ${successful_transactions} transactions with ${total_errors} errors. Please review the details.`);
+        } else if (total_errors > 0) {
+          toast.error(`Failed to process any transactions. ${total_errors} errors occurred. Please check the error details.`);
+        }
+      } else {
+        // Fallback for old response format
+        toast.success(`Successfully processed ${result.uploaded_transactions} transactions`);
+      }
     } catch (error) {
       toast.error('Error uploading contract notes: ' + (error.response?.data?.detail || error.message));
       console.error('Upload error:', error);
@@ -410,33 +424,78 @@ const Upload = () => {
           </Card.Header>
           <Card.Body>
             <div className="row text-center mb-3">
-              <div className="col-md-4">
+              <div className="col-md-3">
                 <div className="card bg-success text-white">
                   <div className="card-body">
-                    <h3>{uploadResults.uploaded_transactions}</h3>
+                    <h3>{uploadResults.summary?.successful_transactions || uploadResults.uploaded_transactions}</h3>
                     <p>Transactions Added</p>
                   </div>
                 </div>
               </div>
-              <div className="col-md-4">
+              <div className="col-md-3">
                 <div className="card bg-info text-white">
                   <div className="card-body">
-                    <h3>{files.length}</h3>
+                    <h3>{uploadResults.summary?.files_processed || files.length}</h3>
                     <p>Files Processed</p>
                   </div>
                 </div>
               </div>
-              <div className="col-md-4">
+              <div className="col-md-3">
                 <div className="card bg-warning text-white">
                   <div className="card-body">
-                    <h3>{uploadResults.results.filter(r => r.error).length}</h3>
-                    <p>Errors</p>
+                    <h3>{uploadResults.summary?.total_errors || uploadResults.results.filter(r => r.error).length}</h3>
+                    <p>Total Errors</p>
+                  </div>
+                </div>
+              </div>
+              <div className="col-md-3">
+                <div className="card bg-secondary text-white">
+                  <div className="card-body">
+                    <h3>{uploadResults.summary?.files_with_errors || 0}</h3>
+                    <p>Files with Issues</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {uploadResults.results.some(r => r.error) && (
+            {/* Detailed Parsing Errors */}
+            {uploadResults.parsing_errors && uploadResults.parsing_errors.length > 0 && (
+              <Alert variant="danger" className="mb-3">
+                <Alert.Heading className="h6">
+                  <i className="bi bi-exclamation-triangle"></i> PDF Parsing Issues
+                </Alert.Heading>
+                
+                {uploadResults.parsing_errors.map((error, index) => (
+                  <div key={index} className="mb-3 pb-3" style={{borderBottom: index < uploadResults.parsing_errors.length - 1 ? '1px solid #dee2e6' : 'none'}}>
+                    <div className="d-flex align-items-start">
+                      <div className="flex-grow-1">
+                        <strong className="text-danger">📄 {error.file}</strong>
+                        <div className="mt-1">
+                          <Badge bg="secondary" className="me-2">{error.error_type}</Badge>
+                          <span className="text-dark">{error.error}</span>
+                        </div>
+                        
+                        {error.suggestions && error.suggestions.length > 0 && (
+                          <div className="mt-2">
+                            <small className="text-muted">
+                              <strong>💡 Suggestions:</strong>
+                            </small>
+                            <ul className="mt-1 mb-0" style={{fontSize: '0.875rem'}}>
+                              {error.suggestions.map((suggestion, suggIndex) => (
+                                <li key={suggIndex} className="text-muted">{suggestion}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </Alert>
+            )}
+
+            {/* Legacy Error Display (for backward compatibility) */}
+            {uploadResults.results && uploadResults.results.some(r => r.error) && !uploadResults.parsing_errors && (
               <Alert variant="warning">
                 <h6>Processing Errors:</h6>
                 <ul className="mb-0">
@@ -446,6 +505,14 @@ const Upload = () => {
                       <li key={index}>{result.error}</li>
                     ))}
                 </ul>
+              </Alert>
+            )}
+
+            {/* Success message for no errors */}
+            {uploadResults.summary && uploadResults.summary.total_errors === 0 && uploadResults.summary.successful_transactions > 0 && (
+              <Alert variant="success">
+                <i className="bi bi-check-circle"></i> All files processed successfully! 
+                {uploadResults.summary.successful_transactions} transactions were extracted and saved.
               </Alert>
             )}
 
