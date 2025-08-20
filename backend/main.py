@@ -588,70 +588,215 @@ async def upload_contract_notes(
     user_id: int = Form(...),
     db: Session = Depends(get_db)
 ):
+    logger.info(f"Upload contract notes request for user_id={user_id}, files={len(files)}")
+    
     # Verify user exists
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
+        logger.error(f"User not found: {user_id}")
         raise HTTPException(status_code=404, detail="User not found")
     
     results = []
-    for file in files:
-        if file.filename.lower().endswith('.pdf'):
-            try:
-                content = await file.read()
-                try:
-                    transactions = parse_contract_note(content, password)
-                    for trans_data in transactions:
-                        try:
-                            # Extract security information
-                            security_name = trans_data.pop('security_name')
-                            security_symbol = trans_data.pop('security_symbol', '')
-                            isin = trans_data.pop('isin', '')
-                            
-                            # Get or create security
-                            security = get_or_create_security(
-                                db, 
-                                security_name, 
-                                isin, 
-                                security_symbol
-                            )
-                            
-                            # Create transaction with security_id
-                            db_transaction = Transaction(
-                                user_id=user_id,
-                                security_id=security.id,
-                                **trans_data
-                            )
-                            db.add(db_transaction)
-                            db.commit()
-                            db.refresh(db_transaction)
-                            
-                            # Convert to dict for JSON serialization
-                            transaction_dict = {
-                                'id': db_transaction.id,
-                                'user_id': db_transaction.user_id,
-                                'security_name': db_transaction.security.security_name,
-                                'security_symbol': db_transaction.security.security_ticker,
-                                'isin': db_transaction.security.security_ISIN,
-                                'transaction_type': db_transaction.transaction_type,
-                                'quantity': db_transaction.quantity,
-                                'price_per_unit': db_transaction.price_per_unit,
-                                'total_amount': db_transaction.total_amount,
-                                'transaction_date': db_transaction.transaction_date.isoformat() if db_transaction.transaction_date else None,
-                                'exchange': db_transaction.exchange,
-                                'broker_fees': db_transaction.broker_fees,
-                                'taxes': db_transaction.taxes,
-                                'created_at': db_transaction.created_at.isoformat() if db_transaction.created_at else None,
-                                'updated_at': db_transaction.updated_at.isoformat() if db_transaction.updated_at else None
-                            }
-                            results.append(transaction_dict)
-                        except Exception as trans_error:
-                            results.append({"error": f"Transaction failed: {str(trans_error)}"})
-                except Exception as e:
-                    results.append({"error": f"Failed to parse {file.filename}: {str(e)}"})
-            finally:
-                await file.close()
+    parsing_errors = []
     
-    return {"uploaded_transactions": len([r for r in results if isinstance(r, dict) and 'id' in r]), "results": results}
+    for file_index, file in enumerate(files):
+        logger.info(f"Processing file {file_index + 1}/{len(files)}: {file.filename}")
+        
+        if not file.filename.lower().endswith('.pdf'):
+            error_msg = f"File {file.filename} is not a PDF file"
+            logger.warning(error_msg)
+            parsing_errors.append({"file": file.filename, "error": error_msg, "error_type": "invalid_file_type"})
+            continue
+            
+        file_results = {"file": file.filename, "transactions": [], "errors": []}
+        
+        try:
+            content = await file.read()
+            logger.info(f"Read {len(content)} bytes from {file.filename}")
+            
+            if len(content) == 0:
+                error_msg = f"File {file.filename} is empty"
+                logger.error(error_msg)
+                parsing_errors.append({"file": file.filename, "error": error_msg, "error_type": "empty_file"})
+                continue
+            
+            try:
+                logger.info(f"Starting PDF parsing for {file.filename}")
+                transactions = parse_contract_note(content, password)
+                logger.info(f"Successfully parsed {len(transactions)} transactions from {file.filename}")
+                
+                if len(transactions) == 0:
+                    error_msg = f"No transactions found in {file.filename}. The PDF format may not be supported or may not contain transaction data."
+                    logger.warning(error_msg)
+                    parsing_errors.append({
+                        "file": file.filename, 
+                        "error": error_msg, 
+                        "error_type": "no_transactions_found",
+                        "suggestions": [
+                            "Verify this is a valid contract note from HDFC Securities",
+                            "Check if the PDF contains a 'scrip wise summary' section",
+                            "Ensure the PDF is not corrupted",
+                            "Try uploading a different contract note"
+                        ]
+                    })
+                    continue
+                
+                for trans_index, trans_data in enumerate(transactions):
+                    try:
+                        logger.debug(f"Processing transaction {trans_index + 1} from {file.filename}: {trans_data.get('security_name', 'Unknown')}")
+                        
+                        # Extract security information
+                        security_name = trans_data.pop('security_name')
+                        security_symbol = trans_data.pop('security_symbol', '')
+                        isin = trans_data.pop('isin', '')
+                        
+                        if not security_name:
+                            error_msg = f"Transaction {trans_index + 1} missing security name"
+                            logger.error(error_msg)
+                            file_results["errors"].append({"transaction": trans_index + 1, "error": error_msg})
+                            continue
+                        
+                        # Get or create security
+                        security = get_or_create_security(
+                            db, 
+                            security_name, 
+                            isin, 
+                            security_symbol
+                        )
+                        
+                        # Create transaction with security_id
+                        db_transaction = Transaction(
+                            user_id=user_id,
+                            security_id=security.id,
+                            **trans_data
+                        )
+                        db.add(db_transaction)
+                        db.commit()
+                        db.refresh(db_transaction)
+                        
+                        # Convert to dict for JSON serialization
+                        transaction_dict = {
+                            'id': db_transaction.id,
+                            'user_id': db_transaction.user_id,
+                            'security_name': db_transaction.security.security_name,
+                            'security_symbol': db_transaction.security.security_ticker,
+                            'isin': db_transaction.security.security_ISIN,
+                            'transaction_type': db_transaction.transaction_type,
+                            'quantity': db_transaction.quantity,
+                            'price_per_unit': db_transaction.price_per_unit,
+                            'total_amount': db_transaction.total_amount,
+                            'transaction_date': db_transaction.transaction_date.isoformat() if db_transaction.transaction_date else None,
+                            'exchange': db_transaction.exchange,
+                            'broker_fees': db_transaction.broker_fees,
+                            'taxes': db_transaction.taxes,
+                            'created_at': db_transaction.created_at.isoformat() if db_transaction.created_at else None,
+                            'updated_at': db_transaction.updated_at.isoformat() if db_transaction.updated_at else None
+                        }
+                        file_results["transactions"].append(transaction_dict)
+                        results.append(transaction_dict)
+                        
+                        logger.debug(f"Successfully saved transaction: {security_name} - {trans_data.get('transaction_type', 'N/A')}")
+                        
+                    except Exception as trans_error:
+                        error_msg = f"Failed to save transaction {trans_index + 1}: {str(trans_error)}"
+                        logger.error(error_msg)
+                        logger.exception("Transaction save error:")
+                        file_results["errors"].append({"transaction": trans_index + 1, "error": error_msg})
+                        results.append({"error": error_msg})
+                        
+            except ValueError as parse_error:
+                # PDF parsing specific errors
+                error_msg = str(parse_error)
+                logger.error(f"PDF parsing failed for {file.filename}: {error_msg}")
+                
+                # Provide more specific error information
+                parsing_error = {
+                    "file": file.filename, 
+                    "error": error_msg, 
+                    "error_type": "parsing_failed"
+                }
+                
+                # Add specific suggestions based on error type
+                if "password" in error_msg.lower() or "decrypt" in error_msg.lower():
+                    parsing_error["error_type"] = "invalid_password"
+                    parsing_error["suggestions"] = [
+                        "Check if the PDF password is correct",
+                        "Ensure the PDF is password-protected with the correct password",
+                        "Try downloading the PDF again from your broker"
+                    ]
+                elif "scrip wise summary" in error_msg.lower():
+                    parsing_error["error_type"] = "unsupported_format"
+                    parsing_error["suggestions"] = [
+                        "This PDF format is not yet supported",
+                        "Ensure this is a contract note from HDFC Securities",
+                        "The PDF should contain a 'scrip wise summary' section",
+                        "Try uploading a different contract note or contact support"
+                    ]
+                else:
+                    parsing_error["suggestions"] = [
+                        "Verify this is a valid contract note PDF",
+                        "Check if the PDF is corrupted",
+                        "Try uploading a different file",
+                        "Contact support if the issue persists"
+                    ]
+                
+                parsing_errors.append(parsing_error)
+                
+            except Exception as e:
+                # Unexpected errors
+                error_msg = f"Unexpected error processing {file.filename}: {str(e)}"
+                logger.error(error_msg)
+                logger.exception("Unexpected processing error:")
+                parsing_errors.append({
+                    "file": file.filename, 
+                    "error": error_msg, 
+                    "error_type": "unexpected_error",
+                    "suggestions": [
+                        "Try uploading the file again",
+                        "Check if the PDF file is corrupted",
+                        "Contact support with this error message"
+                    ]
+                })
+                
+        except Exception as file_error:
+            # File reading errors
+            error_msg = f"Failed to read file {file.filename}: {str(file_error)}"
+            logger.error(error_msg)
+            parsing_errors.append({
+                "file": file.filename, 
+                "error": error_msg, 
+                "error_type": "file_read_error",
+                "suggestions": [
+                    "Check if the file is corrupted",
+                    "Try uploading the file again", 
+                    "Ensure the file is a valid PDF"
+                ]
+            })
+        finally:
+            try:
+                await file.close()
+            except:
+                pass
+    
+    successful_transactions = len([r for r in results if isinstance(r, dict) and 'id' in r])
+    total_errors = len(parsing_errors)
+    
+    logger.info(f"Upload completed: {successful_transactions} transactions, {total_errors} errors")
+    
+    # Return enhanced response with detailed error information
+    response = {
+        "uploaded_transactions": successful_transactions,
+        "results": results,
+        "parsing_errors": parsing_errors,
+        "summary": {
+            "files_processed": len(files),
+            "successful_transactions": successful_transactions,
+            "total_errors": total_errors,
+            "files_with_errors": len(parsing_errors)
+        }
+    }
+    
+    return response
 
 
 @app.get("/stock-price/{symbol}")
