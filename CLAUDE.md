@@ -70,7 +70,7 @@ sqlite3 stock_portfolio.db
 
 ### Core Tables
 - **users**: `id`, `username`, `created_at`
-- **transactions**: `id`, `user_id`, `security_name`, `security_symbol`, `isin`, `transaction_type` (BUY/SELL), `quantity`, `price_per_unit`, `total_amount`, `transaction_date`, `order_date`, `exchange`, `broker_fees`, `taxes`
+- **transactions**: `id`, `user_id`, `security_id`, `transaction_type` (BUY/SELL), `quantity`, `price_per_unit`, `total_amount`, `transaction_date`, `exchange`, `broker_fees`, `taxes`, `created_at`, `updated_at`
 
 ### ISIN Integration
 The system uses International Securities Identification Numbers (ISIN) for accurate stock pricing:
