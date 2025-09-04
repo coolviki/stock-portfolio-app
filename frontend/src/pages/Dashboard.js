@@ -16,8 +16,8 @@ const Dashboard = () => {
   const [loadingPrice, setLoadingPrice] = useState({});
   const { user } = useAuth();
 
-  const fetchSecurityPrice = async (symbol, isin) => {
-    const securityKey = symbol;
+  const fetchSecurityPrice = async (ticker, isin) => {
+    const securityKey = ticker;
     
     // Don't fetch if already loading
     if (loadingPrice[securityKey]) {
@@ -32,9 +32,9 @@ const Dashboard = () => {
       let timestamp = new Date().toLocaleString('en-IN');
 
       // Try waterfall price fetching: TICKER → ISIN → Security Name
-      if (symbol) {
+      if (ticker) {
         try {
-          const response = await fetchStockPriceBySymbol(symbol);
+          const response = await fetchStockPriceBySymbol(ticker);
           if (response.ok) {
             const data = await response.json();
             price = data.price;
@@ -66,7 +66,7 @@ const Dashboard = () => {
           price: price || 'N/A',
           method,
           timestamp,
-          symbol: symbol || 'N/A',
+          symbol: ticker || 'N/A',
           error: !price
         }
       }));
@@ -79,7 +79,7 @@ const Dashboard = () => {
           price: 'Error',
           method: 'ERROR',
           timestamp: new Date().toLocaleString('en-IN'),
-          symbol: symbol || 'N/A',
+          symbol: ticker || 'N/A',
           error: true
         }
       }));
@@ -88,12 +88,12 @@ const Dashboard = () => {
     }
   };
 
-  const handleSecurityNameClick = (symbol, isin) => {
-    fetchSecurityPrice(symbol, isin);
+  const handleSecurityNameClick = (ticker, isin) => {
+    fetchSecurityPrice(ticker, isin);
   };
 
-  const renderPriceTooltip = (symbol, isin) => {
-    const securityKey = symbol;
+  const renderPriceTooltip = (tickerSymbol, isin, securityName) => {
+    const securityKey = tickerSymbol;
     const loading = loadingPrice[securityKey];
     const data = priceData[securityKey];
 
@@ -115,7 +115,7 @@ const Dashboard = () => {
             <strong>📈 Click to fetch latest price</strong>
             <br />
             <small>Price will be fetched using waterfall method:<br />
-            1. Ticker Symbol ({symbol || 'N/A'})<br />
+            1. Ticker Symbol ({tickerSymbol || 'N/A'})<br />
             2. ISIN Code ({isin || 'N/A'})<br />
             3. Fallback pricing</small>
           </div>
@@ -128,7 +128,7 @@ const Dashboard = () => {
         <div>
           <strong>💰 Latest Price Information</strong>
           <hr className="my-2" style={{borderColor: '#fff'}} />
-          <div><strong>Security:</strong> {symbol}</div>
+          <div><strong>Security:</strong> {securityName}</div>
           <div><strong>Symbol:</strong> {data.symbol}</div>
           <div><strong>Price:</strong> {data.error ? '❌ Unable to fetch' : `₹${parseFloat(data.price).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}</div>
           <div><strong>Method:</strong> {data.method || 'FALLBACK'}</div>
@@ -376,7 +376,7 @@ const Dashboard = () => {
                         <OverlayTrigger
                           placement="top"
                           delay={{ show: 250, hide: 400 }}
-                          overlay={renderPriceTooltip(symbol, stock.isin)}
+                          overlay={renderPriceTooltip(stock.security_symbol || symbol, stock.isin, symbol)}
                           trigger={['hover', 'focus']}
                         >
                           <strong 
@@ -388,13 +388,13 @@ const Dashboard = () => {
                               alignItems: 'center',
                               gap: '4px'
                             }}
-                            onClick={() => handleSecurityNameClick(symbol, stock.isin)}
+                            onClick={() => handleSecurityNameClick(stock.security_symbol || symbol, stock.isin)}
                             title={`Click to fetch current price for ${symbol}`}
                             onMouseEnter={(e) => e.target.style.color = '#0a58ca'}
                             onMouseLeave={(e) => e.target.style.color = '#0d6efd'}
                           >
                             {symbol}
-                            {loadingPrice[symbol] ? (
+                            {loadingPrice[stock.security_symbol || symbol] ? (
                               <Spinner animation="border" size="sm" />
                             ) : (
                               '📈'
