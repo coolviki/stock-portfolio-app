@@ -35,10 +35,10 @@ function App() {
     return (
       <div className="App">
         <Routes>
-          <Route path="/firebase-auth" element={<FirebaseAuth />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/firebase-auth" element={<FirebaseAuth />} />
           <Route path="/register" element={<Register />} />
-          <Route path="*" element={<Navigate to="/firebase-auth" />} />
+          <Route path="*" element={<Navigate to="/login" />} />
         </Routes>
         <ToastContainer position="top-right" autoClose={3000} />
       </div>

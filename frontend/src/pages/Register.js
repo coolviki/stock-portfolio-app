@@ -1,44 +1,24 @@
 import React, { useState } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 
 const Register = () => {
-  const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    password: '',
-    confirmPassword: ''
-  });
+  const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
-  const { register } = useAuth();
-  const navigate = useNavigate();
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
+  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
-      return;
-    }
-
     try {
-      await register(formData.username, formData.email, formData.password);
-      toast.success('Registration successful! Please login.');
-      navigate('/login');
+      await login(username);
+      toast.success('Account created successfully!');
     } catch (error) {
       setError(error.response?.data?.detail || 'Registration failed');
     } finally {
@@ -60,52 +40,18 @@ const Register = () => {
               {error && <Alert variant="danger">{error}</Alert>}
 
               <Form onSubmit={handleSubmit}>
-                <Form.Group className="mb-3">
+                <Form.Group className="mb-4">
                   <Form.Label>Username</Form.Label>
                   <Form.Control
                     type="text"
-                    name="username"
-                    value={formData.username}
-                    onChange={handleChange}
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                     required
                     placeholder="Choose a username"
                   />
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Email</Form.Label>
-                  <Form.Control
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                    placeholder="Enter your email"
-                  />
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Password</Form.Label>
-                  <Form.Control
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                    placeholder="Enter your password"
-                  />
-                </Form.Group>
-
-                <Form.Group className="mb-4">
-                  <Form.Label>Confirm Password</Form.Label>
-                  <Form.Control
-                    type="password"
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    required
-                    placeholder="Confirm your password"
-                  />
+                  <Form.Text className="text-muted">
+                    Pick a unique username to get started. No password required!
+                  </Form.Text>
                 </Form.Group>
 
                 <Button
@@ -113,9 +59,9 @@ const Register = () => {
                   variant="primary"
                   size="lg"
                   className="w-100 mb-3"
-                  disabled={loading}
+                  disabled={loading || !username.trim()}
                 >
-                  {loading ? 'Creating Account...' : 'Sign Up'}
+                  {loading ? 'Creating Account...' : 'Create Account'}
                 </Button>
               </Form>
 

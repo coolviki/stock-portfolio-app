@@ -64,6 +64,21 @@ const Login = () => {
                   {loading ? 'Signing in...' : 'Continue'}
                 </Button>
               </Form>
+
+              <div className="text-center mt-3">
+                <p className="text-muted">
+                  Don't have an account?{' '}
+                  <Link to="/register" className="text-primary text-decoration-none">
+                    Sign up here
+                  </Link>
+                </p>
+                <p className="text-muted small">
+                  Or{' '}
+                  <Link to="/firebase-auth" className="text-primary text-decoration-none">
+                    sign in with Google
+                  </Link>
+                </p>
+              </div>
             </Card.Body>
           </Card>
         </Col>
