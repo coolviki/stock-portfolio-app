@@ -69,29 +69,51 @@ async def api_root():
 async def health():
     return {"status": "healthy"}
 
+@app.get("/config/auth")
+def get_auth_config():
+    """Get authentication configuration for frontend"""
+    logger.info("Frontend requesting authentication configuration")
+
+    # Get auth mode from environment (default to 'simple')
+    auth_mode = os.getenv('AUTH_MODE', 'simple').lower()
+
+    # Validate auth mode
+    if auth_mode not in ['simple', 'firebase']:
+        logger.warning(f"Invalid AUTH_MODE '{auth_mode}', defaulting to 'simple'")
+        auth_mode = 'simple'
+
+    config = {
+        "authMode": auth_mode,
+        "requiresFirebase": auth_mode == 'firebase',
+        "allowsSimpleLogin": auth_mode == 'simple'
+    }
+
+    logger.info(f"Auth configuration - Mode: {auth_mode}")
+    return config
+
 @app.get("/config/firebase")
 def get_firebase_config():
     """Get Firebase configuration for frontend"""
     logger.info("Frontend requesting Firebase configuration")
-    
+
     # Only return public Firebase configuration (never private keys)
     config = {
         "apiKey": os.getenv('FIREBASE_API_KEY', ''),
         "authDomain": os.getenv('FIREBASE_AUTH_DOMAIN', '') or f"{os.getenv('FIREBASE_PROJECT_ID', '')}.firebaseapp.com",
         "projectId": os.getenv('FIREBASE_PROJECT_ID', ''),
-        "storageBucket": os.getenv('FIREBASE_STORAGE_BUCKET', '') or f"{os.getenv('FIREBASE_PROJECT_ID', '')}.appspot.com", 
+        "storageBucket": os.getenv('FIREBASE_STORAGE_BUCKET', '') or f"{os.getenv('FIREBASE_PROJECT_ID', '')}.appspot.com",
         "messagingSenderId": os.getenv('FIREBASE_MESSAGING_SENDER_ID', ''),
         "appId": os.getenv('FIREBASE_APP_ID', ''),
         "available": bool(os.getenv('FIREBASE_API_KEY') and os.getenv('FIREBASE_PROJECT_ID'))
     }
-    
+
     # Log configuration status (without exposing secrets)
     logger.info(f"Firebase configuration - Available: {config['available']}")
     logger.info(f"Project ID: {config['projectId'] or 'NOT SET'}")
     logger.info(f"Auth Domain: {config['authDomain'] or 'NOT SET'}")
     logger.info(f"API Key set: {'Yes' if config['apiKey'] else 'No'}")
     logger.info(f"App ID set: {'Yes' if config['appId'] else 'No'}")
-    
+
     return config
 
 @app.post("/users/select-or-create", response_model=UserResponse)

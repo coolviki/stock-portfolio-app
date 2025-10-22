@@ -179,8 +179,33 @@ SECRET_KEY=your-secret-key-here
 # Add production API keys as needed
 ```
 
+### Authentication Configuration
+
+The application supports two authentication modes that can be configured via environment variable:
+
+**Simple Mode (Default)**
+- Username-only authentication (no password required)
+- Best for demos, development, and trusted environments
+- Users are automatically created when they enter a username
+
+**Firebase Mode**
+- Requires Google authentication via Firebase
+- More secure for production deployments
+- Supports email verification and user management
+
+To configure authentication mode, set in backend `.env`:
+```env
+# Authentication mode: 'simple' or 'firebase' (default: 'simple')
+AUTH_MODE=simple
+```
+
+**Behavior by Mode:**
+- `AUTH_MODE=simple`: Shows username login by default, Firebase available as alternative
+- `AUTH_MODE=firebase`: Requires Firebase Google authentication, username login disabled
+
 ### Security Notes
-- Currently uses simplified user system (username-only)
+- Simple auth mode: Username-only, no password verification
+- Firebase auth mode: Secured by Firebase Authentication with Google OAuth
 - Contract note passwords handled in-memory only
 - ISIN data improves price accuracy and reduces API dependencies
 

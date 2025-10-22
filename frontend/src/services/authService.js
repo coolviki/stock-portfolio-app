@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // API URL configuration for different environments
-const API_URL = process.env.REACT_APP_API_URL || 
+const API_URL = process.env.REACT_APP_API_URL ||
   (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:8000');
 
 const api = axios.create({
@@ -9,10 +9,15 @@ const api = axios.create({
 });
 
 export const authService = {
+  async getAuthConfig() {
+    const response = await api.get('/config/auth');
+    return response.data;
+  },
+
   async login(username) {
     const formData = new FormData();
     formData.append('username', username);
-    
+
     const response = await api.post('/users/select-or-create', formData);
     return { user_data: response.data };
   },

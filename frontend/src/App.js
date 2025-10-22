@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import { useAuth } from './context/AuthContext';
+import { authService } from './services/authService';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -20,8 +21,28 @@ import PriceProviders from './pages/PriceProviders';
 
 function App() {
   const { user, loading } = useAuth();
+  const [authConfig, setAuthConfig] = useState(null);
+  const [configLoading, setConfigLoading] = useState(true);
 
-  if (loading) {
+  useEffect(() => {
+    // Fetch auth configuration from backend
+    const fetchAuthConfig = async () => {
+      try {
+        const config = await authService.getAuthConfig();
+        setAuthConfig(config);
+      } catch (error) {
+        console.error('Error fetching auth config:', error);
+        // Default to simple auth if config fetch fails
+        setAuthConfig({ authMode: 'simple', allowsSimpleLogin: true, requiresFirebase: false });
+      } finally {
+        setConfigLoading(false);
+      }
+    };
+
+    fetchAuthConfig();
+  }, []);
+
+  if (loading || configLoading) {
     return (
       <div className="d-flex justify-content-center align-items-center min-vh-100">
         <div className="spinner-border text-primary" role="status">
@@ -32,13 +53,20 @@ function App() {
   }
 
   if (!user) {
+    // Determine default route based on auth mode
+    const defaultRoute = authConfig?.requiresFirebase ? '/firebase-auth' : '/login';
+
     return (
       <div className="App">
         <Routes>
-          <Route path="/login" element={<Login />} />
+          {authConfig?.allowsSimpleLogin && (
+            <>
+              <Route path="/login" element={<Login authConfig={authConfig} />} />
+              <Route path="/register" element={<Register authConfig={authConfig} />} />
+            </>
+          )}
           <Route path="/firebase-auth" element={<FirebaseAuth />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="*" element={<Navigate to="/login" />} />
+          <Route path="*" element={<Navigate to={defaultRoute} />} />
         </Routes>
         <ToastContainer position="top-right" autoClose={3000} />
       </div>

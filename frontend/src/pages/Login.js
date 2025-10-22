@@ -4,11 +4,11 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 
-const Login = () => {
+const Login = ({ authConfig }) => {
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
+
   const { login } = useAuth();
 
   const handleSubmit = async (e) => {
@@ -72,12 +72,14 @@ const Login = () => {
                     Sign up here
                   </Link>
                 </p>
-                <p className="text-muted small">
-                  Or{' '}
-                  <Link to="/firebase-auth" className="text-primary text-decoration-none">
-                    sign in with Google
-                  </Link>
-                </p>
+                {!authConfig?.requiresFirebase && (
+                  <p className="text-muted small">
+                    Or{' '}
+                    <Link to="/firebase-auth" className="text-primary text-decoration-none">
+                      sign in with Google
+                    </Link>
+                  </p>
+                )}
               </div>
             </Card.Body>
           </Card>
