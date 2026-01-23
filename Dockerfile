@@ -7,6 +7,7 @@ COPY frontend/package*.json ./
 # Install dependencies with npm install instead of ci
 RUN npm install
 
+# Cache bust: 2026-01-23 - Force rebuild to pick up Spinner import fix
 COPY frontend/ ./
 RUN CI=false GENERATE_SOURCEMAP=false npm run build
 
