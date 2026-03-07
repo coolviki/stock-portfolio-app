@@ -12,8 +12,16 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 from database import get_db, engine, Base
-from models import User, Transaction, Security
-from schemas import UserCreate, UserResponse, FirebaseUserCreate, TransactionCreate, TransactionResponse, TransactionUpdate, CapitalGainsResponse, CapitalGainsQuery, SecurityCreate, SecurityResponse, SecurityUpdate, LegacyTransactionCreate
+from models import User, Transaction, Security, Lot, CorporateEvent, LotAdjustment, SaleAllocation, LotStatus
+from schemas import (
+    UserCreate, UserResponse, FirebaseUserCreate,
+    TransactionCreate, TransactionResponse, TransactionUpdate,
+    CapitalGainsResponse, CapitalGainsQuery,
+    SecurityCreate, SecurityResponse, SecurityUpdate, LegacyTransactionCreate,
+    LotResponse, LotDetailResponse, LotAdjustmentResponse, SaleAllocationResponse,
+    CorporateEventCreate, CorporateEventUpdate, CorporateEventResponse,
+    AdjustedCapitalGainsResponse
+)
 from pdf_parser import parse_contract_note
 from stock_api import get_current_price, get_current_price_with_fallback, search_stocks, enrich_security_data, get_current_price_with_waterfall
 from capital_gains import get_capital_gains_for_financial_year, get_available_financial_years, get_current_financial_year
@@ -21,6 +29,8 @@ from firebase_config import verify_firebase_token
 from admin_utils import is_admin_user, get_admin_users, add_admin_user, remove_admin_user
 from price_config import price_config
 from stock_providers.manager import stock_price_manager
+from corporate_events import CorporateEventProcessor, CorporateEventError
+from lot_capital_gains import LotCapitalGainsCalculator, get_adjusted_portfolio_summary
 
 load_dotenv()
 
@@ -1420,6 +1430,401 @@ def require_admin_access(user_email: str = Query(...)):
             detail="Access denied. Admin privileges required."
         )
     return user_email
+
+
+# =============================================================================
+# CORPORATE EVENTS ENDPOINTS (Admin only)
+# =============================================================================
+
+@app.post("/corporate-events/", response_model=CorporateEventResponse)
+def create_corporate_event(
+    event: CorporateEventCreate,
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Create a new corporate event (admin only)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Verify security exists
+    security = db.query(Security).filter(Security.id == event.security_id).first()
+    if not security:
+        raise HTTPException(status_code=404, detail="Security not found")
+
+    # Get user ID from email
+    user = db.query(User).filter(User.email == admin_email).first()
+    user_id = user.id if user else None
+
+    db_event = CorporateEvent(
+        **event.model_dump(),
+        created_by_user_id=user_id
+    )
+    db.add(db_event)
+    db.commit()
+    db.refresh(db_event)
+
+    return db_event
+
+
+@app.get("/corporate-events/", response_model=List[CorporateEventResponse])
+def get_corporate_events(
+    security_id: Optional[int] = None,
+    event_type: Optional[str] = None,
+    is_applied: Optional[bool] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """Get corporate events with optional filters"""
+    query = db.query(CorporateEvent)
+
+    if security_id:
+        query = query.filter(CorporateEvent.security_id == security_id)
+    if event_type:
+        query = query.filter(CorporateEvent.event_type == event_type)
+    if is_applied is not None:
+        query = query.filter(CorporateEvent.is_applied == is_applied)
+
+    return query.order_by(CorporateEvent.event_date.desc()).offset(skip).limit(limit).all()
+
+
+@app.get("/corporate-events/{event_id}", response_model=CorporateEventResponse)
+def get_corporate_event(event_id: int, db: Session = Depends(get_db)):
+    """Get a specific corporate event"""
+    event = db.query(CorporateEvent).filter(CorporateEvent.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Corporate event not found")
+    return event
+
+
+@app.put("/corporate-events/{event_id}", response_model=CorporateEventResponse)
+def update_corporate_event(
+    event_id: int,
+    event_update: CorporateEventUpdate,
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Update a corporate event (admin only, not if applied)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    event = db.query(CorporateEvent).filter(CorporateEvent.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Corporate event not found")
+
+    if event.is_applied:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot update an applied event. Revert it first."
+        )
+
+    update_data = event_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(event, field, value)
+
+    event.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(event)
+
+    return event
+
+
+@app.delete("/corporate-events/{event_id}")
+def delete_corporate_event(
+    event_id: int,
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Delete a corporate event (admin only, not if applied)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    event = db.query(CorporateEvent).filter(CorporateEvent.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Corporate event not found")
+
+    if event.is_applied:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete an applied event. Revert it first."
+        )
+
+    db.delete(event)
+    db.commit()
+
+    return {"message": "Corporate event deleted successfully"}
+
+
+@app.post("/corporate-events/{event_id}/apply")
+def apply_corporate_event(
+    event_id: int,
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Apply a corporate event to all applicable lots (admin only)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    event = db.query(CorporateEvent).filter(CorporateEvent.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Corporate event not found")
+
+    try:
+        processor = CorporateEventProcessor(db)
+        adjustments = processor.apply_event(event)
+
+        return {
+            "success": True,
+            "message": f"Event applied successfully to {len(adjustments)} lots",
+            "lots_affected": len(adjustments),
+            "event_id": event_id
+        }
+    except CorporateEventError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error applying corporate event: {e}")
+        raise HTTPException(status_code=500, detail=f"Error applying event: {str(e)}")
+
+
+@app.post("/corporate-events/{event_id}/revert")
+def revert_corporate_event(
+    event_id: int,
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Revert a previously applied corporate event (admin only)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    event = db.query(CorporateEvent).filter(CorporateEvent.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Corporate event not found")
+
+    try:
+        processor = CorporateEventProcessor(db)
+        reverted_count = processor.revert_event(event)
+
+        return {
+            "success": True,
+            "message": f"Event reverted successfully from {reverted_count} lots",
+            "lots_affected": reverted_count,
+            "event_id": event_id
+        }
+    except CorporateEventError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error reverting corporate event: {e}")
+        raise HTTPException(status_code=500, detail=f"Error reverting event: {str(e)}")
+
+
+# =============================================================================
+# LOTS ENDPOINTS
+# =============================================================================
+
+@app.get("/lots/", response_model=List[LotResponse])
+def get_lots(
+    user_id: int,
+    security_id: Optional[int] = None,
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """Get lots for a user with optional filters"""
+    # Verify user exists
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    calculator = LotCapitalGainsCalculator(db)
+    lots = calculator.get_lots_for_user(user_id, security_id, status)
+
+    return lots[skip:skip + limit]
+
+
+@app.get("/lots/{lot_id}", response_model=LotDetailResponse)
+def get_lot_detail(lot_id: int, db: Session = Depends(get_db)):
+    """Get detailed lot information including adjustments and allocations"""
+    lot = db.query(Lot).filter(Lot.id == lot_id).first()
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot not found")
+
+    return lot
+
+
+@app.get("/lots/{lot_id}/adjustments", response_model=List[LotAdjustmentResponse])
+def get_lot_adjustments(lot_id: int, db: Session = Depends(get_db)):
+    """Get adjustment history for a lot"""
+    lot = db.query(Lot).filter(Lot.id == lot_id).first()
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot not found")
+
+    adjustments = db.query(LotAdjustment).filter(
+        LotAdjustment.lot_id == lot_id
+    ).order_by(LotAdjustment.created_at.desc()).all()
+
+    return adjustments
+
+
+@app.get("/lots/{lot_id}/sale-allocations", response_model=List[SaleAllocationResponse])
+def get_lot_sale_allocations(lot_id: int, db: Session = Depends(get_db)):
+    """Get sale allocations for a lot"""
+    lot = db.query(Lot).filter(Lot.id == lot_id).first()
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot not found")
+
+    allocations = db.query(SaleAllocation).filter(
+        SaleAllocation.lot_id == lot_id
+    ).order_by(SaleAllocation.created_at.desc()).all()
+
+    return allocations
+
+
+# =============================================================================
+# ADJUSTED PORTFOLIO AND CAPITAL GAINS ENDPOINTS
+# =============================================================================
+
+@app.get("/portfolio-adjusted/")
+def get_adjusted_portfolio(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get portfolio summary with adjusted cost basis from lots"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        portfolio = get_adjusted_portfolio_summary(db, user_id)
+        return {
+            "user_id": user_id,
+            "portfolio": portfolio,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting adjusted portfolio: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+@app.get("/capital-gains-adjusted/", response_model=AdjustedCapitalGainsResponse)
+def get_adjusted_capital_gains(
+    financial_year: int = Query(ge=2000, le=2050),
+    user_id: Optional[int] = Query(None, ge=1),
+    db: Session = Depends(get_db)
+):
+    """Get capital gains using adjusted cost basis from lots"""
+    current_year = datetime.now().year
+    if financial_year > current_year + 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Financial year cannot be more than {current_year + 1}"
+        )
+
+    if user_id:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        calculator = LotCapitalGainsCalculator(db)
+        return calculator.get_adjusted_capital_gains(financial_year, user_id)
+    except Exception as e:
+        logger.error(f"Error calculating adjusted capital gains: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+@app.post("/lots/recalculate")
+def recalculate_sale_allocations(
+    user_id: int,
+    security_id: Optional[int] = None,
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Recalculate sale allocations after corporate event changes (admin only)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        calculator = LotCapitalGainsCalculator(db)
+        updated_count = calculator.recalculate_sale_allocations(user_id, security_id)
+
+        return {
+            "success": True,
+            "message": f"Recalculated {updated_count} sale allocations",
+            "allocations_updated": updated_count
+        }
+    except Exception as e:
+        logger.error(f"Error recalculating sale allocations: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+# =============================================================================
+# MIGRATION ENDPOINT (Admin only - run once)
+# =============================================================================
+
+@app.post("/admin/migrate-to-lots")
+def run_lot_migration(
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Run the lot migration to create lots from existing transactions.
+    This should only be run once during initial setup.
+    Admin access required.
+    """
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        calculator = LotCapitalGainsCalculator(db)
+
+        # Migrate BUY transactions to lots
+        buy_transactions = db.query(Transaction).filter(
+            Transaction.transaction_type == 'BUY'
+        ).order_by(Transaction.transaction_date.asc()).all()
+
+        lots_created = 0
+        for tx in buy_transactions:
+            try:
+                existing_lot = db.query(Lot).filter(Lot.transaction_id == tx.id).first()
+                if not existing_lot:
+                    calculator.create_lot_from_transaction(tx)
+                    lots_created += 1
+            except Exception as e:
+                logger.error(f"Error creating lot for transaction {tx.id}: {e}")
+
+        # Allocate SELL transactions
+        sell_transactions = db.query(Transaction).filter(
+            Transaction.transaction_type == 'SELL'
+        ).order_by(Transaction.transaction_date.asc()).all()
+
+        allocations_created = 0
+        for tx in sell_transactions:
+            try:
+                existing = db.query(SaleAllocation).filter(
+                    SaleAllocation.sell_transaction_id == tx.id
+                ).count()
+                if existing == 0:
+                    allocations = calculator.allocate_sale_to_lots(tx)
+                    allocations_created += len(allocations)
+            except Exception as e:
+                logger.error(f"Error allocating sell transaction {tx.id}: {e}")
+
+        return {
+            "success": True,
+            "message": "Migration completed",
+            "lots_created": lots_created,
+            "allocations_created": allocations_created
+        }
+
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
 
 # SPA routing - serve frontend for all non-API routes (production only)
 if IS_PRODUCTION:

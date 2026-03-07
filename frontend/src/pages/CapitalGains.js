@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Form, Table, Badge, Button, Collapse, Alert, Spinner } from 'react-bootstrap';
+import { Container, Row, Col, Card, Form, Table, Badge, Button, Collapse, Alert, Spinner, ToggleButtonGroup, ToggleButton } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/apiService';
 import { toast } from 'react-toastify';
@@ -10,7 +10,9 @@ const CapitalGains = () => {
   const [availableYears, setAvailableYears] = useState([]);
   const [selectedYear, setSelectedYear] = useState('');
   const [capitalGains, setCapitalGains] = useState(null);
+  const [adjustedCapitalGains, setAdjustedCapitalGains] = useState(null);
   const [expandedSecurities, setExpandedSecurities] = useState({});
+  const [viewMode, setViewMode] = useState('original'); // 'original', 'adjusted', 'both'
 
   useEffect(() => {
     loadAvailableYears();
@@ -19,8 +21,17 @@ const CapitalGains = () => {
   useEffect(() => {
     if (selectedYear) {
       loadCapitalGains();
+      if (viewMode === 'adjusted' || viewMode === 'both') {
+        loadAdjustedCapitalGains();
+      }
     }
   }, [selectedYear, user]);
+
+  useEffect(() => {
+    if (selectedYear && (viewMode === 'adjusted' || viewMode === 'both') && !adjustedCapitalGains) {
+      loadAdjustedCapitalGains();
+    }
+  }, [viewMode]);
 
   const loadAvailableYears = async () => {
     try {
@@ -74,6 +85,23 @@ const CapitalGains = () => {
     }
   };
 
+  const loadAdjustedCapitalGains = async () => {
+    if (!selectedYear) return;
+
+    try {
+      setLoading(true);
+      const userId = user?.id;
+      const response = await apiService.getAdjustedCapitalGains(parseInt(selectedYear), userId);
+      setAdjustedCapitalGains(response);
+    } catch (error) {
+      console.error('Error loading adjusted capital gains:', error);
+      // Silently fail for adjusted gains - they may not be available if no lots exist
+      setAdjustedCapitalGains(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const toggleSecurityDetails = (securityName) => {
     setExpandedSecurities(prev => ({
       ...prev,
@@ -119,15 +147,15 @@ const CapitalGains = () => {
         <Col>
           <h2 className="mb-4">Capital Gains Analysis</h2>
           
-          {/* Year Selection */}
+          {/* Year Selection and View Mode */}
           <Card className="mb-4">
             <Card.Body>
               <Row className="align-items-center">
-                <Col md={6}>
+                <Col md={4}>
                   <Form.Group>
                     <Form.Label>Select Financial Year:</Form.Label>
-                    <Form.Select 
-                      value={selectedYear} 
+                    <Form.Select
+                      value={selectedYear}
                       onChange={(e) => {
                         const year = e.target.value;
                         if (year && (isNaN(year) || year < 2000 || year > new Date().getFullYear() + 1)) {
@@ -135,6 +163,7 @@ const CapitalGains = () => {
                           return;
                         }
                         setSelectedYear(year);
+                        setAdjustedCapitalGains(null);
                       }}
                       disabled={loading}
                     >
@@ -147,7 +176,33 @@ const CapitalGains = () => {
                     </Form.Select>
                   </Form.Group>
                 </Col>
-                <Col md={6}>
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label>Cost Basis View:</Form.Label>
+                    <div>
+                      <ToggleButtonGroup
+                        type="radio"
+                        name="viewMode"
+                        value={viewMode}
+                        onChange={(val) => setViewMode(val)}
+                      >
+                        <ToggleButton id="view-original" value="original" variant="outline-primary" size="sm">
+                          Original
+                        </ToggleButton>
+                        <ToggleButton id="view-adjusted" value="adjusted" variant="outline-success" size="sm">
+                          Adjusted
+                        </ToggleButton>
+                        <ToggleButton id="view-both" value="both" variant="outline-info" size="sm">
+                          Compare
+                        </ToggleButton>
+                      </ToggleButtonGroup>
+                    </div>
+                    <Form.Text className="text-muted">
+                      Adjusted values reflect corporate events (splits, bonuses)
+                    </Form.Text>
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
                   <p className="text-muted mb-0">
                     {`Showing data for ${user?.username || 'current user'}`}
                   </p>
@@ -174,9 +229,30 @@ const CapitalGains = () => {
                   <Card className="h-100">
                     <Card.Body className="text-center">
                       <h5 className="card-title">Total Gain/Loss</h5>
-                      <h3 className={`text-${getGainLossColor(capitalGains.total_gain_loss)}`}>
-                        {formatCurrency(capitalGains.total_gain_loss)}
-                      </h3>
+                      {viewMode === 'both' && adjustedCapitalGains ? (
+                        <>
+                          <div className="mb-2">
+                            <small className="text-muted">Original:</small>
+                            <h4 className={`text-${getGainLossColor(capitalGains.total_gain_loss)} mb-0`}>
+                              {formatCurrency(capitalGains.total_gain_loss)}
+                            </h4>
+                          </div>
+                          <div>
+                            <small className="text-muted">Adjusted:</small>
+                            <h4 className={`text-${getGainLossColor(adjustedCapitalGains.total_adjusted_gain_loss)} mb-0`}>
+                              {formatCurrency(adjustedCapitalGains.total_adjusted_gain_loss)}
+                            </h4>
+                          </div>
+                        </>
+                      ) : viewMode === 'adjusted' && adjustedCapitalGains ? (
+                        <h3 className={`text-${getGainLossColor(adjustedCapitalGains.total_adjusted_gain_loss)}`}>
+                          {formatCurrency(adjustedCapitalGains.total_adjusted_gain_loss)}
+                        </h3>
+                      ) : (
+                        <h3 className={`text-${getGainLossColor(capitalGains.total_gain_loss)}`}>
+                          {formatCurrency(capitalGains.total_gain_loss)}
+                        </h3>
+                      )}
                     </Card.Body>
                   </Card>
                 </Col>
@@ -184,10 +260,31 @@ const CapitalGains = () => {
                   <Card className="h-100">
                     <Card.Body className="text-center">
                       <h5 className="card-title">Short Term Gain/Loss</h5>
-                      <h3 className={`text-${getGainLossColor(capitalGains.short_term_gain_loss)}`}>
-                        {formatCurrency(capitalGains.short_term_gain_loss)}
-                      </h3>
-                      <small className="text-muted">Holdings ≤ 1 year</small>
+                      {viewMode === 'both' && adjustedCapitalGains ? (
+                        <>
+                          <div className="mb-2">
+                            <small className="text-muted">Original:</small>
+                            <h4 className={`text-${getGainLossColor(capitalGains.short_term_gain_loss)} mb-0`}>
+                              {formatCurrency(capitalGains.short_term_gain_loss)}
+                            </h4>
+                          </div>
+                          <div>
+                            <small className="text-muted">Adjusted:</small>
+                            <h4 className={`text-${getGainLossColor(adjustedCapitalGains.short_term_adjusted)} mb-0`}>
+                              {formatCurrency(adjustedCapitalGains.short_term_adjusted)}
+                            </h4>
+                          </div>
+                        </>
+                      ) : viewMode === 'adjusted' && adjustedCapitalGains ? (
+                        <h3 className={`text-${getGainLossColor(adjustedCapitalGains.short_term_adjusted)}`}>
+                          {formatCurrency(adjustedCapitalGains.short_term_adjusted)}
+                        </h3>
+                      ) : (
+                        <h3 className={`text-${getGainLossColor(capitalGains.short_term_gain_loss)}`}>
+                          {formatCurrency(capitalGains.short_term_gain_loss)}
+                        </h3>
+                      )}
+                      <small className="text-muted">Holdings &lt;= 1 year</small>
                     </Card.Body>
                   </Card>
                 </Col>
@@ -195,14 +292,44 @@ const CapitalGains = () => {
                   <Card className="h-100">
                     <Card.Body className="text-center">
                       <h5 className="card-title">Long Term Gain/Loss</h5>
-                      <h3 className={`text-${getGainLossColor(capitalGains.long_term_gain_loss)}`}>
-                        {formatCurrency(capitalGains.long_term_gain_loss)}
-                      </h3>
-                      <small className="text-muted">Holdings > 1 year</small>
+                      {viewMode === 'both' && adjustedCapitalGains ? (
+                        <>
+                          <div className="mb-2">
+                            <small className="text-muted">Original:</small>
+                            <h4 className={`text-${getGainLossColor(capitalGains.long_term_gain_loss)} mb-0`}>
+                              {formatCurrency(capitalGains.long_term_gain_loss)}
+                            </h4>
+                          </div>
+                          <div>
+                            <small className="text-muted">Adjusted:</small>
+                            <h4 className={`text-${getGainLossColor(adjustedCapitalGains.long_term_adjusted)} mb-0`}>
+                              {formatCurrency(adjustedCapitalGains.long_term_adjusted)}
+                            </h4>
+                          </div>
+                        </>
+                      ) : viewMode === 'adjusted' && adjustedCapitalGains ? (
+                        <h3 className={`text-${getGainLossColor(adjustedCapitalGains.long_term_adjusted)}`}>
+                          {formatCurrency(adjustedCapitalGains.long_term_adjusted)}
+                        </h3>
+                      ) : (
+                        <h3 className={`text-${getGainLossColor(capitalGains.long_term_gain_loss)}`}>
+                          {formatCurrency(capitalGains.long_term_gain_loss)}
+                        </h3>
+                      )}
+                      <small className="text-muted">Holdings &gt; 1 year</small>
                     </Card.Body>
                   </Card>
                 </Col>
               </Row>
+
+              {/* Adjusted Data Notice */}
+              {(viewMode === 'adjusted' || viewMode === 'both') && !adjustedCapitalGains && (
+                <Alert variant="info" className="mb-4">
+                  <strong>Note:</strong> Adjusted capital gains data is not available.
+                  This may be because the lot migration has not been run yet.
+                  Contact your administrator to run the lot migration.
+                </Alert>
+              )}
 
               {/* Securities Breakdown */}
               <Card>

@@ -13,10 +13,12 @@ const Sidebar = () => {
     { path: '/transactions', icon: '📋', label: 'Transactions' },
     { path: '/upload', icon: '📤', label: 'Upload Contract Notes' },
     { path: '/manual-entry', icon: '✏️', label: 'Manual Entry' },
+    { path: '/lots', icon: '📦', label: 'Lot View' },
     { path: '/capital-gains', icon: '💰', label: 'Capital Gains' }
   ];
 
   const adminMenuItems = [
+    { path: '/corporate-events', icon: '📢', label: 'Corporate Events', adminOnly: true },
     { path: '/security-master', icon: '🔐', label: 'Security Master', adminOnly: true },
     { path: '/users', icon: '👥', label: 'Manage Users', adminOnly: true },
     { path: '/price-providers', icon: '🌐', label: 'Price Providers', adminOnly: true },

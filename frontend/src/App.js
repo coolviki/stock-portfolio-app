@@ -18,6 +18,8 @@ import Admin from './pages/Admin';
 import CapitalGains from './pages/CapitalGains';
 import SecurityMaster from './pages/SecurityMaster';
 import PriceProviders from './pages/PriceProviders';
+import CorporateEvents from './pages/CorporateEvents';
+import LotView from './pages/LotView';
 
 function App() {
   const { user, loading } = useAuth();
@@ -87,7 +89,9 @@ function App() {
                 <Route path="/transactions" element={<Transactions />} />
                 <Route path="/upload" element={<Upload />} />
                 <Route path="/manual-entry" element={<ManualEntry />} />
+                <Route path="/lots" element={<LotView />} />
                 <Route path="/capital-gains" element={<CapitalGains />} />
+                <Route path="/corporate-events" element={<CorporateEvents />} />
                 <Route path="/security-master" element={<SecurityMaster />} />
                 <Route path="/users" element={<ManageUsers />} />
                 <Route path="/price-providers" element={<PriceProviders />} />

@@ -211,8 +211,130 @@ export const apiService = {
   async removeAdminUser(email) {
     const formData = new FormData();
     formData.append('email', email);
-    
+
     const response = await api.delete('/admin/users/remove', { data: formData });
+    return response.data;
+  },
+
+  // Corporate Events APIs
+  async getCorporateEvents(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.security_id) params.append('security_id', filters.security_id);
+    if (filters.event_type) params.append('event_type', filters.event_type);
+    if (filters.is_applied !== undefined) params.append('is_applied', filters.is_applied);
+    if (filters.skip) params.append('skip', filters.skip);
+    if (filters.limit) params.append('limit', filters.limit);
+
+    const response = await api.get(`/corporate-events/?${params}`);
+    return response.data;
+  },
+
+  async getCorporateEvent(eventId) {
+    const response = await api.get(`/corporate-events/${eventId}`);
+    return response.data;
+  },
+
+  async createCorporateEvent(event, adminEmail) {
+    const params = new URLSearchParams();
+    params.append('admin_email', adminEmail);
+
+    const response = await api.post(`/corporate-events/?${params}`, event);
+    return response.data;
+  },
+
+  async updateCorporateEvent(eventId, event, adminEmail) {
+    const params = new URLSearchParams();
+    params.append('admin_email', adminEmail);
+
+    const response = await api.put(`/corporate-events/${eventId}?${params}`, event);
+    return response.data;
+  },
+
+  async deleteCorporateEvent(eventId, adminEmail) {
+    const params = new URLSearchParams();
+    params.append('admin_email', adminEmail);
+
+    const response = await api.delete(`/corporate-events/${eventId}?${params}`);
+    return response.data;
+  },
+
+  async applyCorporateEvent(eventId, adminEmail) {
+    const params = new URLSearchParams();
+    params.append('admin_email', adminEmail);
+
+    const response = await api.post(`/corporate-events/${eventId}/apply?${params}`);
+    return response.data;
+  },
+
+  async revertCorporateEvent(eventId, adminEmail) {
+    const params = new URLSearchParams();
+    params.append('admin_email', adminEmail);
+
+    const response = await api.post(`/corporate-events/${eventId}/revert?${params}`);
+    return response.data;
+  },
+
+  // Lots APIs
+  async getLots(userId, filters = {}) {
+    const params = new URLSearchParams();
+    params.append('user_id', userId);
+    if (filters.security_id) params.append('security_id', filters.security_id);
+    if (filters.status) params.append('status', filters.status);
+    if (filters.skip) params.append('skip', filters.skip);
+    if (filters.limit) params.append('limit', filters.limit);
+
+    const response = await api.get(`/lots/?${params}`);
+    return response.data;
+  },
+
+  async getLotDetail(lotId) {
+    const response = await api.get(`/lots/${lotId}`);
+    return response.data;
+  },
+
+  async getLotAdjustments(lotId) {
+    const response = await api.get(`/lots/${lotId}/adjustments`);
+    return response.data;
+  },
+
+  async getLotSaleAllocations(lotId) {
+    const response = await api.get(`/lots/${lotId}/sale-allocations`);
+    return response.data;
+  },
+
+  // Adjusted Portfolio APIs
+  async getAdjustedPortfolio(userId) {
+    const params = new URLSearchParams();
+    params.append('user_id', userId);
+
+    const response = await api.get(`/portfolio-adjusted/?${params}`);
+    return response.data;
+  },
+
+  async getAdjustedCapitalGains(financialYear, userId = null) {
+    const params = new URLSearchParams();
+    params.append('financial_year', financialYear);
+    if (userId) params.append('user_id', userId);
+
+    const response = await api.get(`/capital-gains-adjusted/?${params}`);
+    return response.data;
+  },
+
+  async recalculateSaleAllocations(userId, securityId, adminEmail) {
+    const params = new URLSearchParams();
+    params.append('user_id', userId);
+    if (securityId) params.append('security_id', securityId);
+    params.append('admin_email', adminEmail);
+
+    const response = await api.post(`/lots/recalculate?${params}`);
+    return response.data;
+  },
+
+  async runLotMigration(adminEmail) {
+    const params = new URLSearchParams();
+    params.append('admin_email', adminEmail);
+
+    const response = await api.post(`/admin/migrate-to-lots?${params}`);
     return response.data;
   }
 };
