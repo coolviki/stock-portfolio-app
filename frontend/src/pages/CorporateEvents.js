@@ -20,7 +20,7 @@ const DIVIDEND_TYPES = [
 ];
 
 const CorporateEvents = () => {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [loading, setLoading] = useState(false);
   const [events, setEvents] = useState([]);
   const [securities, setSecurities] = useState([]);
@@ -45,8 +45,6 @@ const CorporateEvents = () => {
     description: '',
     source: 'MANUAL'
   });
-
-  const isAdmin = user?.is_admin || false;
 
   useEffect(() => {
     loadSecurities();
