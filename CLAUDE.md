@@ -195,8 +195,8 @@ The application supports two authentication modes that can be configured via env
 
 To configure authentication mode, set in backend `.env`:
 ```env
-# Authentication mode: 'simple' or 'firebase' (default: 'simple')
-AUTH_MODE=simple
+# Authentication mode: 'simple' or 'firebase' (default: 'firebase')
+AUTH_MODE=firebase
 ```
 
 **Behavior by Mode:**

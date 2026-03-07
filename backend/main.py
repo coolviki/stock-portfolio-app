@@ -74,13 +74,13 @@ def get_auth_config():
     """Get authentication configuration for frontend"""
     logger.info("Frontend requesting authentication configuration")
 
-    # Get auth mode from environment (default to 'simple')
-    auth_mode = os.getenv('AUTH_MODE', 'simple').lower()
+    # Get auth mode from environment (default to 'firebase')
+    auth_mode = os.getenv('AUTH_MODE', 'firebase').lower()
 
     # Validate auth mode
     if auth_mode not in ['simple', 'firebase']:
-        logger.warning(f"Invalid AUTH_MODE '{auth_mode}', defaulting to 'simple'")
-        auth_mode = 'simple'
+        logger.warning(f"Invalid AUTH_MODE '{auth_mode}', defaulting to 'firebase'")
+        auth_mode = 'firebase'
 
     config = {
         "authMode": auth_mode,
