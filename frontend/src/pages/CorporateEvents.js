@@ -143,12 +143,18 @@ const CorporateEvents = () => {
     try {
       setLoading(true);
 
+      // Helper to convert date string to datetime string for backend
+      const toDatetime = (dateStr) => {
+        if (!dateStr) return null;
+        return `${dateStr}T00:00:00`;
+      };
+
       const eventData = {
         security_id: parseInt(formData.security_id),
         event_type: formData.event_type,
-        event_date: formData.event_date,
-        record_date: formData.record_date || null,
-        ex_date: formData.ex_date || null,
+        event_date: toDatetime(formData.event_date),
+        record_date: toDatetime(formData.record_date),
+        ex_date: toDatetime(formData.ex_date),
         description: formData.description || null,
         source: formData.source
       };
