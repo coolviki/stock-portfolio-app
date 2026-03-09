@@ -1225,6 +1225,62 @@ def remove_admin_user_endpoint(email: str = Form(...)):
     else:
         raise HTTPException(status_code=404, detail=f"User {email} not found in admin whitelist")
 
+@app.delete("/admin/clear-database")
+def clear_database(
+    admin_email: str = Form(...),
+    confirmation_code: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    """
+    DANGER: Clear ALL data from the database.
+    Requires admin access and a confirmation code matching "DELETE-ALL-DATA"
+    """
+    # Check admin access
+    if not is_admin_user(admin_email):
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Admin privileges required."
+        )
+
+    # Verify confirmation code
+    if confirmation_code != "DELETE-ALL-DATA":
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid confirmation code. Operation aborted."
+        )
+
+    try:
+        # Count records before deletion for reporting
+        counts = {
+            "sale_allocations": db.query(SaleAllocation).count(),
+            "lot_adjustments": db.query(LotAdjustment).count(),
+            "lots": db.query(Lot).count(),
+            "corporate_events": db.query(CorporateEvent).count(),
+            "transactions": db.query(Transaction).count(),
+            "securities": db.query(Security).count(),
+            "users": db.query(User).count()
+        }
+
+        # Delete in order respecting foreign key constraints
+        db.query(SaleAllocation).delete()
+        db.query(LotAdjustment).delete()
+        db.query(Lot).delete()
+        db.query(CorporateEvent).delete()
+        db.query(Transaction).delete()
+        db.query(Security).delete()
+        db.query(User).delete()
+
+        db.commit()
+
+        return {
+            "message": "Database cleared successfully",
+            "deleted_counts": counts,
+            "total_records_deleted": sum(counts.values())
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to clear database: {str(e)}")
+
 # Price Provider Admin Endpoints
 @app.get("/admin/price-providers/status")
 def get_price_providers_status(user_email: str = Query(...)):

@@ -37,3 +37,14 @@ export const fetchAdminImport = (formData) => {
     body: formData,
   });
 };
+
+export const clearDatabase = (adminEmail, confirmationCode) => {
+  const baseUrl = getApiBaseUrl();
+  const formData = new FormData();
+  formData.append('admin_email', adminEmail);
+  formData.append('confirmation_code', confirmationCode);
+  return fetch(`${baseUrl}/admin/clear-database`, {
+    method: 'DELETE',
+    body: formData,
+  });
+};
