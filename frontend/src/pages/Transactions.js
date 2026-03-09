@@ -417,8 +417,8 @@ const Transactions = () => {
           </div>
         </Card.Header>
         <Card.Body>
-          <Row>
-            <Col md={3}>
+          <Row className="g-3">
+            <Col xs={12} sm={6} md={3}>
               <Form.Group>
                 <Form.Label>Security Name</Form.Label>
                 <div style={{ position: 'relative' }}>
@@ -476,7 +476,7 @@ const Transactions = () => {
                 </div>
               </Form.Group>
             </Col>
-            <Col md={2}>
+            <Col xs={6} sm={6} md={2}>
               <Form.Group>
                 <Form.Label>Type</Form.Label>
                 <Form.Select
@@ -489,7 +489,7 @@ const Transactions = () => {
                 </Form.Select>
               </Form.Group>
             </Col>
-            <Col md={2}>
+            <Col xs={6} sm={6} md={2}>
               <Form.Group>
                 <Form.Label>From Date</Form.Label>
                 <DatePicker
@@ -501,7 +501,7 @@ const Transactions = () => {
                 />
               </Form.Group>
             </Col>
-            <Col md={2}>
+            <Col xs={6} sm={6} md={2}>
               <Form.Group>
                 <Form.Label>To Date</Form.Label>
                 <DatePicker
@@ -513,8 +513,8 @@ const Transactions = () => {
                 />
               </Form.Group>
             </Col>
-            <Col md={3} className="d-flex align-items-end">
-              <Button variant="outline-secondary" onClick={clearFilters}>
+            <Col xs={6} sm={6} md={3} className="d-flex align-items-end">
+              <Button variant="outline-secondary" onClick={clearFilters} className="w-100 w-md-auto">
                 Clear Filters
               </Button>
             </Col>

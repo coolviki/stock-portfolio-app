@@ -111,8 +111,8 @@ const Dashboard = () => {
       </h2>
       
       {/* Summary Cards */}
-      <Row className="mb-4">
-        <Col md={3}>
+      <Row className="mb-4 g-3">
+        <Col xs={6} md={3}>
           <Card className="card-stat text-center h-100">
             <Card.Body>
               <h5>Total Invested</h5>
@@ -120,7 +120,7 @@ const Dashboard = () => {
             </Card.Body>
           </Card>
         </Col>
-        <Col md={3}>
+        <Col xs={6} md={3}>
           <Card className="card-stat text-center h-100">
             <Card.Body>
               <h5>Current Value</h5>
@@ -128,7 +128,7 @@ const Dashboard = () => {
             </Card.Body>
           </Card>
         </Col>
-        <Col md={3}>
+        <Col xs={6} md={3}>
           <Card className={`card-stat text-center h-100 ${totalGains >= 0 ? 'profit' : 'loss'}`}>
             <Card.Body>
               <h5>Total P&L</h5>
@@ -137,7 +137,7 @@ const Dashboard = () => {
             </Card.Body>
           </Card>
         </Col>
-        <Col md={3}>
+        <Col xs={6} md={3}>
           <Card className="card-stat text-center h-100">
             <Card.Body>
               <h5>Holdings</h5>
@@ -148,16 +148,16 @@ const Dashboard = () => {
         </Col>
       </Row>
 
-      <Row className="mb-4">
-        <Col md={6}>
+      <Row className="mb-4 g-3">
+        <Col xs={12} md={6}>
           <Card>
             <Card.Header>
               <h5>Portfolio Allocation</h5>
             </Card.Header>
             <Card.Body>
               {portfolioLabels.length > 0 ? (
-                <Doughnut 
-                  data={portfolioData} 
+                <Doughnut
+                  data={portfolioData}
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,
@@ -175,14 +175,14 @@ const Dashboard = () => {
             </Card.Body>
           </Card>
         </Col>
-        
-        <Col md={6}>
+
+        <Col xs={12} md={6}>
           <Card>
             <Card.Header>
               <h5>Gains/Losses Breakdown</h5>
             </Card.Header>
             <Card.Body>
-              <Bar 
+              <Bar
                 data={gainsData}
                 options={{
                   responsive: true,

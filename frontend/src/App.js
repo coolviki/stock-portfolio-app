@@ -25,6 +25,10 @@ function App() {
   const { user, loading } = useAuth();
   const [authConfig, setAuthConfig] = useState(null);
   const [configLoading, setConfigLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+  const closeSidebar = () => setSidebarOpen(false);
 
   useEffect(() => {
     // Fetch auth configuration from backend
@@ -78,9 +82,13 @@ function App() {
   return (
     <div className="App">
       <div className="d-flex">
-        <Sidebar />
+        <div
+          className={`sidebar-overlay ${!sidebarOpen ? 'hidden' : ''}`}
+          onClick={closeSidebar}
+        />
+        <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
         <div className="flex-grow-1">
-          <Navbar />
+          <Navbar onToggleSidebar={toggleSidebar} />
           <div className="main-content">
             <ErrorBoundary>
               <Routes>
