@@ -267,14 +267,23 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    # Delete all transactions for this user first (due to foreign key constraint)
+
+    # Delete lot-related data for this user first
+    # Delete sale allocations for lots owned by this user
+    user_lot_ids = [lot.id for lot in db.query(Lot).filter(Lot.user_id == user_id).all()]
+    if user_lot_ids:
+        db.query(SaleAllocation).filter(SaleAllocation.lot_id.in_(user_lot_ids)).delete(synchronize_session=False)
+        db.query(LotAdjustment).filter(LotAdjustment.lot_id.in_(user_lot_ids)).delete(synchronize_session=False)
+    # Delete lots for this user
+    db.query(Lot).filter(Lot.user_id == user_id).delete()
+
+    # Delete all transactions for this user (due to foreign key constraint)
     db.query(Transaction).filter(Transaction.user_id == user_id).delete()
-    
+
     # Delete the user
     db.delete(user)
     db.commit()
-    
+
     return {"message": f"User '{user.username}' and all their transactions deleted successfully"}
 
 @app.delete("/users/{user_id}/transactions")
@@ -283,14 +292,22 @@ def clear_user_transactions(user_id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     # Count transactions before deletion
     transaction_count = db.query(Transaction).filter(Transaction.user_id == user_id).count()
-    
+
+    # Delete lot-related data for this user first
+    user_lot_ids = [lot.id for lot in db.query(Lot).filter(Lot.user_id == user_id).all()]
+    if user_lot_ids:
+        db.query(SaleAllocation).filter(SaleAllocation.lot_id.in_(user_lot_ids)).delete(synchronize_session=False)
+        db.query(LotAdjustment).filter(LotAdjustment.lot_id.in_(user_lot_ids)).delete(synchronize_session=False)
+    # Delete lots for this user
+    db.query(Lot).filter(Lot.user_id == user_id).delete()
+
     # Delete all transactions for this user
     db.query(Transaction).filter(Transaction.user_id == user_id).delete()
     db.commit()
-    
+
     return {"message": f"Cleared {transaction_count} transactions for user '{user.username}'"}
 
 # Helper function to get or create security
@@ -317,6 +334,73 @@ def get_or_create_security(db: Session, security_name: str, isin: str = "", tick
     db.commit()
     db.refresh(new_security)
     return new_security
+
+# Helper functions for automatic lot management
+def handle_lot_for_transaction(db: Session, transaction: Transaction):
+    """
+    Automatically create lot for BUY or allocate to lots for SELL.
+    Called after a transaction is committed to the database.
+    """
+    calculator = LotCapitalGainsCalculator(db)
+
+    if transaction.transaction_type.upper() == 'BUY':
+        try:
+            lot = calculator.create_lot_from_transaction(transaction)
+            logger.info(f"Created lot {lot.id} for BUY transaction {transaction.id}")
+            return lot
+        except Exception as e:
+            logger.error(f"Failed to create lot for transaction {transaction.id}: {e}")
+            # Don't fail the transaction, just log the error
+            return None
+    elif transaction.transaction_type.upper() == 'SELL':
+        try:
+            allocations = calculator.allocate_sale_to_lots(transaction)
+            logger.info(f"Created {len(allocations)} allocations for SELL transaction {transaction.id}")
+            return allocations
+        except Exception as e:
+            logger.error(f"Failed to allocate lots for transaction {transaction.id}: {e}")
+            return None
+    return None
+
+
+def cleanup_lot_for_transaction(db: Session, transaction: Transaction):
+    """
+    Clean up lot data when a transaction is deleted.
+    For BUY: delete the lot and any adjustments
+    For SELL: delete allocations and restore lot quantities
+    """
+    if transaction.transaction_type.upper() == 'BUY':
+        # Find and delete the lot associated with this transaction
+        lot = db.query(Lot).filter(Lot.transaction_id == transaction.id).first()
+        if lot:
+            # Delete any adjustments for this lot
+            db.query(LotAdjustment).filter(LotAdjustment.lot_id == lot.id).delete()
+            # Delete any sale allocations for this lot
+            allocations = db.query(SaleAllocation).filter(SaleAllocation.lot_id == lot.id).all()
+            for alloc in allocations:
+                db.delete(alloc)
+            # Delete the lot
+            db.delete(lot)
+            logger.info(f"Deleted lot {lot.id} for BUY transaction {transaction.id}")
+    elif transaction.transaction_type.upper() == 'SELL':
+        # Find and restore lots from allocations
+        allocations = db.query(SaleAllocation).filter(
+            SaleAllocation.sell_transaction_id == transaction.id
+        ).all()
+        for alloc in allocations:
+            lot = db.query(Lot).filter(Lot.id == alloc.lot_id).first()
+            if lot:
+                # Restore the quantity
+                lot.remaining_quantity += alloc.quantity_sold
+                # Update status
+                if lot.remaining_quantity >= lot.current_quantity:
+                    lot.status = LotStatus.OPEN.value
+                else:
+                    lot.status = LotStatus.PARTIALLY_SOLD.value
+                lot.updated_at = datetime.utcnow()
+            db.delete(alloc)
+        logger.info(f"Restored {len(allocations)} lot allocations for SELL transaction {transaction.id}")
+
 
 # Security endpoints
 @app.post("/securities/", response_model=SecurityResponse)
@@ -414,6 +498,10 @@ def create_transaction(
     db.add(db_transaction)
     db.commit()
     db.refresh(db_transaction)
+
+    # Automatically handle lot creation/allocation
+    handle_lot_for_transaction(db, db_transaction)
+
     return db_transaction
 
 # Legacy endpoint for backward compatibility
@@ -448,10 +536,14 @@ def create_transaction_legacy(
         broker_fees=transaction.broker_fees,
         taxes=transaction.taxes
     )
-    
+
     db.add(db_transaction)
     db.commit()
     db.refresh(db_transaction)
+
+    # Automatically handle lot creation/allocation
+    handle_lot_for_transaction(db, db_transaction)
+
     return db_transaction
 
 @app.get("/transactions/", response_model=List[TransactionResponse])
@@ -606,10 +698,13 @@ def delete_transaction(
         Transaction.id == transaction_id,
         Transaction.user_id == user_id
     ).first()
-    
+
     if not db_transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    
+
+    # Clean up associated lots before deleting transaction
+    cleanup_lot_for_transaction(db, db_transaction)
+
     db.delete(db_transaction)
     db.commit()
     return {"message": "Transaction deleted successfully"}
@@ -706,7 +801,10 @@ async def upload_contract_notes(
                         db.add(db_transaction)
                         db.commit()
                         db.refresh(db_transaction)
-                        
+
+                        # Automatically handle lot creation/allocation
+                        handle_lot_for_transaction(db, db_transaction)
+
                         # Convert to dict for JSON serialization
                         transaction_dict = {
                             'id': db_transaction.id,
@@ -1129,7 +1227,11 @@ async def import_database(
                 new_transaction = Transaction(**transaction_dict)
                 db.add(new_transaction)
                 db.commit()
-                
+                db.refresh(new_transaction)
+
+                # Automatically handle lot creation/allocation
+                handle_lot_for_transaction(db, new_transaction)
+
                 results["transactions_imported"] += 1
                 
             except Exception as e:
