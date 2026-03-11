@@ -107,16 +107,46 @@ class AlphaVantageProvider(StockPriceProvider):
                     if '05. price' in quote:
                         price = float(quote['05. price'])
                         timestamp = quote.get('07. latest trading day', '')
-                        
+
+                        # Extract change data
+                        previous_close = None
+                        change = None
+                        change_percent = None
+
+                        if '08. previous close' in quote:
+                            try:
+                                previous_close = float(quote['08. previous close'])
+                            except (ValueError, TypeError):
+                                pass
+
+                        if '09. change' in quote:
+                            try:
+                                change = float(quote['09. change'])
+                            except (ValueError, TypeError):
+                                pass
+
+                        if '10. change percent' in quote:
+                            try:
+                                # Remove % sign if present
+                                change_pct_str = quote['10. change percent'].replace('%', '')
+                                change_percent = float(change_pct_str)
+                            except (ValueError, TypeError):
+                                pass
+
+                        logger.info(f"Alpha Vantage quote for {clean_symbol}: price={price}, previous_close={previous_close}, change={change}, change_percent={change_percent}")
+
                         self.record_success()
-                        
+
                         return StockPrice(
                             symbol=symbol,
                             price=price,
                             currency="INR",
                             timestamp=timestamp,
                             provider=self.name,
-                            source_method="GLOBAL_QUOTE"
+                            source_method="GLOBAL_QUOTE",
+                            previous_close=previous_close,
+                            change=change,
+                            change_percent=change_percent
                         )
             
             # If we reach here, no valid price found
