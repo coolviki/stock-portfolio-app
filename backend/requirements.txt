@@ -13,5 +13,5 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 pandas==2.1.3
 firebase-admin==6.2.0
-bse==2.0.3
 apscheduler==3.10.4
+# bse package removed - version compatibility issues
