@@ -1,6 +1,7 @@
 from typing import Dict, List, Optional, Tuple
 import logging
 from datetime import datetime, timedelta
+from dataclasses import dataclass
 
 from .base import StockPriceProvider, StockPrice, ProviderStatus
 from .alpha_vantage import AlphaVantageProvider
@@ -9,13 +10,50 @@ from price_config import price_config
 
 logger = logging.getLogger(__name__)
 
+# Cache entry for storing price data with expiry
+@dataclass
+class CacheEntry:
+    data: StockPrice
+    expires_at: datetime
+
 class StockPriceManager:
-    """Manages multiple stock price providers with waterfall logic"""
-    
+    """Manages multiple stock price providers with waterfall logic and caching"""
+
+    # Cache TTL in minutes - prices are cached for this duration
+    CACHE_TTL_MINUTES = 5
+
     def __init__(self):
         self.providers: Dict[str, StockPriceProvider] = {}
         self.last_retry_times: Dict[str, datetime] = {}
+        self._price_cache: Dict[str, CacheEntry] = {}  # Cache for price data
         self._initialize_providers()
+
+    def _get_cache_key(self, ticker: str = None, isin: str = None, security_name: str = None) -> str:
+        """Generate a cache key from identifiers"""
+        return f"{ticker or ''}:{isin or ''}:{security_name or ''}".upper()
+
+    def _get_from_cache(self, cache_key: str) -> Optional[StockPrice]:
+        """Get price from cache if not expired"""
+        if cache_key in self._price_cache:
+            entry = self._price_cache[cache_key]
+            if datetime.now() < entry.expires_at:
+                logger.debug(f"Cache hit for {cache_key}")
+                return entry.data
+            else:
+                # Expired, remove from cache
+                del self._price_cache[cache_key]
+        return None
+
+    def _add_to_cache(self, cache_key: str, data: StockPrice):
+        """Add price data to cache"""
+        expires_at = datetime.now() + timedelta(minutes=self.CACHE_TTL_MINUTES)
+        self._price_cache[cache_key] = CacheEntry(data=data, expires_at=expires_at)
+        logger.debug(f"Cached price for {cache_key}, expires at {expires_at}")
+
+    def clear_cache(self):
+        """Clear all cached prices"""
+        self._price_cache.clear()
+        logger.info("Price cache cleared")
     
     def _initialize_providers(self):
         """Initialize all available providers"""
@@ -192,8 +230,15 @@ class StockPriceManager:
     def get_full_price_data(self, ticker: str = None, isin: str = None, security_name: str = None) -> Optional[StockPrice]:
         """
         Get full stock price data including change information using waterfall logic.
+        Results are cached for CACHE_TTL_MINUTES to reduce API calls.
         Returns: StockPrice object with price, change, change_percent, etc.
         """
+        # Check cache first
+        cache_key = self._get_cache_key(ticker, isin, security_name)
+        cached_data = self._get_from_cache(cache_key)
+        if cached_data:
+            return cached_data
+
         available_providers = self._get_available_providers()
         waterfall_config = price_config.get_waterfall_config()
         max_retries = waterfall_config.get("max_retries_per_provider", 3)
@@ -224,6 +269,8 @@ class StockPriceManager:
                                     break
 
                     if price_data and price_data.price > 0:
+                        # Cache the result before returning
+                        self._add_to_cache(cache_key, price_data)
                         return price_data
 
                 except Exception as e:
