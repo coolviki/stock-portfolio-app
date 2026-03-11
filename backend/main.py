@@ -45,6 +45,37 @@ logger = logging.getLogger(__name__)
 
 Base.metadata.create_all(bind=engine)
 
+# Run database migrations for new columns
+def run_startup_migrations():
+    """Add missing columns to existing tables"""
+    from sqlalchemy import text
+    from database import engine as db_engine
+    try:
+        with db_engine.connect() as conn:
+            # Check and add bse_scrip_code column
+            result = conn.execute(text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'securities' AND column_name = 'bse_scrip_code'
+            """))
+            if not result.fetchone():
+                conn.execute(text("ALTER TABLE securities ADD COLUMN bse_scrip_code VARCHAR"))
+                conn.commit()
+                logger.info("Added bse_scrip_code column to securities table")
+
+            # Check and add last_corporate_events_fetch column
+            result = conn.execute(text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'securities' AND column_name = 'last_corporate_events_fetch'
+            """))
+            if not result.fetchone():
+                conn.execute(text("ALTER TABLE securities ADD COLUMN last_corporate_events_fetch TIMESTAMP"))
+                conn.commit()
+                logger.info("Added last_corporate_events_fetch column to securities table")
+    except Exception as e:
+        logger.error(f"Migration error (non-fatal): {e}")
+
+run_startup_migrations()
+
 app = FastAPI(title="Stock Portfolio API", version="1.0.0")
 
 # Print environment variables on startup (excluding secrets)
@@ -55,10 +86,10 @@ except Exception as e:
     logger.error(f"Failed to print environment variables: {e}")
 
 # CORS configuration for Railway deployment
-# Use regex to allow all Railway domains and localhost
+# Use regex to allow all Railway domains, custom domain, and localhost
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^https://.*\.railway\.app$|^https://.*\.up\.railway\.app$|^http://localhost:3000$",
+    allow_origin_regex=r"^https://.*\.railway\.app$|^https://.*\.up\.railway\.app$|^https://.*\.vikramkumar\.org$|^https://stock\.vikramkumar\.org$|^http://localhost:3000$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1051,20 +1082,26 @@ def get_portfolio_summary(
     user_id: int,
     db: Session = Depends(get_db)
 ):
-    # Verify user exists
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        # Verify user exists
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
 
-    # Check if lots exist for this user (lot-based tracking)
-    lots_exist = db.query(Lot).filter(Lot.user_id == user_id).first() is not None
+        # Check if lots exist for this user (lot-based tracking)
+        lots_exist = db.query(Lot).filter(Lot.user_id == user_id).first() is not None
 
-    if lots_exist:
-        # Use lot-based calculations (includes corporate event adjustments)
-        return _get_portfolio_from_lots(user_id, db)
-    else:
-        # Fall back to transaction-based calculations (pre-migration)
-        return _get_portfolio_from_transactions(user_id, db)
+        if lots_exist:
+            # Use lot-based calculations (includes corporate event adjustments)
+            return _get_portfolio_from_lots(user_id, db)
+        else:
+            # Fall back to transaction-based calculations (pre-migration)
+            return _get_portfolio_from_transactions(user_id, db)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in portfolio-summary for user {user_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 
 def _get_portfolio_from_lots(user_id: int, db: Session):
