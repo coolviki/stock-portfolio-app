@@ -245,6 +245,8 @@ const Dashboard = () => {
               const currentVal = portfolio.current_values[symbol] || 0;
               const pnl = currentVal - stock.total_invested;
               const pnlPercent = stock.total_invested > 0 ? (pnl / stock.total_invested) * 100 : 0;
+              const dailyChange = stock.todays_change || 0;
+              const dailyChangePercent = stock.change_percent || 0;
 
               return (
                 <div key={symbol} className="holding-item px-3 py-2 border-bottom">
@@ -255,8 +257,8 @@ const Dashboard = () => {
                     </div>
                     <div className="text-end">
                       <div style={{fontSize: '0.9rem'}}>₹{currentVal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
-                      <small className={pnl >= 0 ? 'text-success' : 'text-danger'}>
-                        {pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN', {maximumFractionDigits: 0})} ({pnlPercent.toFixed(1)}%)
+                      <small className={dailyChange >= 0 ? 'text-success' : 'text-danger'} style={{fontSize: '0.75rem'}}>
+                        Today: {dailyChange >= 0 ? '+' : ''}₹{dailyChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}
                       </small>
                     </div>
                   </div>
@@ -279,7 +281,8 @@ const Dashboard = () => {
                   <th>Current Price</th>
                   <th className="d-none d-lg-table-cell">Invested</th>
                   <th>Value</th>
-                  <th>P&L</th>
+                  <th>Day P&L</th>
+                  <th>Total P&L</th>
                   <th>%</th>
                 </tr>
               </thead>
@@ -291,6 +294,8 @@ const Dashboard = () => {
                   const avgPrice = stock.quantity > 0 ? stock.total_invested / stock.quantity : 0;
                   const pnl = currentVal - stock.total_invested;
                   const pnlPercent = stock.total_invested > 0 ? (pnl / stock.total_invested) * 100 : 0;
+                  const dailyChange = stock.todays_change || 0;
+                  const dailyChangePercent = stock.change_percent || 0;
 
                   return (
                     <tr key={symbol}>
@@ -300,6 +305,12 @@ const Dashboard = () => {
                       <td>₹{currentPrice.toFixed(2)}</td>
                       <td className="d-none d-lg-table-cell">₹{stock.total_invested.toLocaleString('en-IN')}</td>
                       <td>₹{currentVal.toLocaleString('en-IN')}</td>
+                      <td className={dailyChange >= 0 ? 'text-success' : 'text-danger'}>
+                        {dailyChange >= 0 ? '+' : ''}₹{dailyChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}
+                        <small className="d-block" style={{fontSize: '0.7rem'}}>
+                          ({dailyChangePercent >= 0 ? '+' : ''}{dailyChangePercent.toFixed(1)}%)
+                        </small>
+                      </td>
                       <td className={pnl >= 0 ? 'text-success' : 'text-danger'}>
                         {pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN')}
                       </td>
