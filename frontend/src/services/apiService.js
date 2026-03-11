@@ -29,15 +29,15 @@ export const apiService = {
   },
 
   async updateTransaction(id, transaction, userId) {
-    const formData = new FormData();
-    formData.append('user_id', userId);
+    // Send JSON body - backend expects TransactionUpdate schema
+    const updateData = {};
     Object.keys(transaction).forEach(key => {
       if (transaction[key] !== null && transaction[key] !== undefined) {
-        formData.append(key, transaction[key]);
+        updateData[key] = transaction[key];
       }
     });
-    
-    const response = await api.put(`/transactions/${id}`, formData);
+
+    const response = await api.put(`/transactions/${id}`, updateData);
     return response.data;
   },
 
