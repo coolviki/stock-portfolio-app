@@ -22,6 +22,9 @@ class StockPrice:
     timestamp: Optional[str] = None
     provider: Optional[str] = None
     source_method: Optional[str] = None
+    previous_close: Optional[float] = None
+    change: Optional[float] = None
+    change_percent: Optional[float] = None
     
 class StockPriceProvider(ABC):
     """Abstract base class for stock price providers"""

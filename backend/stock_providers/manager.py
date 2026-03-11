@@ -169,25 +169,68 @@ class StockPriceManager:
             price, method = self.get_price(ticker)
             if price > 0:
                 return price, method
-        
+
         # Method 2: Try ISIN
         if isin:
             price, method = self.get_price_by_isin(isin)
             if price > 0:
                 return price, method
-        
+
         # Method 3: Try security name search
         if security_name:
             search_results = self.search_stocks(security_name[:10])
             for result in search_results:
-                if (result['name'].upper() == security_name.upper() or 
+                if (result['name'].upper() == security_name.upper() or
                     security_name.upper() in result['name'].upper()):
                     price, method = self.get_price(result['symbol'])
                     if price > 0:
                         return price, f"{method}_SEARCH"
-        
+
         # All methods failed
         return 0.0, "UNAVAILABLE"
+
+    def get_full_price_data(self, ticker: str = None, isin: str = None, security_name: str = None) -> Optional[StockPrice]:
+        """
+        Get full stock price data including change information using waterfall logic.
+        Returns: StockPrice object with price, change, change_percent, etc.
+        """
+        available_providers = self._get_available_providers()
+        waterfall_config = price_config.get_waterfall_config()
+        max_retries = waterfall_config.get("max_retries_per_provider", 3)
+
+        for provider_name in available_providers:
+            provider = self.providers[provider_name]
+
+            for attempt in range(max_retries):
+                try:
+                    price_data = None
+
+                    # Try ticker first
+                    if ticker:
+                        price_data = provider.get_price(ticker)
+
+                    # Try ISIN if ticker failed
+                    if (not price_data or price_data.price <= 0) and isin:
+                        price_data = provider.get_price_by_isin(isin)
+
+                    # Try search if both failed
+                    if (not price_data or price_data.price <= 0) and security_name:
+                        search_results = provider.search_stocks(security_name[:10])
+                        for result in search_results:
+                            if (result['name'].upper() == security_name.upper() or
+                                security_name.upper() in result['name'].upper()):
+                                price_data = provider.get_price(result['symbol'])
+                                if price_data and price_data.price > 0:
+                                    break
+
+                    if price_data and price_data.price > 0:
+                        return price_data
+
+                except Exception as e:
+                    logger.error(f"Error getting full price data from {provider_name} (attempt {attempt + 1}): {e}")
+                    provider.record_error(e)
+
+        return None
     
     def search_stocks(self, query: str) -> List[Dict]:
         """Search for stocks using available providers"""

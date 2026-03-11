@@ -103,26 +103,38 @@ class YahooFinanceProvider(StockPriceProvider):
                         result = results[0]
                         
                         if 'meta' in result and 'regularMarketPrice' in result['meta']:
-                            price = result['meta']['regularMarketPrice']
-                            
+                            meta = result['meta']
+                            price = meta['regularMarketPrice']
+
                             if price is not None and price > 0:
                                 # Get additional metadata
-                                currency = result['meta'].get('currency', 'INR')
-                                timestamp = result['meta'].get('regularMarketTime')
-                                
+                                currency = meta.get('currency', 'INR')
+                                timestamp = meta.get('regularMarketTime')
+                                previous_close = meta.get('previousClose') or meta.get('chartPreviousClose')
+
+                                # Calculate change and change percent
+                                change = None
+                                change_percent = None
+                                if previous_close and previous_close > 0:
+                                    change = float(price) - float(previous_close)
+                                    change_percent = (change / float(previous_close)) * 100
+
                                 # Convert timestamp if available
                                 if timestamp:
                                     timestamp = datetime.fromtimestamp(timestamp).isoformat()
-                                
+
                                 self.record_success()
-                                
+
                                 return StockPrice(
                                     symbol=symbol,
                                     price=float(price),
                                     currency=currency,
                                     timestamp=timestamp,
                                     provider=self.name,
-                                    source_method="CHART_API"
+                                    source_method="CHART_API",
+                                    previous_close=float(previous_close) if previous_close else None,
+                                    change=change,
+                                    change_percent=change_percent
                                 )
                         else:
                             logger.warning(f"Yahoo Finance: No regularMarketPrice in meta for {clean_symbol}. Meta keys: {list(result.get('meta', {}).keys())}")

@@ -64,6 +64,10 @@ const Dashboard = () => {
   const totalGains = portfolio.realized_gains + portfolio.unrealized_gains;
   const totalGainsPercent = totalInvested > 0 ? (totalGains / totalInvested) * 100 : 0;
 
+  // Today's change data
+  const todaysChange = portfolio.todays_change || 0;
+  const todaysChangePercent = portfolio.todays_change_percent || 0;
+
   // Chart data for portfolio allocation
   const portfolioLabels = Object.keys(portfolio.portfolio || {}).filter(
     symbol => portfolio.portfolio[symbol].quantity > 0
@@ -112,7 +116,7 @@ const Dashboard = () => {
       
       {/* Summary Cards */}
       <Row className="mb-4 g-2 g-md-3">
-        <Col xs={6} md={3}>
+        <Col xs={6} lg={true}>
           <Card className="card-stat text-center h-100">
             <Card.Body className="p-2 p-md-3">
               <h6 className="mb-1">Total Invested</h6>
@@ -120,7 +124,7 @@ const Dashboard = () => {
             </Card.Body>
           </Card>
         </Col>
-        <Col xs={6} md={3}>
+        <Col xs={6} lg={true}>
           <Card className="card-stat text-center h-100">
             <Card.Body className="p-2 p-md-3">
               <h6 className="mb-1">Current Value</h6>
@@ -128,7 +132,7 @@ const Dashboard = () => {
             </Card.Body>
           </Card>
         </Col>
-        <Col xs={6} md={3}>
+        <Col xs={6} lg={true}>
           <Card className={`card-stat text-center h-100 ${totalGains >= 0 ? 'profit' : 'loss'}`}>
             <Card.Body className="p-2 p-md-3">
               <h6 className="mb-1">Total P&L</h6>
@@ -137,7 +141,18 @@ const Dashboard = () => {
             </Card.Body>
           </Card>
         </Col>
-        <Col xs={6} md={3}>
+        <Col xs={6} lg={true}>
+          <Card className={`card-stat text-center h-100 ${todaysChange >= 0 ? 'profit' : 'loss'}`}>
+            <Card.Body className="p-2 p-md-3">
+              <h6 className="mb-1">Today's Change</h6>
+              <h5 className="mb-0">
+                {todaysChange >= 0 ? '+' : ''}₹{todaysChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}
+              </h5>
+              <small>{todaysChange >= 0 ? '+' : ''}{todaysChangePercent.toFixed(2)}%</small>
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col xs={12} lg={true}>
           <Card className="card-stat text-center h-100">
             <Card.Body className="p-2 p-md-3">
               <h6 className="mb-1">Holdings</h6>

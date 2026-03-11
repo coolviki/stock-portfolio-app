@@ -1049,30 +1049,64 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
     for alloc in sale_allocations:
         realized_gains += alloc.realized_gain_loss or 0
 
-    # Calculate unrealized gains and current values
+    # Calculate unrealized gains, current values, and today's change
     unrealized_gains = 0
     current_values = {}
+    todays_change = 0
+    todays_change_percent = 0
+    previous_close_total = 0
 
     for symbol, data in portfolio.items():
         if data["quantity"] > 0:
             try:
-                current_price, method = stock_price_manager.get_price_with_waterfall(
+                # Get full price data including change info
+                price_data = stock_price_manager.get_full_price_data(
                     ticker=data["security_symbol"],
                     isin=data["isin"],
                     security_name=symbol
                 )
-                data["price_method"] = method
-                current_value = current_price * data["quantity"]
-                current_values[symbol] = current_value
-                unrealized_gains += current_value - data["total_invested"]
-            except:
+
+                if price_data and price_data.price > 0:
+                    data["price_method"] = price_data.source_method or "API"
+                    current_value = price_data.price * data["quantity"]
+                    current_values[symbol] = current_value
+                    unrealized_gains += current_value - data["total_invested"]
+
+                    # Calculate today's change for this stock
+                    if price_data.change is not None:
+                        stock_change = price_data.change * data["quantity"]
+                        todays_change += stock_change
+                        data["todays_change"] = stock_change
+                        data["change_percent"] = price_data.change_percent
+
+                    if price_data.previous_close:
+                        previous_close_total += price_data.previous_close * data["quantity"]
+                else:
+                    # Fallback to simple price fetch
+                    current_price, method = stock_price_manager.get_price_with_waterfall(
+                        ticker=data["security_symbol"],
+                        isin=data["isin"],
+                        security_name=symbol
+                    )
+                    data["price_method"] = method
+                    current_value = current_price * data["quantity"]
+                    current_values[symbol] = current_value
+                    unrealized_gains += current_value - data["total_invested"]
+            except Exception as e:
+                logger.error(f"Error fetching price for {symbol}: {e}")
                 current_values[symbol] = 0
+
+    # Calculate overall today's change percentage
+    if previous_close_total > 0:
+        todays_change_percent = (todays_change / previous_close_total) * 100
 
     return {
         "portfolio": portfolio,
         "realized_gains": realized_gains,
         "unrealized_gains": unrealized_gains,
-        "current_values": current_values
+        "current_values": current_values,
+        "todays_change": todays_change,
+        "todays_change_percent": todays_change_percent
     }
 
 
@@ -1100,6 +1134,9 @@ def _get_portfolio_from_transactions(user_id: int, db: Session):
 
     unrealized_gains = 0
     current_values = {}
+    todays_change = 0
+    todays_change_percent = 0
+    previous_close_total = 0
 
     for symbol, data in portfolio.items():
         if data["quantity"] > 0:
@@ -1115,24 +1152,46 @@ def _get_portfolio_from_transactions(user_id: int, db: Session):
                 data["isin"] = isin
                 data["security_symbol"] = security_symbol
 
-                current_price, method = stock_price_manager.get_price_with_waterfall(
+                # Get full price data including change info
+                price_data = stock_price_manager.get_full_price_data(
                     ticker=security_symbol,
                     isin=isin,
                     security_name=symbol
                 )
-                data["price_method"] = method
-                current_value = current_price * data["quantity"]
-                current_values[symbol] = current_value
-                unrealized_gains += current_value - data["total_invested"]
+
+                if price_data and price_data.price > 0:
+                    data["price_method"] = price_data.source_method or "API"
+                    current_value = price_data.price * data["quantity"]
+                    current_values[symbol] = current_value
+                    unrealized_gains += current_value - data["total_invested"]
+
+                    # Calculate today's change for this stock
+                    if price_data.change is not None:
+                        stock_change = price_data.change * data["quantity"]
+                        todays_change += stock_change
+                        data["todays_change"] = stock_change
+                        data["change_percent"] = price_data.change_percent
+
+                    if price_data.previous_close:
+                        previous_close_total += price_data.previous_close * data["quantity"]
+                else:
+                    current_values[symbol] = 0
             except:
                 current_values[symbol] = 0
+
+    # Calculate overall today's change percentage
+    if previous_close_total > 0:
+        todays_change_percent = (todays_change / previous_close_total) * 100
 
     return {
         "portfolio": portfolio,
         "realized_gains": realized_gains,
         "unrealized_gains": unrealized_gains,
-        "current_values": current_values
+        "current_values": current_values,
+        "todays_change": todays_change,
+        "todays_change_percent": todays_change_percent
     }
+
 
 @app.get("/admin/export")
 def export_database(user_email: str = Query(...), db: Session = Depends(get_db)):
