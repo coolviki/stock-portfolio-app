@@ -111,37 +111,37 @@ const Dashboard = () => {
       </h2>
       
       {/* Summary Cards */}
-      <Row className="mb-4 g-3">
+      <Row className="mb-4 g-2 g-md-3">
         <Col xs={6} md={3}>
           <Card className="card-stat text-center h-100">
-            <Card.Body>
-              <h5>Total Invested</h5>
-              <h3>₹{totalInvested.toLocaleString('en-IN')}</h3>
+            <Card.Body className="p-2 p-md-3">
+              <h6 className="mb-1">Total Invested</h6>
+              <h5 className="mb-0">₹{totalInvested.toLocaleString('en-IN')}</h5>
             </Card.Body>
           </Card>
         </Col>
         <Col xs={6} md={3}>
           <Card className="card-stat text-center h-100">
-            <Card.Body>
-              <h5>Current Value</h5>
-              <h3>₹{currentValue.toLocaleString('en-IN')}</h3>
+            <Card.Body className="p-2 p-md-3">
+              <h6 className="mb-1">Current Value</h6>
+              <h5 className="mb-0">₹{currentValue.toLocaleString('en-IN')}</h5>
             </Card.Body>
           </Card>
         </Col>
         <Col xs={6} md={3}>
           <Card className={`card-stat text-center h-100 ${totalGains >= 0 ? 'profit' : 'loss'}`}>
-            <Card.Body>
-              <h5>Total P&L</h5>
-              <h3>₹{totalGains.toLocaleString('en-IN')}</h3>
+            <Card.Body className="p-2 p-md-3">
+              <h6 className="mb-1">Total P&L</h6>
+              <h5 className="mb-0">₹{totalGains.toLocaleString('en-IN')}</h5>
               <small>{totalGainsPercent.toFixed(2)}%</small>
             </Card.Body>
           </Card>
         </Col>
         <Col xs={6} md={3}>
           <Card className="card-stat text-center h-100">
-            <Card.Body>
-              <h5>Holdings</h5>
-              <h3>{portfolioLabels.length}</h3>
+            <Card.Body className="p-2 p-md-3">
+              <h6 className="mb-1">Holdings</h6>
+              <h5 className="mb-0">{portfolioLabels.length}</h5>
               <small>Securities</small>
             </Card.Body>
           </Card>
@@ -219,17 +219,17 @@ const Dashboard = () => {
         </Card.Header>
         <Card.Body>
           <div className="table-responsive">
-            <Table striped hover>
+            <Table striped hover size="sm">
               <thead>
                 <tr>
                   <th>Security</th>
-                  <th>Quantity</th>
-                  <th>Avg. Price</th>
-                  <th>Current Price</th>
-                  <th>Invested</th>
-                  <th>Current Value</th>
+                  <th>Qty</th>
+                  <th className="d-none d-md-table-cell">Avg. Price</th>
+                  <th className="d-none d-md-table-cell">Current Price</th>
+                  <th className="d-none d-lg-table-cell">Invested</th>
+                  <th>Value</th>
                   <th>P&L</th>
-                  <th>P&L %</th>
+                  <th className="d-none d-sm-table-cell">%</th>
                 </tr>
               </thead>
               <tbody>
@@ -244,17 +244,17 @@ const Dashboard = () => {
                   return (
                     <tr key={symbol}>
                       <td>
-                        <strong>{symbol}</strong>
+                        <strong style={{fontSize: '0.85rem'}}>{symbol}</strong>
                       </td>
                       <td>{stock.quantity}</td>
-                      <td>₹{avgPrice.toFixed(2)}</td>
-                      <td>₹{currentPrice.toFixed(2)}</td>
-                      <td>₹{stock.total_invested.toLocaleString('en-IN')}</td>
+                      <td className="d-none d-md-table-cell">₹{avgPrice.toFixed(2)}</td>
+                      <td className="d-none d-md-table-cell">₹{currentPrice.toFixed(2)}</td>
+                      <td className="d-none d-lg-table-cell">₹{stock.total_invested.toLocaleString('en-IN')}</td>
                       <td>₹{currentValue.toLocaleString('en-IN')}</td>
                       <td className={pnl >= 0 ? 'profit' : 'loss'}>
                         ₹{pnl.toLocaleString('en-IN')}
                       </td>
-                      <td>
+                      <td className="d-none d-sm-table-cell">
                         <Badge bg={pnlPercent >= 0 ? 'success' : 'danger'}>
                           {pnlPercent.toFixed(2)}%
                         </Badge>

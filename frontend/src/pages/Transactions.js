@@ -401,19 +401,19 @@ const Transactions = () => {
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>📋 Transactions</h2>
-        <Button variant="success" onClick={exportToCSV}>
+      <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h4 className="mb-0">📋 Transactions</h4>
+        <Button variant="success" size="sm" onClick={exportToCSV}>
           Export to CSV
         </Button>
       </div>
 
       {/* Filters */}
-      <Card className="mb-4">
-        <Card.Header>
-          <div className="d-flex justify-content-between align-items-center">
-            <h5>Filters</h5>
-            <small className="text-muted">💡 Click on security names in the table to see current prices</small>
+      <Card className="mb-3">
+        <Card.Header className="py-2">
+          <div className="d-flex justify-content-between align-items-center flex-wrap">
+            <h6 className="mb-0">Filters</h6>
+            <small className="text-muted d-none d-md-inline">💡 Click on security names in the table to see current prices</small>
           </div>
         </Card.Header>
         <Card.Body>
@@ -529,24 +529,24 @@ const Transactions = () => {
         </Card.Header>
         <Card.Body>
           <div className="table-responsive">
-            <Table striped hover>
+            <Table striped hover size="sm">
               <thead>
                 <tr>
                   <th>Date</th>
                   <th>Security</th>
                   <th>Type</th>
-                  <th>Quantity</th>
-                  <th>Price</th>
-                  <th>Total Amount</th>
-                  <th>Exchange</th>
+                  <th className="d-none d-md-table-cell">Qty</th>
+                  <th className="d-none d-md-table-cell">Price</th>
+                  <th>Amount</th>
+                  <th className="d-none d-lg-table-cell">Exchange</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredTransactions.map(transaction => (
                   <tr key={transaction.id} className="transaction-row">
-                    <td>{format(new Date(transaction.transaction_date), 'dd/MM/yyyy')}</td>
-                    <td>
+                    <td style={{whiteSpace: 'nowrap', fontSize: '0.85rem'}}>{format(new Date(transaction.transaction_date), 'dd/MM/yy')}</td>
+                    <td style={{maxWidth: '120px'}}>
                       <OverlayTrigger
                         placement="top"
                         delay={{ show: 250, hide: 400 }}
@@ -554,14 +554,19 @@ const Transactions = () => {
                         trigger={['hover', 'focus']}
                       >
                         <div>
-                          <strong 
-                            style={{ 
-                              color: '#0d6efd', 
-                              cursor: 'pointer', 
+                          <strong
+                            style={{
+                              color: '#0d6efd',
+                              cursor: 'pointer',
                               textDecoration: 'underline',
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '4px'
+                              gap: '4px',
+                              fontSize: '0.85rem',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              maxWidth: '100px'
                             }}
                             onClick={() => handleSecurityNameClick(transaction)}
                             title={`Click to fetch current price for ${transaction.security?.security_name || 'this security'}`}
@@ -572,34 +577,34 @@ const Transactions = () => {
                             {loadingPrice[transaction.id] ? (
                               <Spinner animation="border" size="sm" />
                             ) : (
-                              '📈'
+                              <span className="d-none d-sm-inline">📈</span>
                             )}
                           </strong>
                           {transaction.security?.security_ticker && (
-                            <small className="text-muted d-block">{transaction.security.security_ticker}</small>
+                            <small className="text-muted d-none d-sm-block">{transaction.security.security_ticker}</small>
                           )}
                         </div>
                       </OverlayTrigger>
                     </td>
                     <td>
-                      <Badge bg={transaction.transaction_type === 'BUY' ? 'success' : 'danger'}>
+                      <Badge bg={transaction.transaction_type === 'BUY' ? 'success' : 'danger'} style={{fontSize: '0.7rem'}}>
                         {transaction.transaction_type}
                       </Badge>
                     </td>
-                    <td>{transaction.quantity}</td>
-                    <td>₹{transaction.price_per_unit.toFixed(2)}</td>
-                    <td>₹{transaction.total_amount.toLocaleString('en-IN')}</td>
-                    <td>{transaction.exchange || 'NSE'}</td>
+                    <td className="d-none d-md-table-cell">{transaction.quantity}</td>
+                    <td className="d-none d-md-table-cell">₹{transaction.price_per_unit.toFixed(2)}</td>
+                    <td style={{whiteSpace: 'nowrap'}}>₹{transaction.total_amount.toLocaleString('en-IN')}</td>
+                    <td className="d-none d-lg-table-cell">{transaction.exchange || 'NSE'}</td>
                     <td>
                       <Dropdown>
-                        <Dropdown.Toggle variant="outline-primary" size="sm">
-                          Actions
+                        <Dropdown.Toggle variant="outline-primary" size="sm" style={{fontSize: '0.75rem', padding: '0.2rem 0.4rem'}}>
+                          ⋮
                         </Dropdown.Toggle>
                         <Dropdown.Menu>
                           <Dropdown.Item onClick={() => handleEdit(transaction)}>
                             Edit
                           </Dropdown.Item>
-                          <Dropdown.Item 
+                          <Dropdown.Item
                             onClick={() => handleDelete(transaction.id)}
                             className="text-danger"
                           >
