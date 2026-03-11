@@ -33,7 +33,7 @@ class AlphaVantageProvider(StockPriceProvider):
             # Add more as needed
         }
         
-        # Indian stock search database
+        # Indian stock search database - expanded list
         self.indian_stocks = [
             {'symbol': 'RELIANCE.BSE', 'name': 'Reliance Industries Limited', 'isin': 'INE002A01018'},
             {'symbol': 'TCS.BSE', 'name': 'Tata Consultancy Services Limited', 'isin': 'INE467B01029'},
@@ -45,6 +45,26 @@ class AlphaVantageProvider(StockPriceProvider):
             {'symbol': 'BAJFINANCE.BSE', 'name': 'Bajaj Finance Limited', 'isin': 'INE296A01024'},
             {'symbol': 'MARUTI.BSE', 'name': 'Maruti Suzuki India Limited', 'isin': 'INE585B01010'},
             {'symbol': 'CMS.BSE', 'name': 'CMS Info Systems Limited', 'isin': 'INE925R01014'},
+            {'symbol': 'AJANTPHARM.BSE', 'name': 'Ajanta Pharma Limited', 'isin': 'INE031B01049'},
+            {'symbol': 'PRICOL.BSE', 'name': 'Pricol Limited', 'isin': 'INE726C01017'},
+            {'symbol': 'SBIN.BSE', 'name': 'State Bank of India', 'isin': 'INE062A01020'},
+            {'symbol': 'HINDUNILVR.BSE', 'name': 'Hindustan Unilever Limited', 'isin': 'INE030A01027'},
+            {'symbol': 'KOTAKBANK.BSE', 'name': 'Kotak Mahindra Bank Limited', 'isin': 'INE237A01028'},
+            {'symbol': 'LT.BSE', 'name': 'Larsen & Toubro Limited', 'isin': 'INE018A01030'},
+            {'symbol': 'AXISBANK.BSE', 'name': 'Axis Bank Limited', 'isin': 'INE238A01034'},
+            {'symbol': 'SUNPHARMA.BSE', 'name': 'Sun Pharmaceutical Industries Limited', 'isin': 'INE044A01036'},
+            {'symbol': 'TITAN.BSE', 'name': 'Titan Company Limited', 'isin': 'INE280A01028'},
+            {'symbol': 'TATAMOTORS.BSE', 'name': 'Tata Motors Limited', 'isin': 'INE155A01022'},
+            {'symbol': 'TATASTEEL.BSE', 'name': 'Tata Steel Limited', 'isin': 'INE081A01012'},
+            {'symbol': 'ADANIENT.BSE', 'name': 'Adani Enterprises Limited', 'isin': 'INE423A01024'},
+            {'symbol': 'NTPC.BSE', 'name': 'NTPC Limited', 'isin': 'INE733E01010'},
+            {'symbol': 'POWERGRID.BSE', 'name': 'Power Grid Corporation of India Limited', 'isin': 'INE752E01010'},
+            {'symbol': 'ONGC.BSE', 'name': 'Oil and Natural Gas Corporation Limited', 'isin': 'INE213A01029'},
+            {'symbol': 'COALINDIA.BSE', 'name': 'Coal India Limited', 'isin': 'INE522F01014'},
+            {'symbol': 'JSWSTEEL.BSE', 'name': 'JSW Steel Limited', 'isin': 'INE019A01038'},
+            {'symbol': 'TECHM.BSE', 'name': 'Tech Mahindra Limited', 'isin': 'INE669C01036'},
+            {'symbol': 'HCLTECH.BSE', 'name': 'HCL Technologies Limited', 'isin': 'INE860A01027'},
+            {'symbol': 'ULTRACEMCO.BSE', 'name': 'UltraTech Cement Limited', 'isin': 'INE481G01011'},
         ]
     
     def is_available(self) -> bool:
@@ -178,23 +198,25 @@ class AlphaVantageProvider(StockPriceProvider):
     
     def search_stocks(self, query: str) -> List[Dict]:
         """Search for stocks using Alpha Vantage Symbol Search"""
-        if not self.is_available():
-            return []
-        
         try:
-            # Use local database for Indian stocks first
+            # Always check local database first (doesn't require API)
             local_results = []
             query_upper = query.upper()
-            
+
             for stock in self.indian_stocks:
-                if (query_upper in stock['symbol'] or 
+                if (query_upper in stock['symbol'] or
                     query_upper in stock['name'].upper()):
                     local_results.append(stock)
-            
+
             if local_results:
                 logger.info(f"Alpha Vantage: Found {len(local_results)} local matches for '{query}'")
                 return local_results[:10]
-            
+
+            # Only check API availability for external search
+            if not self.is_available():
+                logger.warning(f"Alpha Vantage API unavailable, no local results for '{query}'")
+                return []
+
             # Fallback to Alpha Vantage Symbol Search API
             params = {
                 'function': 'SYMBOL_SEARCH',

@@ -35,7 +35,7 @@ class YahooFinanceProvider(StockPriceProvider):
             # Add more as needed
         }
         
-        # Indian stock search database
+        # Indian stock search database - expanded list
         self.indian_stocks = [
             {'symbol': 'RELIANCE.NS', 'name': 'Reliance Industries Limited', 'isin': 'INE002A01018'},
             {'symbol': 'TCS.NS', 'name': 'Tata Consultancy Services Limited', 'isin': 'INE467B01029'},
@@ -51,7 +51,26 @@ class YahooFinanceProvider(StockPriceProvider):
             {'symbol': 'ASIANPAINT.NS', 'name': 'Asian Paints Limited', 'isin': 'INE021A01026'},
             {'symbol': 'BAJAJFINSV.NS', 'name': 'Bajaj Finserv Limited', 'isin': 'INE918I01018'},
             {'symbol': 'BHARTIARTL.NS', 'name': 'Bharti Airtel Limited', 'isin': 'INE397D01024'},
-            # Add more popular stocks
+            {'symbol': 'AJANTPHARM.NS', 'name': 'Ajanta Pharma Limited', 'isin': 'INE031B01049'},
+            {'symbol': 'PRICOL.NS', 'name': 'Pricol Limited', 'isin': 'INE726C01017'},
+            {'symbol': 'SBIN.NS', 'name': 'State Bank of India', 'isin': 'INE062A01020'},
+            {'symbol': 'HINDUNILVR.NS', 'name': 'Hindustan Unilever Limited', 'isin': 'INE030A01027'},
+            {'symbol': 'KOTAKBANK.NS', 'name': 'Kotak Mahindra Bank Limited', 'isin': 'INE237A01028'},
+            {'symbol': 'LT.NS', 'name': 'Larsen & Toubro Limited', 'isin': 'INE018A01030'},
+            {'symbol': 'AXISBANK.NS', 'name': 'Axis Bank Limited', 'isin': 'INE238A01034'},
+            {'symbol': 'SUNPHARMA.NS', 'name': 'Sun Pharmaceutical Industries Limited', 'isin': 'INE044A01036'},
+            {'symbol': 'TITAN.NS', 'name': 'Titan Company Limited', 'isin': 'INE280A01028'},
+            {'symbol': 'TATAMOTORS.NS', 'name': 'Tata Motors Limited', 'isin': 'INE155A01022'},
+            {'symbol': 'TATASTEEL.NS', 'name': 'Tata Steel Limited', 'isin': 'INE081A01012'},
+            {'symbol': 'ADANIENT.NS', 'name': 'Adani Enterprises Limited', 'isin': 'INE423A01024'},
+            {'symbol': 'NTPC.NS', 'name': 'NTPC Limited', 'isin': 'INE733E01010'},
+            {'symbol': 'POWERGRID.NS', 'name': 'Power Grid Corporation of India Limited', 'isin': 'INE752E01010'},
+            {'symbol': 'ONGC.NS', 'name': 'Oil and Natural Gas Corporation Limited', 'isin': 'INE213A01029'},
+            {'symbol': 'COALINDIA.NS', 'name': 'Coal India Limited', 'isin': 'INE522F01014'},
+            {'symbol': 'JSWSTEEL.NS', 'name': 'JSW Steel Limited', 'isin': 'INE019A01038'},
+            {'symbol': 'TECHM.NS', 'name': 'Tech Mahindra Limited', 'isin': 'INE669C01036'},
+            {'symbol': 'HCLTECH.NS', 'name': 'HCL Technologies Limited', 'isin': 'INE860A01027'},
+            {'symbol': 'ULTRACEMCO.NS', 'name': 'UltraTech Cement Limited', 'isin': 'INE481G01011'},
         ]
     
     def is_available(self) -> bool:
