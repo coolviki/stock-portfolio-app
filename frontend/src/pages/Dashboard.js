@@ -108,63 +108,69 @@ const Dashboard = () => {
   };
 
   return (
-    <div>
-      <h2 className="mb-4 d-flex align-items-center">
-        <img src="/images/analytics.svg" alt="Portfolio Analytics" style={{width: '2.5rem', height: '2.5rem', marginRight: '0.5rem'}} />
-        Portfolio Dashboard
+    <div className="dashboard-container">
+      {/* Header - simplified on mobile */}
+      <h2 className="mb-3 mb-md-4 d-flex align-items-center">
+        <img src="/images/analytics.svg" alt="Portfolio Analytics" className="d-none d-sm-block" style={{width: '2.5rem', height: '2.5rem', marginRight: '0.5rem'}} />
+        <span className="d-none d-sm-inline">Portfolio Dashboard</span>
+        <span className="d-sm-none">Dashboard</span>
       </h2>
-      
-      {/* Summary Cards */}
-      <Row className="mb-4 g-2 g-md-3">
-        <Col xs={6} lg={true}>
-          <Card className="card-stat text-center h-100">
+
+      {/* Summary Cards - Compact on mobile */}
+      <Row className="mb-3 mb-md-4 g-2">
+        <Col xs={6} md={3} lg={true}>
+          <Card className="card-stat text-center h-100 border-0 shadow-sm">
             <Card.Body className="p-2 p-md-3">
-              <h6 className="mb-1">Total Invested</h6>
-              <h5 className="mb-0">₹{totalInvested.toLocaleString('en-IN')}</h5>
+              <small className="text-muted d-block mb-1">Invested</small>
+              <strong className="fs-6 fs-md-5">₹{totalInvested.toLocaleString('en-IN', {maximumFractionDigits: 0})}</strong>
             </Card.Body>
           </Card>
         </Col>
-        <Col xs={6} lg={true}>
-          <Card className="card-stat text-center h-100">
+        <Col xs={6} md={3} lg={true}>
+          <Card className="card-stat text-center h-100 border-0 shadow-sm">
             <Card.Body className="p-2 p-md-3">
-              <h6 className="mb-1">Current Value</h6>
-              <h5 className="mb-0">₹{currentValue.toLocaleString('en-IN')}</h5>
+              <small className="text-muted d-block mb-1">Current</small>
+              <strong className="fs-6 fs-md-5">₹{currentValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}</strong>
             </Card.Body>
           </Card>
         </Col>
-        <Col xs={6} lg={true}>
-          <Card className={`card-stat text-center h-100 ${totalGains >= 0 ? 'profit' : 'loss'}`}>
+        <Col xs={6} md={3} lg={true}>
+          <Card className={`card-stat text-center h-100 border-0 shadow-sm ${totalGains >= 0 ? 'profit' : 'loss'}`}>
             <Card.Body className="p-2 p-md-3">
-              <h6 className="mb-1">Total P&L</h6>
-              <h5 className="mb-0">₹{totalGains.toLocaleString('en-IN')}</h5>
-              <small>{totalGainsPercent.toFixed(2)}%</small>
+              <small className="text-muted d-block mb-1">P&L</small>
+              <strong className="fs-6 fs-md-5">
+                {totalGains >= 0 ? '+' : ''}₹{totalGains.toLocaleString('en-IN', {maximumFractionDigits: 0})}
+              </strong>
+              <small className="d-block" style={{fontSize: '0.7rem'}}>{totalGainsPercent.toFixed(1)}%</small>
             </Card.Body>
           </Card>
         </Col>
-        <Col xs={6} lg={true}>
-          <Card className={`card-stat text-center h-100 ${todaysChange >= 0 ? 'profit' : 'loss'}`}>
+        <Col xs={6} md={3} lg={true}>
+          <Card className={`card-stat text-center h-100 border-0 shadow-sm ${todaysChange >= 0 ? 'profit' : 'loss'}`}>
             <Card.Body className="p-2 p-md-3">
-              <h6 className="mb-1">Today's Change</h6>
-              <h5 className="mb-0">
+              <small className="text-muted d-block mb-1">Today</small>
+              <strong className="fs-6 fs-md-5">
                 {todaysChange >= 0 ? '+' : ''}₹{todaysChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}
-              </h5>
-              <small>{todaysChange >= 0 ? '+' : ''}{todaysChangePercent.toFixed(2)}%</small>
+              </strong>
+              <small className="d-block" style={{fontSize: '0.7rem'}}>{todaysChange >= 0 ? '+' : ''}{todaysChangePercent.toFixed(1)}%</small>
             </Card.Body>
           </Card>
         </Col>
-        <Col xs={12} lg={true}>
-          <Card className="card-stat text-center h-100">
+        {/* Holdings count - hidden on mobile */}
+        <Col className="d-none d-lg-block" lg={true}>
+          <Card className="card-stat text-center h-100 border-0 shadow-sm">
             <Card.Body className="p-2 p-md-3">
-              <h6 className="mb-1">Holdings</h6>
-              <h5 className="mb-0">{portfolioLabels.length}</h5>
-              <small>Securities</small>
+              <small className="text-muted d-block mb-1">Holdings</small>
+              <strong className="fs-6 fs-md-5">{portfolioLabels.length}</strong>
+              <small className="d-block" style={{fontSize: '0.7rem'}}>Securities</small>
             </Card.Body>
           </Card>
         </Col>
       </Row>
 
-      <Row className="mb-4 g-3">
-        <Col xs={12} md={6}>
+      {/* Charts - Hidden on mobile for cleaner view */}
+      <Row className="mb-4 g-3 d-none d-md-flex">
+        <Col md={6}>
           <Card>
             <Card.Header>
               <h5>Portfolio Allocation</h5>
@@ -191,7 +197,7 @@ const Dashboard = () => {
           </Card>
         </Col>
 
-        <Col xs={12} md={6}>
+        <Col md={6}>
           <Card>
             <Card.Header>
               <h5>Gains/Losses Breakdown</h5>
@@ -225,51 +231,79 @@ const Dashboard = () => {
         </Col>
       </Row>
 
-      {/* Holdings Table */}
-      <Card>
-        <Card.Header>
-          <div className="d-flex justify-content-between align-items-center">
-            <h5>Current Holdings</h5>
-          </div>
+      {/* Holdings Table - Clean layout for mobile */}
+      <Card className="border-0 shadow-sm">
+        <Card.Header className="bg-transparent border-bottom">
+          <h6 className="mb-0 d-md-none">Holdings ({portfolioLabels.length})</h6>
+          <h5 className="mb-0 d-none d-md-block">Current Holdings</h5>
         </Card.Header>
-        <Card.Body>
-          <div className="table-responsive">
-            <Table striped hover size="sm">
+        <Card.Body className="p-0 p-md-3">
+          {/* Mobile: Compact card-based layout */}
+          <div className="d-md-none">
+            {portfolioLabels.map(symbol => {
+              const stock = portfolio.portfolio[symbol];
+              const currentVal = portfolio.current_values[symbol] || 0;
+              const pnl = currentVal - stock.total_invested;
+              const pnlPercent = stock.total_invested > 0 ? (pnl / stock.total_invested) * 100 : 0;
+
+              return (
+                <div key={symbol} className="holding-item px-3 py-2 border-bottom">
+                  <div className="d-flex justify-content-between align-items-center">
+                    <div>
+                      <strong style={{fontSize: '0.9rem'}}>{symbol}</strong>
+                      <small className="text-muted d-block">{stock.quantity} shares</small>
+                    </div>
+                    <div className="text-end">
+                      <div style={{fontSize: '0.9rem'}}>₹{currentVal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
+                      <small className={pnl >= 0 ? 'text-success' : 'text-danger'}>
+                        {pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN', {maximumFractionDigits: 0})} ({pnlPercent.toFixed(1)}%)
+                      </small>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {portfolioLabels.length === 0 && (
+              <p className="text-center text-muted py-4">No current holdings</p>
+            )}
+          </div>
+
+          {/* Desktop: Full table */}
+          <div className="d-none d-md-block table-responsive">
+            <Table striped hover size="sm" className="mb-0">
               <thead>
                 <tr>
                   <th>Security</th>
                   <th>Qty</th>
-                  <th className="d-none d-md-table-cell">Avg. Price</th>
-                  <th className="d-none d-md-table-cell">Current Price</th>
+                  <th>Avg. Price</th>
+                  <th>Current Price</th>
                   <th className="d-none d-lg-table-cell">Invested</th>
                   <th>Value</th>
                   <th>P&L</th>
-                  <th className="d-none d-sm-table-cell">%</th>
+                  <th>%</th>
                 </tr>
               </thead>
               <tbody>
                 {portfolioLabels.map(symbol => {
                   const stock = portfolio.portfolio[symbol];
-                  const currentValue = portfolio.current_values[symbol] || 0;
-                  const currentPrice = stock.quantity > 0 ? currentValue / stock.quantity : 0;
+                  const currentVal = portfolio.current_values[symbol] || 0;
+                  const currentPrice = stock.quantity > 0 ? currentVal / stock.quantity : 0;
                   const avgPrice = stock.quantity > 0 ? stock.total_invested / stock.quantity : 0;
-                  const pnl = currentValue - stock.total_invested;
+                  const pnl = currentVal - stock.total_invested;
                   const pnlPercent = stock.total_invested > 0 ? (pnl / stock.total_invested) * 100 : 0;
 
                   return (
                     <tr key={symbol}>
-                      <td>
-                        <strong style={{fontSize: '0.85rem'}}>{symbol}</strong>
-                      </td>
+                      <td><strong>{symbol}</strong></td>
                       <td>{stock.quantity}</td>
-                      <td className="d-none d-md-table-cell">₹{avgPrice.toFixed(2)}</td>
-                      <td className="d-none d-md-table-cell">₹{currentPrice.toFixed(2)}</td>
+                      <td>₹{avgPrice.toFixed(2)}</td>
+                      <td>₹{currentPrice.toFixed(2)}</td>
                       <td className="d-none d-lg-table-cell">₹{stock.total_invested.toLocaleString('en-IN')}</td>
-                      <td>₹{currentValue.toLocaleString('en-IN')}</td>
-                      <td className={pnl >= 0 ? 'profit' : 'loss'}>
-                        ₹{pnl.toLocaleString('en-IN')}
+                      <td>₹{currentVal.toLocaleString('en-IN')}</td>
+                      <td className={pnl >= 0 ? 'text-success' : 'text-danger'}>
+                        {pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN')}
                       </td>
-                      <td className="d-none d-sm-table-cell">
+                      <td>
                         <Badge bg={pnlPercent >= 0 ? 'success' : 'danger'}>
                           {pnlPercent.toFixed(2)}%
                         </Badge>
@@ -279,11 +313,10 @@ const Dashboard = () => {
                 })}
               </tbody>
             </Table>
+            {portfolioLabels.length === 0 && (
+              <p className="text-center text-muted py-3">No current holdings</p>
+            )}
           </div>
-          
-          {portfolioLabels.length === 0 && (
-            <p className="text-center text-muted mt-3">No current holdings</p>
-          )}
         </Card.Body>
       </Card>
     </div>

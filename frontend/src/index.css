@@ -238,6 +238,38 @@ code {
   }
 }
 
+/* Dashboard mobile-specific styles */
+@media (max-width: 767.98px) {
+  .dashboard-container h2 {
+    font-size: 1.1rem;
+    margin-bottom: 0.75rem !important;
+  }
+
+  .dashboard-container .card-stat {
+    border-radius: 8px;
+  }
+
+  .dashboard-container .card-stat .card-body {
+    padding: 0.5rem !important;
+  }
+
+  .dashboard-container .card-stat small {
+    font-size: 0.65rem;
+  }
+
+  .dashboard-container .card-stat strong {
+    font-size: 0.85rem !important;
+  }
+
+  .holding-item {
+    background: #fff;
+  }
+
+  .holding-item:active {
+    background: #f8f9fa;
+  }
+}
+
 @media (min-width: 768px) {
   .sidebar-overlay {
     display: none !important;
