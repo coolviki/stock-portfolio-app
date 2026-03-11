@@ -1001,19 +1001,95 @@ def get_portfolio_summary(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
+    # Check if lots exist for this user (lot-based tracking)
+    lots_exist = db.query(Lot).filter(Lot.user_id == user_id).first() is not None
+
+    if lots_exist:
+        # Use lot-based calculations (includes corporate event adjustments)
+        return _get_portfolio_from_lots(user_id, db)
+    else:
+        # Fall back to transaction-based calculations (pre-migration)
+        return _get_portfolio_from_transactions(user_id, db)
+
+
+def _get_portfolio_from_lots(user_id: int, db: Session):
+    """Calculate portfolio summary from lots (includes corporate event adjustments)"""
+    # Get all lots with remaining quantity
+    lots = db.query(Lot).filter(
+        Lot.user_id == user_id,
+        Lot.remaining_quantity > 0
+    ).all()
+
+    portfolio = {}
+
+    for lot in lots:
+        security = db.query(Security).filter(Security.id == lot.security_id).first()
+        if not security:
+            continue
+
+        symbol = security.security_name
+
+        if symbol not in portfolio:
+            portfolio[symbol] = {
+                "quantity": 0,
+                "total_invested": 0,
+                "isin": security.security_ISIN,
+                "security_symbol": security.security_ticker,
+                "transactions": []
+            }
+
+        # Use adjusted values from lots (reflects corporate events like bonus/split)
+        portfolio[symbol]["quantity"] += lot.remaining_quantity
+        portfolio[symbol]["total_invested"] += lot.adjusted_cost_per_unit * lot.remaining_quantity
+
+    # Calculate realized gains from sale allocations
+    realized_gains = 0
+    sale_allocations = db.query(SaleAllocation).join(Lot).filter(Lot.user_id == user_id).all()
+    for alloc in sale_allocations:
+        realized_gains += alloc.realized_gain_loss or 0
+
+    # Calculate unrealized gains and current values
+    unrealized_gains = 0
+    current_values = {}
+
+    for symbol, data in portfolio.items():
+        if data["quantity"] > 0:
+            try:
+                current_price, method = stock_price_manager.get_price_with_waterfall(
+                    ticker=data["security_symbol"],
+                    isin=data["isin"],
+                    security_name=symbol
+                )
+                data["price_method"] = method
+                current_value = current_price * data["quantity"]
+                current_values[symbol] = current_value
+                unrealized_gains += current_value - data["total_invested"]
+            except:
+                current_values[symbol] = 0
+
+    return {
+        "portfolio": portfolio,
+        "realized_gains": realized_gains,
+        "unrealized_gains": unrealized_gains,
+        "current_values": current_values
+    }
+
+
+def _get_portfolio_from_transactions(user_id: int, db: Session):
+    """Calculate portfolio summary from transactions (legacy, pre-lot migration)"""
     transactions = db.query(Transaction).join(Security).filter(Transaction.user_id == user_id).all()
-    
+
     portfolio = {}
     realized_gains = 0
-    
+
     for trans in transactions:
         symbol = trans.security.security_name
         if symbol not in portfolio:
             portfolio[symbol] = {"quantity": 0, "total_invested": 0, "transactions": []}
-        
+
         portfolio[symbol]["transactions"].append(trans)
-        
+
         if trans.transaction_type.upper() == "BUY":
             portfolio[symbol]["quantity"] += trans.quantity
             portfolio[symbol]["total_invested"] += trans.total_amount
@@ -1021,14 +1097,13 @@ def get_portfolio_summary(
             portfolio[symbol]["quantity"] -= trans.quantity
             portfolio[symbol]["total_invested"] -= (trans.total_amount * trans.quantity / trans.quantity if trans.quantity > 0 else 0)
             realized_gains += trans.total_amount - (portfolio[symbol]["total_invested"] / portfolio[symbol]["quantity"] if portfolio[symbol]["quantity"] > 0 else 0) * trans.quantity
-    
+
     unrealized_gains = 0
     current_values = {}
-    
+
     for symbol, data in portfolio.items():
         if data["quantity"] > 0:
             try:
-                # Get the first transaction to extract the security information
                 first_transaction = data["transactions"][0] if data["transactions"] else None
                 if first_transaction:
                     security_symbol = first_transaction.security.security_ticker
@@ -1036,25 +1111,22 @@ def get_portfolio_summary(
                 else:
                     security_symbol = symbol
                     isin = None
-                
-                # Add ISIN to portfolio data for frontend use
+
                 data["isin"] = isin
                 data["security_symbol"] = security_symbol
-                
-                # Use ISIN-aware price fetching with new provider system
+
                 current_price, method = stock_price_manager.get_price_with_waterfall(
-                    ticker=security_symbol, 
-                    isin=isin, 
+                    ticker=security_symbol,
+                    isin=isin,
                     security_name=symbol
                 )
-                # Store the method for debugging
                 data["price_method"] = method
                 current_value = current_price * data["quantity"]
                 current_values[symbol] = current_value
                 unrealized_gains += current_value - data["total_invested"]
             except:
                 current_values[symbol] = 0
-    
+
     return {
         "portfolio": portfolio,
         "realized_gains": realized_gains,
