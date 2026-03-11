@@ -110,7 +110,10 @@ class YahooFinanceProvider(StockPriceProvider):
                                 # Get additional metadata
                                 currency = meta.get('currency', 'INR')
                                 timestamp = meta.get('regularMarketTime')
-                                previous_close = meta.get('previousClose') or meta.get('chartPreviousClose')
+                                prev_close_direct = meta.get('previousClose')
+                                chart_prev_close = meta.get('chartPreviousClose')
+                                previous_close = prev_close_direct or chart_prev_close
+                                logger.info(f"Yahoo Finance meta for {clean_symbol}: price={price}, previousClose={prev_close_direct}, chartPreviousClose={chart_prev_close}, using={previous_close}")
 
                                 # Calculate change and change percent
                                 change = None

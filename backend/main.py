@@ -1114,6 +1114,7 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
         if data["quantity"] > 0:
             try:
                 # Get full price data including change info
+                logger.info(f"Fetching full price data for {symbol}: ticker={data['security_symbol']}, isin={data['isin']}")
                 price_data = stock_price_manager.get_full_price_data(
                     ticker=data["security_symbol"],
                     isin=data["isin"],
@@ -1121,6 +1122,7 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
                 )
 
                 if price_data and price_data.price > 0:
+                    logger.info(f"Price data for {symbol}: price={price_data.price}, previous_close={price_data.previous_close}, change={price_data.change}, change_percent={price_data.change_percent}")
                     data["price_method"] = price_data.source_method or "API"
                     current_value = price_data.price * data["quantity"]
                     current_values[symbol] = current_value
@@ -1132,10 +1134,14 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
                         todays_change += stock_change
                         data["todays_change"] = stock_change
                         data["change_percent"] = price_data.change_percent
+                        logger.info(f"Today's change for {symbol}: stock_change={stock_change}, qty={data['quantity']}")
+                    else:
+                        logger.warning(f"No change data available for {symbol}")
 
                     if price_data.previous_close:
                         previous_close_total += price_data.previous_close * data["quantity"]
                 else:
+                    logger.warning(f"No valid price data for {symbol}, price_data={price_data}")
                     # Fallback to simple price fetch
                     current_price, method = stock_price_manager.get_price_with_waterfall(
                         ticker=data["security_symbol"],
