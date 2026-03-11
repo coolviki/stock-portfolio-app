@@ -274,6 +274,33 @@ export const apiService = {
     return response.data;
   },
 
+  // Corporate Events Fetching
+  async fetchCorporateEventsForSecurity(securityId, adminEmail, force = false) {
+    const params = new URLSearchParams();
+    params.append('admin_email', adminEmail);
+    if (force) params.append('force', 'true');
+
+    const response = await api.post(`/corporate-events/fetch/${securityId}?${params}`);
+    return response.data;
+  },
+
+  async fetchCorporateEventsForAll(adminEmail, force = false) {
+    const params = new URLSearchParams();
+    params.append('admin_email', adminEmail);
+    if (force) params.append('force', 'true');
+
+    const response = await api.post(`/corporate-events/fetch-all?${params}`);
+    return response.data;
+  },
+
+  async getCorporateEventsFetchStatus(adminEmail) {
+    const params = new URLSearchParams();
+    params.append('admin_email', adminEmail);
+
+    const response = await api.get(`/corporate-events/fetch-status?${params}`);
+    return response.data;
+  },
+
   // Lots APIs
   async getLots(userId, filters = {}) {
     const params = new URLSearchParams();

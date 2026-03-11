@@ -32,6 +32,7 @@ from price_config import price_config
 from stock_providers.manager import stock_price_manager
 from corporate_events import CorporateEventProcessor, CorporateEventError
 from lot_capital_gains import LotCapitalGainsCalculator, get_adjusted_portfolio_summary
+from corporate_events_fetcher import CorporateEventsFetcher, get_fetcher
 
 load_dotenv()
 
@@ -70,6 +71,59 @@ IS_PRODUCTION = os.path.exists(FRONTEND_BUILD_PATH)
 if IS_PRODUCTION:
     # Mount static files for production (frontend build)
     app.mount("/static", StaticFiles(directory=f"{FRONTEND_BUILD_PATH}/static"), name="static")
+
+# =============================================================================
+# SCHEDULED TASKS - Weekly Corporate Events Fetch
+# =============================================================================
+try:
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from apscheduler.triggers.cron import CronTrigger
+
+    def scheduled_corporate_events_fetch():
+        """Scheduled task to fetch corporate events for all securities"""
+        logger.info("Starting scheduled corporate events fetch...")
+        try:
+            from database import SessionLocal
+            db = SessionLocal()
+            try:
+                fetcher = get_fetcher(db)
+                if fetcher.is_available():
+                    results = fetcher.fetch_all_securities(force=False)
+                    logger.info(f"Scheduled fetch completed: {results['events_created']} events created "
+                               f"for {results['securities_processed']} securities")
+                else:
+                    logger.warning("BSE API not available for scheduled fetch")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error in scheduled corporate events fetch: {e}")
+
+    # Initialize scheduler
+    scheduler = BackgroundScheduler()
+
+    # Run every Sunday at 2:00 AM IST (Saturday 8:30 PM UTC)
+    scheduler.add_job(
+        scheduled_corporate_events_fetch,
+        CronTrigger(day_of_week='sun', hour=2, minute=0),
+        id='corporate_events_fetch',
+        name='Weekly Corporate Events Fetch',
+        replace_existing=True
+    )
+
+    @app.on_event("startup")
+    def start_scheduler():
+        if not scheduler.running:
+            scheduler.start()
+            logger.info("Corporate events scheduler started - runs every Sunday at 2:00 AM")
+
+    @app.on_event("shutdown")
+    def shutdown_scheduler():
+        if scheduler.running:
+            scheduler.shutdown()
+            logger.info("Corporate events scheduler stopped")
+
+except ImportError:
+    logger.warning("APScheduler not installed. Scheduled corporate events fetch disabled.")
 
 @app.get("/api")
 async def api_root():
@@ -1905,6 +1959,119 @@ def revert_corporate_event(
     except Exception as e:
         logger.error(f"Error reverting corporate event: {e}")
         raise HTTPException(status_code=500, detail=f"Error reverting event: {str(e)}")
+
+
+# =============================================================================
+# CORPORATE EVENTS FETCHING ENDPOINTS
+# =============================================================================
+
+@app.post("/corporate-events/fetch/{security_id}")
+def fetch_corporate_events_for_security(
+    security_id: int,
+    admin_email: str = Query(...),
+    force: bool = Query(False, description="Force fetch even if recently fetched"),
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch corporate events for a specific security from BSE (admin only).
+    Events are stored as pending for admin review.
+    """
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    security = db.query(Security).filter(Security.id == security_id).first()
+    if not security:
+        raise HTTPException(status_code=404, detail="Security not found")
+
+    fetcher = get_fetcher(db)
+
+    if not fetcher.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="BSE API not available. Please install the 'bse' package."
+        )
+
+    # Determine from_date
+    from_date = None
+    if not force and security.last_corporate_events_fetch:
+        from_date = security.last_corporate_events_fetch
+
+    events_created, errors = fetcher.fetch_corporate_events(
+        security,
+        from_date=from_date
+    )
+
+    return {
+        "success": True,
+        "security_id": security_id,
+        "security_name": security.security_name,
+        "events_created": events_created,
+        "errors": errors,
+        "last_fetch": security.last_corporate_events_fetch.isoformat() if security.last_corporate_events_fetch else None
+    }
+
+
+@app.post("/corporate-events/fetch-all")
+def fetch_corporate_events_for_all_securities(
+    admin_email: str = Query(...),
+    force: bool = Query(False, description="Force fetch for all securities"),
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch corporate events for all securities from BSE (admin only).
+    Only fetches for securities not updated in the last week, unless force=True.
+    """
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    fetcher = get_fetcher(db)
+
+    if not fetcher.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="BSE API not available. Please install the 'bse' package."
+        )
+
+    results = fetcher.fetch_all_securities(force=force)
+
+    return {
+        "success": True,
+        "total_securities": results['total_securities'],
+        "securities_processed": results['securities_processed'],
+        "events_created": results['events_created'],
+        "errors": results['errors'][:10] if len(results['errors']) > 10 else results['errors'],
+        "total_errors": len(results['errors'])
+    }
+
+
+@app.get("/corporate-events/fetch-status")
+def get_corporate_events_fetch_status(
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Get the fetch status for all securities (admin only)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    securities = db.query(Security).all()
+
+    status_list = []
+    for security in securities:
+        status_list.append({
+            "security_id": security.id,
+            "security_name": security.security_name,
+            "bse_scrip_code": security.bse_scrip_code,
+            "last_fetch": security.last_corporate_events_fetch.isoformat() if security.last_corporate_events_fetch else None,
+            "needs_update": security.last_corporate_events_fetch is None or
+                          (datetime.utcnow() - security.last_corporate_events_fetch).days >= 7
+        })
+
+    fetcher = get_fetcher(db)
+
+    return {
+        "bse_api_available": fetcher.is_available(),
+        "securities": status_list
+    }
 
 
 # =============================================================================

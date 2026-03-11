@@ -23,6 +23,7 @@ const SecurityMaster = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [priceData, setPriceData] = useState({});
   const [loadingPrice, setLoadingPrice] = useState({});
+  const [fetchingEvents, setFetchingEvents] = useState({});
 
   useEffect(() => {
     loadSecurities();
@@ -277,6 +278,39 @@ const SecurityMaster = () => {
     );
   };
 
+  const fetchCorporateEvents = async (security) => {
+    const securityId = security.id;
+
+    if (fetchingEvents[securityId]) {
+      return;
+    }
+
+    setFetchingEvents(prev => ({ ...prev, [securityId]: true }));
+
+    try {
+      const response = await apiService.fetchCorporateEventsForSecurity(securityId, user?.email);
+
+      if (response.events_created > 0) {
+        toast.success(`Found ${response.events_created} corporate events for ${security.security_name}. Please review in Corporate Events page.`);
+      } else {
+        toast.info(`No new corporate events found for ${security.security_name}`);
+      }
+
+      if (response.errors && response.errors.length > 0) {
+        console.warn('Fetch errors:', response.errors);
+      }
+    } catch (error) {
+      console.error('Error fetching corporate events:', error);
+      if (error.response?.status === 503) {
+        toast.error('BSE API not available. Please try again later.');
+      } else {
+        toast.error(`Error fetching corporate events: ${error.message || 'Unknown error'}`);
+      }
+    } finally {
+      setFetchingEvents(prev => ({ ...prev, [securityId]: false }));
+    }
+  };
+
   const filteredSecurities = securities.filter(security => 
     security.security_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     security.security_ISIN.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -401,17 +435,30 @@ const SecurityMaster = () => {
                     <td>{formatDate(security.created_at)}</td>
                     <td>{formatDate(security.updated_at)}</td>
                     <td>
-                      <div className="d-flex gap-2">
-                        <Button 
-                          variant="outline-primary" 
+                      <div className="d-flex gap-1 flex-wrap">
+                        <Button
+                          variant="outline-info"
+                          size="sm"
+                          onClick={() => fetchCorporateEvents(security)}
+                          disabled={fetchingEvents[security.id]}
+                          title="Fetch corporate events (bonus, splits, dividends) from BSE"
+                        >
+                          {fetchingEvents[security.id] ? (
+                            <Spinner animation="border" size="sm" />
+                          ) : (
+                            '📋 Events'
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline-primary"
                           size="sm"
                           onClick={() => openEditModal(security)}
                           title="Edit security details"
                         >
                           Edit
                         </Button>
-                        <Button 
-                          variant="outline-danger" 
+                        <Button
+                          variant="outline-danger"
                           size="sm"
                           onClick={() => openDeleteModal(security)}
                           title="Delete security"

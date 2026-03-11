@@ -50,6 +50,8 @@ class Security(Base):
     security_name = Column(String, nullable=False, index=True)
     security_ISIN = Column(String, nullable=False, index=True)
     security_ticker = Column(String, nullable=False, index=True)
+    bse_scrip_code = Column(String, nullable=True, index=True)  # BSE scrip code for corporate events
+    last_corporate_events_fetch = Column(DateTime, nullable=True)  # Last time corporate events were fetched
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
