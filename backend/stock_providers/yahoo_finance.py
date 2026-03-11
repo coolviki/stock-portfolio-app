@@ -5,6 +5,7 @@ from datetime import datetime
 import logging
 
 from .base import StockPriceProvider, StockPrice, ProviderStatus
+from .indian_stocks_db import get_stocks_for_provider
 
 logger = logging.getLogger(__name__)
 
@@ -35,43 +36,8 @@ class YahooFinanceProvider(StockPriceProvider):
             # Add more as needed
         }
         
-        # Indian stock search database - expanded list
-        self.indian_stocks = [
-            {'symbol': 'RELIANCE.NS', 'name': 'Reliance Industries Limited', 'isin': 'INE002A01018'},
-            {'symbol': 'TCS.NS', 'name': 'Tata Consultancy Services Limited', 'isin': 'INE467B01029'},
-            {'symbol': 'INFY.NS', 'name': 'Infosys Limited', 'isin': 'INE009A01021'},
-            {'symbol': 'HDFCBANK.NS', 'name': 'HDFC Bank Limited', 'isin': 'INE040A01034'},
-            {'symbol': 'ICICIBANK.NS', 'name': 'ICICI Bank Limited', 'isin': 'INE090A01013'},
-            {'symbol': 'ITC.NS', 'name': 'ITC Limited', 'isin': 'INE154A01025'},
-            {'symbol': 'WIPRO.NS', 'name': 'Wipro Limited', 'isin': 'INE075A01022'},
-            {'symbol': 'BAJFINANCE.NS', 'name': 'Bajaj Finance Limited', 'isin': 'INE296A01024'},
-            {'symbol': 'MARUTI.NS', 'name': 'Maruti Suzuki India Limited', 'isin': 'INE585B01010'},
-            {'symbol': 'CMS.NS', 'name': 'CMS Info Systems Limited', 'isin': 'INE925R01014'},
-            {'symbol': 'ADANIPORTS.NS', 'name': 'Adani Ports and Special Economic Zone Limited', 'isin': 'INE742F01042'},
-            {'symbol': 'ASIANPAINT.NS', 'name': 'Asian Paints Limited', 'isin': 'INE021A01026'},
-            {'symbol': 'BAJAJFINSV.NS', 'name': 'Bajaj Finserv Limited', 'isin': 'INE918I01018'},
-            {'symbol': 'BHARTIARTL.NS', 'name': 'Bharti Airtel Limited', 'isin': 'INE397D01024'},
-            {'symbol': 'AJANTPHARM.NS', 'name': 'Ajanta Pharma Limited', 'isin': 'INE031B01049'},
-            {'symbol': 'PRICOL.NS', 'name': 'Pricol Limited', 'isin': 'INE726C01017'},
-            {'symbol': 'SBIN.NS', 'name': 'State Bank of India', 'isin': 'INE062A01020'},
-            {'symbol': 'HINDUNILVR.NS', 'name': 'Hindustan Unilever Limited', 'isin': 'INE030A01027'},
-            {'symbol': 'KOTAKBANK.NS', 'name': 'Kotak Mahindra Bank Limited', 'isin': 'INE237A01028'},
-            {'symbol': 'LT.NS', 'name': 'Larsen & Toubro Limited', 'isin': 'INE018A01030'},
-            {'symbol': 'AXISBANK.NS', 'name': 'Axis Bank Limited', 'isin': 'INE238A01034'},
-            {'symbol': 'SUNPHARMA.NS', 'name': 'Sun Pharmaceutical Industries Limited', 'isin': 'INE044A01036'},
-            {'symbol': 'TITAN.NS', 'name': 'Titan Company Limited', 'isin': 'INE280A01028'},
-            {'symbol': 'TATAMOTORS.NS', 'name': 'Tata Motors Limited', 'isin': 'INE155A01022'},
-            {'symbol': 'TATASTEEL.NS', 'name': 'Tata Steel Limited', 'isin': 'INE081A01012'},
-            {'symbol': 'ADANIENT.NS', 'name': 'Adani Enterprises Limited', 'isin': 'INE423A01024'},
-            {'symbol': 'NTPC.NS', 'name': 'NTPC Limited', 'isin': 'INE733E01010'},
-            {'symbol': 'POWERGRID.NS', 'name': 'Power Grid Corporation of India Limited', 'isin': 'INE752E01010'},
-            {'symbol': 'ONGC.NS', 'name': 'Oil and Natural Gas Corporation Limited', 'isin': 'INE213A01029'},
-            {'symbol': 'COALINDIA.NS', 'name': 'Coal India Limited', 'isin': 'INE522F01014'},
-            {'symbol': 'JSWSTEEL.NS', 'name': 'JSW Steel Limited', 'isin': 'INE019A01038'},
-            {'symbol': 'TECHM.NS', 'name': 'Tech Mahindra Limited', 'isin': 'INE669C01036'},
-            {'symbol': 'HCLTECH.NS', 'name': 'HCL Technologies Limited', 'isin': 'INE860A01027'},
-            {'symbol': 'ULTRACEMCO.NS', 'name': 'UltraTech Cement Limited', 'isin': 'INE481G01011'},
-        ]
+        # Use comprehensive Indian stock database (120+ stocks)
+        self.indian_stocks = get_stocks_for_provider('.NS')
     
     def is_available(self) -> bool:
         """Check if Yahoo Finance is available"""
