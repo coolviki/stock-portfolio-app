@@ -11,6 +11,7 @@ NODE_ENV = "production"
 GENERATE_SOURCEMAP = "false"
 CI = "false"
 PORT = "3000"
+NIXPACKS_NODE_VERSION = "20"
 
 # These will be set via Railway dashboard or CLI
 # REACT_APP_FIREBASE_API_KEY = "${{REACT_APP_FIREBASE_API_KEY}}"
