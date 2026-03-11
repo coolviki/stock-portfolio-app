@@ -283,7 +283,6 @@ const Dashboard = () => {
                   <th>Value</th>
                   <th>Day P&L</th>
                   <th>Total P&L</th>
-                  <th>%</th>
                 </tr>
               </thead>
               <tbody>
@@ -312,12 +311,10 @@ const Dashboard = () => {
                         </small>
                       </td>
                       <td className={pnl >= 0 ? 'text-success' : 'text-danger'}>
-                        {pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN')}
-                      </td>
-                      <td>
-                        <Badge bg={pnlPercent >= 0 ? 'success' : 'danger'}>
-                          {pnlPercent.toFixed(2)}%
-                        </Badge>
+                        {pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN', {maximumFractionDigits: 0})}
+                        <small className="d-block" style={{fontSize: '0.7rem'}}>
+                          ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%)
+                        </small>
                       </td>
                     </tr>
                   );
