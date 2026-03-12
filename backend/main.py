@@ -1048,7 +1048,7 @@ def get_stock_price_by_isin(isin: str):
 @app.get("/market-indices")
 def get_market_indices():
     """Get BSE Sensex and NIFTY 50 current values with change"""
-    import yfinance as yf
+    import requests as req
 
     indices = {
         "SENSEX": {"symbol": "^BSESN", "name": "BSE SENSEX"},
@@ -1056,32 +1056,51 @@ def get_market_indices():
     }
 
     result = {}
+    base_url = "https://query1.finance.yahoo.com/v8/finance/chart"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+    }
 
     for key, info in indices.items():
         try:
-            ticker = yf.Ticker(info["symbol"])
-            hist = ticker.history(period="2d")
+            url = f"{base_url}/{info['symbol']}?interval=1d&range=2d"
+            response = req.get(url, headers=headers, timeout=10)
 
-            if len(hist) >= 1:
-                current_price = hist['Close'].iloc[-1]
-                prev_close = hist['Close'].iloc[-2] if len(hist) >= 2 else current_price
-                change = current_price - prev_close
-                change_percent = (change / prev_close) * 100 if prev_close > 0 else 0
+            if response.status_code == 200:
+                data = response.json()
+                if 'chart' in data and 'result' in data['chart'] and data['chart']['result']:
+                    chart_result = data['chart']['result'][0]
+                    meta = chart_result.get('meta', {})
 
-                result[key] = {
-                    "name": info["name"],
-                    "value": round(current_price, 2),
-                    "change": round(change, 2),
-                    "change_percent": round(change_percent, 2),
-                    "timestamp": datetime.now().isoformat()
-                }
+                    current_price = meta.get('regularMarketPrice', 0)
+                    prev_close = meta.get('previousClose') or meta.get('chartPreviousClose', current_price)
+
+                    change = current_price - prev_close if prev_close else 0
+                    change_percent = (change / prev_close) * 100 if prev_close > 0 else 0
+
+                    result[key] = {
+                        "name": info["name"],
+                        "value": round(current_price, 2),
+                        "change": round(change, 2),
+                        "change_percent": round(change_percent, 2),
+                        "timestamp": datetime.now().isoformat()
+                    }
+                else:
+                    result[key] = {
+                        "name": info["name"],
+                        "value": 0,
+                        "change": 0,
+                        "change_percent": 0,
+                        "error": "No data in response"
+                    }
             else:
                 result[key] = {
                     "name": info["name"],
                     "value": 0,
                     "change": 0,
                     "change_percent": 0,
-                    "error": "No data available"
+                    "error": f"HTTP {response.status_code}"
                 }
         except Exception as e:
             logger.error(f"Error fetching {key}: {e}")

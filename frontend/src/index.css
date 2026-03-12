@@ -233,12 +233,19 @@ code {
   font-weight: 500;
 }
 
-.holding-item-new .holding-pnl.positive {
+.holding-item-new .holding-pnl.positive,
+.holding-item-new .holding-day-pnl.positive {
   color: #2e7d32;
 }
 
-.holding-item-new .holding-pnl.negative {
+.holding-item-new .holding-pnl.negative,
+.holding-item-new .holding-day-pnl.negative {
   color: #c62828;
+}
+
+.holding-item-new .holding-day-pnl {
+  font-size: 0.7rem;
+  font-weight: 500;
 }
 
 .holding-item-new .pnl-percent {

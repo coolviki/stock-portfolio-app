@@ -61,7 +61,9 @@ const Dashboard = () => {
       const currentVal = currentValues[symbol] || 0;
       const pnl = currentVal - stock.total_invested;
       const pnlPercent = stock.total_invested > 0 ? (pnl / stock.total_invested) * 100 : 0;
-      return { symbol, stock, currentVal, pnl, pnlPercent };
+      const dailyChange = stock.todays_change || 0;
+      const dailyChangePercent = stock.change_percent || 0;
+      return { symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent };
     });
 
     return holdingsArray.sort((a, b) => {
@@ -74,6 +76,14 @@ const Dashboard = () => {
         case 'pnlPercent':
           aVal = a.pnlPercent;
           bVal = b.pnlPercent;
+          break;
+        case 'dayPnl':
+          aVal = a.dailyChange;
+          bVal = b.dailyChange;
+          break;
+        case 'dayPnlPercent':
+          aVal = a.dailyChangePercent;
+          bVal = b.dailyChangePercent;
           break;
         default:
           aVal = a.symbol;
@@ -332,6 +342,13 @@ const Dashboard = () => {
           <div className="d-md-none">
             <ButtonGroup size="sm">
               <Button
+                variant={sortConfig.key === 'dayPnl' ? 'primary' : 'outline-secondary'}
+                onClick={() => handleSort('dayPnl')}
+                className="sort-btn"
+              >
+                Day {sortConfig.key === 'dayPnl' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </Button>
+              <Button
                 variant={sortConfig.key === 'pnl' ? 'primary' : 'outline-secondary'}
                 onClick={() => handleSort('pnl')}
                 className="sort-btn"
@@ -351,7 +368,7 @@ const Dashboard = () => {
         <Card.Body className="p-0 p-md-3">
           {/* Mobile: Compact card-based layout with P&L display */}
           <div className="d-md-none">
-            {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent }) => {
+            {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent }) => {
               return (
                 <div key={symbol} className="holding-item-new px-3 py-2 border-bottom">
                   <div className="d-flex justify-content-between align-items-start">
@@ -361,8 +378,12 @@ const Dashboard = () => {
                     </div>
                     <div className="text-end">
                       <div className="holding-value">₹{currentVal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
+                      <div className={`holding-day-pnl ${dailyChange >= 0 ? 'positive' : 'negative'}`}>
+                        Day: {dailyChange >= 0 ? '+' : ''}₹{dailyChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}
+                        <span className="pnl-percent"> ({dailyChangePercent >= 0 ? '+' : ''}{dailyChangePercent.toFixed(1)}%)</span>
+                      </div>
                       <div className={`holding-pnl ${pnl >= 0 ? 'positive' : 'negative'}`}>
-                        {pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN', {maximumFractionDigits: 0})}
+                        Total: {pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN', {maximumFractionDigits: 0})}
                         <span className="pnl-percent"> ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%)</span>
                       </div>
                     </div>
