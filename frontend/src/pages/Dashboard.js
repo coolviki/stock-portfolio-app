@@ -408,7 +408,7 @@ const Dashboard = () => {
                       <strong className="holding-symbol">{symbol}</strong>
                       <div className="holding-meta">
                         {stock.quantity} shares @ ₹{avgPrice.toFixed(0)}, CMP{' '}
-                        <span className={dailyChange >= 0 ? 'text-success' : 'text-danger'}>
+                        <span className={currentPrice >= avgPrice ? 'text-success' : 'text-danger'}>
                           ₹{currentPrice.toFixed(0)}
                         </span>
                       </div>
