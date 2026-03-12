@@ -425,6 +425,22 @@ def handle_lot_for_transaction(db: Session, transaction: Transaction):
     """
     Automatically create lot for BUY or allocate to lots for SELL.
     Called after a transaction is committed to the database.
+
+    For NEW BUY transactions with past dates:
+    -----------------------------------------
+    After creating a lot, this function also checks for and applies any
+    historical corporate events that the lot would have been eligible for.
+
+    This handles the scenario where:
+    1. A bonus/split was issued and applied to existing lots
+    2. User later adds a backdated BUY that was eligible for that event
+    3. The backdated lot automatically receives the same adjustments
+
+    See corporate_events.py `apply_historical_corporate_events_to_lot()` for
+    detailed documentation on the auto-apply logic.
+
+    Note: This only applies to NEW transactions. Edited transactions already
+    have their lots adjusted from when the event was originally applied.
     """
     calculator = LotCapitalGainsCalculator(db)
 
@@ -432,6 +448,25 @@ def handle_lot_for_transaction(db: Session, transaction: Transaction):
         try:
             lot = calculator.create_lot_from_transaction(transaction)
             logger.info(f"Created lot {lot.id} for BUY transaction {transaction.id}")
+
+            # Auto-apply any historical corporate events to the new lot
+            # This handles backdated transactions that are eligible for
+            # already-applied corporate events (e.g., bonuses, splits)
+            try:
+                event_processor = CorporateEventProcessor(db)
+                adjustments = event_processor.apply_historical_corporate_events_to_lot(lot)
+                if adjustments:
+                    logger.info(
+                        f"Auto-applied {len(adjustments)} historical corporate event(s) "
+                        f"to lot {lot.id} for transaction {transaction.id}"
+                    )
+            except Exception as e:
+                # Don't fail the transaction if auto-apply fails
+                # The lot is still valid, just without historical adjustments
+                logger.error(
+                    f"Failed to auto-apply historical corporate events to lot {lot.id}: {e}"
+                )
+
             return lot
         except Exception as e:
             logger.error(f"Failed to create lot for transaction {transaction.id}: {e}")

@@ -147,6 +147,41 @@ mock_prices = {
 - Bulk upload via PDF processing
 - Date filtering and search capabilities
 
+### Corporate Events System
+
+The system handles corporate actions (bonus shares, stock splits, dividends) with automatic application for backdated transactions.
+
+#### Supported Event Types
+- **SPLIT**: Stock splits (e.g., 2:1 doubles quantity, halves cost per unit)
+- **BONUS**: Bonus issues (e.g., 1:2 gives 1 free share per 2 held)
+- **DIVIDEND**: Recorded for audit trail (no cost basis change per Indian tax rules)
+- **RIGHTS**: Recorded as eligible (requires manual exercise)
+- **MERGER/DEMERGER**: Recorded (requires manual handling)
+
+#### Two Application Scenarios
+
+**1. Manual Application (Admin-initiated)**
+- Admin creates event via Corporate Events UI
+- Admin clicks "Apply" to adjust all eligible lots
+- Lots where `purchase_date <= record_date` are adjusted
+
+**2. Auto-Application (Backdated Transactions)**
+- User adds a BUY transaction with a past date
+- System checks for already-applied events the lot would have been eligible for
+- Automatically applies those adjustments to the new lot only
+- Creates audit records prefixed with "[Auto-applied]"
+
+#### Important: Why Edits Don't Trigger Auto-Application
+When editing an existing transaction, the lot already exists and was already adjusted when the event was originally applied. Re-applying would double-count.
+
+#### Key Files
+- `corporate_events.py`: Event processing logic and auto-application
+- `lot_capital_gains.py`: Lot creation and capital gains calculation
+- `main.py`: `handle_lot_for_transaction()` hooks auto-application
+
+#### Audit Trail
+All adjustments create `LotAdjustment` records showing before/after values. Auto-applied adjustments are prefixed with "[Auto-applied]" in the adjustment_reason field.
+
 ## Testing and Debugging
 
 ### API Testing
