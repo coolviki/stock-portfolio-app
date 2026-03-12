@@ -286,6 +286,13 @@ code {
   font-weight: 500;
 }
 
+/* View toggle button (% / ₹) */
+.view-toggle-btn {
+  font-size: 0.7rem !important;
+  padding: 0.2rem 0.6rem !important;
+  font-weight: 600;
+}
+
 /* Sort button styles */
 .sort-btn {
   font-size: 0.7rem !important;

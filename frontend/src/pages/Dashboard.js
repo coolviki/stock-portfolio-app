@@ -12,7 +12,8 @@ const Dashboard = () => {
   const [portfolio, setPortfolio] = useState(null);
   const [marketIndices, setMarketIndices] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [sortConfig, setSortConfig] = useState({ key: 'symbol', direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState({ key: 'pnlPercent', direction: 'desc' }); // Default: highest % gains on top
+  const [valueView, setValueView] = useState('percent'); // 'percent' or 'actual'
   const { user } = useAuth();
 
 
@@ -340,24 +341,54 @@ const Dashboard = () => {
               <h5 className="mb-0 d-none d-md-block">Current Holdings</h5>
             </div>
           </div>
-          {/* Mobile Sort Controls */}
-          <div className="d-md-none mt-2 d-flex justify-content-end gap-2">
-            <Button
-              variant={sortConfig.key === 'dayPnl' ? 'primary' : 'outline-secondary'}
-              size="sm"
-              onClick={() => handleSort('dayPnl')}
-              className="sort-btn-label"
-            >
-              Day {sortConfig.key === 'dayPnl' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-            </Button>
-            <Button
-              variant={sortConfig.key === 'pnl' ? 'primary' : 'outline-secondary'}
-              size="sm"
-              onClick={() => handleSort('pnl')}
-              className="sort-btn-label"
-            >
-              Total {sortConfig.key === 'pnl' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-            </Button>
+          {/* Mobile Controls: Day/Total toggle, %/₹ toggle, Sort */}
+          <div className="d-md-none mt-2 d-flex justify-content-between align-items-center">
+            {/* Value View Toggle */}
+            <ButtonGroup size="sm">
+              <Button
+                variant={valueView === 'percent' ? 'primary' : 'outline-secondary'}
+                onClick={() => {
+                  setValueView('percent');
+                  // Update sort key to use percent variant
+                  if (sortConfig.key === 'pnl') setSortConfig(prev => ({ ...prev, key: 'pnlPercent' }));
+                  if (sortConfig.key === 'dayPnl') setSortConfig(prev => ({ ...prev, key: 'dayPnlPercent' }));
+                }}
+                className="view-toggle-btn"
+              >
+                %
+              </Button>
+              <Button
+                variant={valueView === 'actual' ? 'primary' : 'outline-secondary'}
+                onClick={() => {
+                  setValueView('actual');
+                  // Update sort key to use actual variant
+                  if (sortConfig.key === 'pnlPercent') setSortConfig(prev => ({ ...prev, key: 'pnl' }));
+                  if (sortConfig.key === 'dayPnlPercent') setSortConfig(prev => ({ ...prev, key: 'dayPnl' }));
+                }}
+                className="view-toggle-btn"
+              >
+                ₹
+              </Button>
+            </ButtonGroup>
+            {/* Sort Controls */}
+            <div className="d-flex gap-1">
+              <Button
+                variant={(sortConfig.key === 'dayPnl' || sortConfig.key === 'dayPnlPercent') ? 'primary' : 'outline-secondary'}
+                size="sm"
+                onClick={() => handleSort(valueView === 'percent' ? 'dayPnlPercent' : 'dayPnl')}
+                className="sort-btn-label"
+              >
+                Day {(sortConfig.key === 'dayPnl' || sortConfig.key === 'dayPnlPercent') && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </Button>
+              <Button
+                variant={(sortConfig.key === 'pnl' || sortConfig.key === 'pnlPercent') ? 'primary' : 'outline-secondary'}
+                size="sm"
+                onClick={() => handleSort(valueView === 'percent' ? 'pnlPercent' : 'pnl')}
+                className="sort-btn-label"
+              >
+                Total {(sortConfig.key === 'pnl' || sortConfig.key === 'pnlPercent') && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </Button>
+            </div>
           </div>
         </Card.Header>
         <Card.Body className="p-0 p-md-3">
@@ -379,15 +410,21 @@ const Dashboard = () => {
                     <div className="pnl-row">
                       <span className="pnl-label">Day</span>
                       <span className={`pnl-value ${dailyChange >= 0 ? 'positive' : 'negative'}`}>
-                        {dailyChange >= 0 ? '+' : ''}₹{dailyChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}
-                        <span className="pnl-percent"> ({dailyChangePercent >= 0 ? '+' : ''}{dailyChangePercent.toFixed(1)}%)</span>
+                        {valueView === 'percent' ? (
+                          <>{dailyChangePercent >= 0 ? '+' : ''}{dailyChangePercent.toFixed(1)}%</>
+                        ) : (
+                          <>{dailyChange >= 0 ? '+' : ''}₹{dailyChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}</>
+                        )}
                       </span>
                     </div>
                     <div className="pnl-row">
                       <span className="pnl-label">Total</span>
                       <span className={`pnl-value ${pnl >= 0 ? 'positive' : 'negative'}`}>
-                        {pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN', {maximumFractionDigits: 0})}
-                        <span className="pnl-percent"> ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%)</span>
+                        {valueView === 'percent' ? (
+                          <>{pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%</>
+                        ) : (
+                          <>{pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN', {maximumFractionDigits: 0})}</>
+                        )}
                       </span>
                     </div>
                   </div>
