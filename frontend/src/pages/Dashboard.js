@@ -13,7 +13,6 @@ const Dashboard = () => {
   const [marketIndices, setMarketIndices] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sortConfig, setSortConfig] = useState({ key: 'symbol', direction: 'asc' });
-  const [pnlView, setPnlView] = useState('total'); // 'total' or 'day'
   const { user } = useAuth();
 
 
@@ -334,64 +333,62 @@ const Dashboard = () => {
 
       {/* Holdings Table - Clean layout for mobile with sorting */}
       <Card className="border-0 shadow-sm">
-        <Card.Header className="bg-transparent border-bottom d-flex justify-content-between align-items-center">
-          <div>
-            <h6 className="mb-0 d-md-none">Holdings ({portfolioLabels.length})</h6>
-            <h5 className="mb-0 d-none d-md-block">Current Holdings</h5>
+        <Card.Header className="bg-transparent border-bottom">
+          <div className="d-flex justify-content-between align-items-center">
+            <div>
+              <h6 className="mb-0 d-md-none">Holdings ({portfolioLabels.length})</h6>
+              <h5 className="mb-0 d-none d-md-block">Current Holdings</h5>
+            </div>
           </div>
-          {/* Mobile View Toggle & Sort */}
-          <div className="d-md-none d-flex align-items-center gap-2">
-            <ButtonGroup size="sm" className="pnl-toggle">
-              <Button
-                variant={pnlView === 'day' ? 'primary' : 'outline-secondary'}
-                onClick={() => setPnlView('day')}
-                className="toggle-btn"
-              >
-                Day
-              </Button>
-              <Button
-                variant={pnlView === 'total' ? 'primary' : 'outline-secondary'}
-                onClick={() => setPnlView('total')}
-                className="toggle-btn"
-              >
-                Total
-              </Button>
-            </ButtonGroup>
+          {/* Mobile Sort Controls */}
+          <div className="d-md-none mt-2 d-flex justify-content-end gap-2">
             <Button
-              variant="outline-secondary"
+              variant={sortConfig.key === 'dayPnl' ? 'primary' : 'outline-secondary'}
               size="sm"
-              onClick={() => handleSort(pnlView === 'day' ? 'dayPnl' : 'pnl')}
-              className="sort-btn"
+              onClick={() => handleSort('dayPnl')}
+              className="sort-btn-label"
             >
-              {(pnlView === 'day' ? sortConfig.key === 'dayPnl' : sortConfig.key === 'pnl')
-                ? (sortConfig.direction === 'asc' ? '↑' : '↓')
-                : '↕'}
+              Day {sortConfig.key === 'dayPnl' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+            </Button>
+            <Button
+              variant={sortConfig.key === 'pnl' ? 'primary' : 'outline-secondary'}
+              size="sm"
+              onClick={() => handleSort('pnl')}
+              className="sort-btn-label"
+            >
+              Total {sortConfig.key === 'pnl' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
             </Button>
           </div>
         </Card.Header>
         <Card.Body className="p-0 p-md-3">
-          {/* Mobile: Compact card-based layout with P&L display */}
+          {/* Mobile: Two-row layout showing both Day and Total P&L */}
           <div className="d-md-none">
             {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent }) => {
-              const displayPnl = pnlView === 'day' ? dailyChange : pnl;
-              const displayPercent = pnlView === 'day' ? dailyChangePercent : pnlPercent;
-
               return (
                 <div key={symbol} className="holding-item-new px-3 py-2 border-bottom">
-                  <div className="d-flex justify-content-between align-items-start">
+                  <div className="d-flex justify-content-between align-items-start mb-1">
                     <div>
                       <strong className="holding-symbol">{symbol}</strong>
                       <div className="holding-meta">{stock.quantity} shares @ ₹{(stock.total_invested / stock.quantity).toFixed(0)}</div>
                     </div>
                     <div className="text-end">
                       <div className="holding-value">₹{currentVal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
-                      <div
-                        className={`holding-pnl-display ${displayPnl >= 0 ? 'positive' : 'negative'}`}
-                        onClick={() => setPnlView(pnlView === 'day' ? 'total' : 'day')}
-                      >
-                        {displayPnl >= 0 ? '+' : ''}₹{displayPnl.toLocaleString('en-IN', {maximumFractionDigits: 0})}
-                        <span className="pnl-percent"> ({displayPercent >= 0 ? '+' : ''}{displayPercent.toFixed(1)}%)</span>
-                      </div>
+                    </div>
+                  </div>
+                  <div className="pnl-rows">
+                    <div className="pnl-row">
+                      <span className="pnl-label">Day</span>
+                      <span className={`pnl-value ${dailyChange >= 0 ? 'positive' : 'negative'}`}>
+                        {dailyChange >= 0 ? '+' : ''}₹{dailyChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}
+                        <span className="pnl-percent"> ({dailyChangePercent >= 0 ? '+' : ''}{dailyChangePercent.toFixed(1)}%)</span>
+                      </span>
+                    </div>
+                    <div className="pnl-row">
+                      <span className="pnl-label">Total</span>
+                      <span className={`pnl-value ${pnl >= 0 ? 'positive' : 'negative'}`}>
+                        {pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN', {maximumFractionDigits: 0})}
+                        <span className="pnl-percent"> ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%)</span>
+                      </span>
                     </div>
                   </div>
                 </div>

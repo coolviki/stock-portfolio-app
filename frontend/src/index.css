@@ -233,44 +233,56 @@ code {
   font-weight: 500;
 }
 
-.holding-item-new .holding-pnl.positive,
-.holding-item-new .holding-day-pnl.positive,
-.holding-item-new .holding-pnl-display.positive {
+.holding-item-new .pnl-value.positive {
   color: #2e7d32;
 }
 
-.holding-item-new .holding-pnl.negative,
-.holding-item-new .holding-day-pnl.negative,
-.holding-item-new .holding-pnl-display.negative {
+.holding-item-new .pnl-value.negative {
   color: #c62828;
-}
-
-.holding-item-new .holding-day-pnl {
-  font-size: 0.7rem;
-  font-weight: 500;
-}
-
-.holding-item-new .holding-pnl-display {
-  font-size: 0.75rem;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-
-.holding-item-new .holding-pnl-display:active {
-  background-color: rgba(0, 0, 0, 0.05);
 }
 
 .holding-item-new .pnl-percent {
   font-size: 0.65rem;
 }
 
-/* P&L Toggle Buttons */
-.pnl-toggle .toggle-btn {
+/* Two-row P&L layout */
+.holding-item-new .pnl-rows {
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-top: 4px;
+}
+
+.holding-item-new .pnl-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.holding-item-new .pnl-row:first-child {
+  border-bottom: 1px solid #e9ecef;
+  padding-bottom: 4px;
+  margin-bottom: 2px;
+}
+
+.holding-item-new .pnl-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.holding-item-new .pnl-value {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Sort button with label */
+.sort-btn-label {
   font-size: 0.65rem !important;
-  padding: 0.15rem 0.4rem !important;
+  padding: 0.2rem 0.5rem !important;
   font-weight: 500;
 }
 
