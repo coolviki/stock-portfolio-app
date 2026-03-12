@@ -52,7 +52,8 @@ const Dashboard = () => {
   const handleSort = (key) => {
     setSortConfig(prev => ({
       key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+      // Default to desc (highest first), toggle to asc on second click
+      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
     }));
   };
 
@@ -179,100 +180,80 @@ const Dashboard = () => {
         <span className="d-sm-none">Dashboard</span>
       </h2>
 
-      {/* Market Indices - Mobile prominent display */}
+      {/* Market Indices - Compact 4-column display */}
       {marketIndices && (
-        <Row className="mb-3 g-2">
-          <Col xs={6} md={3}>
-            <div className="market-index-card">
-              <div className="d-flex justify-content-between align-items-center">
-                <span className="index-name">SENSEX</span>
-                <span className={`index-change ${marketIndices.SENSEX?.change >= 0 ? 'positive' : 'negative'}`}>
-                  {marketIndices.SENSEX?.change >= 0 ? '▲' : '▼'} {Math.abs(marketIndices.SENSEX?.change_percent || 0).toFixed(2)}%
-                </span>
-              </div>
+        <Row className="mb-3 g-1">
+          <Col xs={3}>
+            <div className="market-index-card compact">
+              <div className="index-name">SENSEX</div>
               <div className="index-value">
                 {(marketIndices.SENSEX?.value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
               </div>
-              <div className={`index-change-value ${marketIndices.SENSEX?.change >= 0 ? 'positive' : 'negative'}`}>
-                {marketIndices.SENSEX?.change >= 0 ? '+' : ''}{(marketIndices.SENSEX?.change || 0).toFixed(2)}
+              <div className={`index-change ${marketIndices.SENSEX?.change >= 0 ? 'positive' : 'negative'}`}>
+                {marketIndices.SENSEX?.change >= 0 ? '+' : ''}{(marketIndices.SENSEX?.change_percent || 0).toFixed(1)}%
               </div>
             </div>
           </Col>
-          <Col xs={6} md={3}>
-            <div className="market-index-card">
-              <div className="d-flex justify-content-between align-items-center">
-                <span className="index-name">NIFTY 50</span>
-                <span className={`index-change ${marketIndices.NIFTY?.change >= 0 ? 'positive' : 'negative'}`}>
-                  {marketIndices.NIFTY?.change >= 0 ? '▲' : '▼'} {Math.abs(marketIndices.NIFTY?.change_percent || 0).toFixed(2)}%
-                </span>
-              </div>
+          <Col xs={3}>
+            <div className="market-index-card compact">
+              <div className="index-name">NIFTY</div>
               <div className="index-value">
                 {(marketIndices.NIFTY?.value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
               </div>
-              <div className={`index-change-value ${marketIndices.NIFTY?.change >= 0 ? 'positive' : 'negative'}`}>
-                {marketIndices.NIFTY?.change >= 0 ? '+' : ''}{(marketIndices.NIFTY?.change || 0).toFixed(2)}
+              <div className={`index-change ${marketIndices.NIFTY?.change >= 0 ? 'positive' : 'negative'}`}>
+                {marketIndices.NIFTY?.change >= 0 ? '+' : ''}{(marketIndices.NIFTY?.change_percent || 0).toFixed(1)}%
               </div>
             </div>
           </Col>
-          <Col xs={6} md={3}>
-            <div className="market-index-card">
-              <div className="d-flex justify-content-between align-items-center">
-                <span className="index-name">NASDAQ</span>
-                <span className={`index-change ${marketIndices.NASDAQ?.change >= 0 ? 'positive' : 'negative'}`}>
-                  {marketIndices.NASDAQ?.change >= 0 ? '▲' : '▼'} {Math.abs(marketIndices.NASDAQ?.change_percent || 0).toFixed(2)}%
-                </span>
-              </div>
+          <Col xs={3}>
+            <div className="market-index-card compact">
+              <div className="index-name">NASDAQ</div>
               <div className="index-value">
                 {(marketIndices.NASDAQ?.value || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}
               </div>
-              <div className={`index-change-value ${marketIndices.NASDAQ?.change >= 0 ? 'positive' : 'negative'}`}>
-                {marketIndices.NASDAQ?.change >= 0 ? '+' : ''}{(marketIndices.NASDAQ?.change || 0).toFixed(2)}
+              <div className={`index-change ${marketIndices.NASDAQ?.change >= 0 ? 'positive' : 'negative'}`}>
+                {marketIndices.NASDAQ?.change >= 0 ? '+' : ''}{(marketIndices.NASDAQ?.change_percent || 0).toFixed(1)}%
               </div>
             </div>
           </Col>
-          <Col xs={6} md={3}>
-            <div className="market-index-card">
-              <div className="d-flex justify-content-between align-items-center">
-                <span className="index-name">DOW</span>
-                <span className={`index-change ${marketIndices.DJI?.change >= 0 ? 'positive' : 'negative'}`}>
-                  {marketIndices.DJI?.change >= 0 ? '▲' : '▼'} {Math.abs(marketIndices.DJI?.change_percent || 0).toFixed(2)}%
-                </span>
-              </div>
+          <Col xs={3}>
+            <div className="market-index-card compact">
+              <div className="index-name">DOW</div>
               <div className="index-value">
                 {(marketIndices.DJI?.value || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}
               </div>
-              <div className={`index-change-value ${marketIndices.DJI?.change >= 0 ? 'positive' : 'negative'}`}>
-                {marketIndices.DJI?.change >= 0 ? '+' : ''}{(marketIndices.DJI?.change || 0).toFixed(2)}
+              <div className={`index-change ${marketIndices.DJI?.change >= 0 ? 'positive' : 'negative'}`}>
+                {marketIndices.DJI?.change >= 0 ? '+' : ''}{(marketIndices.DJI?.change_percent || 0).toFixed(1)}%
               </div>
             </div>
           </Col>
         </Row>
       )}
 
-      {/* Summary Cards - Compact and sleek on mobile */}
-      <Row className="mb-3 mb-md-4 g-2">
-        <Col xs={6} md={3} lg={true}>
+      {/* Summary Cards - 3 columns on mobile */}
+      <Row className="mb-3 mb-md-4 g-1 g-md-2">
+        <Col xs={4} md={3} lg={true}>
           <Card className="card-stat-new invested text-center h-100 border-0">
-            <Card.Body className="py-2 px-2">
+            <Card.Body className="py-2 px-1">
               <small className="stat-label">Invested</small>
               <div className="stat-value">₹{totalInvested.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
             </Card.Body>
           </Card>
         </Col>
-        <Col xs={6} md={3} lg={true}>
+        <Col xs={4} md={3} lg={true}>
           <Card className={`card-stat-new text-center h-100 border-0 ${totalGains >= 0 ? 'profit' : 'loss'}`}>
-            <Card.Body className="py-2 px-2">
+            <Card.Body className="py-2 px-1">
               <small className="stat-label">Current</small>
               <div className="stat-value">₹{currentValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
               <small className="stat-percent">
-                {totalGains >= 0 ? '+' : ''}₹{totalGains.toLocaleString('en-IN', {maximumFractionDigits: 0})} ({totalGains >= 0 ? '+' : ''}{totalGainsPercent.toFixed(1)}%)
+                {totalGains >= 0 ? '+' : ''}{totalGainsPercent.toFixed(1)}%
               </small>
             </Card.Body>
           </Card>
         </Col>
-        <Col xs={6} md={3} lg={true}>
+        <Col xs={4} md={3} lg={true}>
           <Card className={`card-stat-new text-center h-100 border-0 ${todaysChange >= 0 ? 'profit' : 'loss'}`}>
-            <Card.Body className="py-2 px-2">
+            <Card.Body className="py-2 px-1">
               <small className="stat-label">Today</small>
               <div className="stat-value">
                 {todaysChange >= 0 ? '+' : ''}₹{todaysChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}

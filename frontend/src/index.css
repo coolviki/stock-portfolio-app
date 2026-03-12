@@ -203,6 +203,29 @@ code {
   color: #c62828;
 }
 
+/* Compact index card for 4-column layout */
+.market-index-card.compact {
+  padding: 6px 4px;
+  text-align: center;
+  border-radius: 8px;
+}
+
+.market-index-card.compact .index-name {
+  font-size: 0.6rem;
+  margin-bottom: 2px;
+}
+
+.market-index-card.compact .index-value {
+  font-size: 0.85rem;
+  margin: 1px 0;
+}
+
+.market-index-card.compact .index-change {
+  font-size: 0.65rem;
+  padding: 1px 3px;
+  display: inline-block;
+}
+
 /* Mobile Holdings Item */
 .holding-item-new {
   background: #fff;
