@@ -21,7 +21,7 @@ class AlphaVantageProvider(StockPriceProvider):
         
         # ISIN to Symbol mapping for Indian stocks
         self.isin_to_symbol = {
-            'INE925R01014': 'CMS.BSE',
+            'INE925R01014': 'CMSINFO.BSE',
             'INE002A01018': 'RELIANCE.BSE',
             'INE467B01029': 'TCS.BSE',
             'INE009A01021': 'INFY.BSE',

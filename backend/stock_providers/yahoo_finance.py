@@ -19,7 +19,7 @@ class YahooFinanceProvider(StockPriceProvider):
         
         # ISIN to Symbol mapping for Indian stocks (Yahoo format)
         self.isin_to_symbol = {
-            'INE925R01014': 'CMS.NS',
+            'INE925R01014': 'CMSINFO.NS',
             'INE002A01018': 'RELIANCE.NS',
             'INE467B01029': 'TCS.NS',
             'INE009A01021': 'INFY.NS',

@@ -116,7 +116,7 @@ INDIAN_STOCKS = [
     # User's stocks and other popular ones
     {'symbol': 'AJANTPHARM', 'name': 'Ajanta Pharma Limited', 'isin': 'INE031B01049'},
     {'symbol': 'PRICOL', 'name': 'Pricol Limited', 'isin': 'INE726C01017'},
-    {'symbol': 'CMS', 'name': 'CMS Info Systems Limited', 'isin': 'INE925R01014'},
+    {'symbol': 'CMSINFO', 'name': 'CMS Info Systems Limited', 'isin': 'INE925R01014'},
     {'symbol': 'PERSISTENT', 'name': 'Persistent Systems Limited', 'isin': 'INE262H01013'},
     {'symbol': 'COFORGE', 'name': 'Coforge Limited', 'isin': 'INE591G01017'},
     {'symbol': 'LTIM', 'name': 'LTIMindtree Limited', 'isin': 'INE214T01019'},
