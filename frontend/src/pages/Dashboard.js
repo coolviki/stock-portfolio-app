@@ -13,6 +13,7 @@ const Dashboard = () => {
   const [marketIndices, setMarketIndices] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sortConfig, setSortConfig] = useState({ key: 'symbol', direction: 'asc' });
+  const [pnlView, setPnlView] = useState('total'); // 'total' or 'day'
   const { user } = useAuth();
 
 
@@ -338,37 +339,43 @@ const Dashboard = () => {
             <h6 className="mb-0 d-md-none">Holdings ({portfolioLabels.length})</h6>
             <h5 className="mb-0 d-none d-md-block">Current Holdings</h5>
           </div>
-          {/* Mobile Sort Controls */}
-          <div className="d-md-none">
-            <ButtonGroup size="sm">
+          {/* Mobile View Toggle & Sort */}
+          <div className="d-md-none d-flex align-items-center gap-2">
+            <ButtonGroup size="sm" className="pnl-toggle">
               <Button
-                variant={sortConfig.key === 'dayPnl' ? 'primary' : 'outline-secondary'}
-                onClick={() => handleSort('dayPnl')}
-                className="sort-btn"
+                variant={pnlView === 'day' ? 'primary' : 'outline-secondary'}
+                onClick={() => setPnlView('day')}
+                className="toggle-btn"
               >
-                Day {sortConfig.key === 'dayPnl' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                Day
               </Button>
               <Button
-                variant={sortConfig.key === 'pnl' ? 'primary' : 'outline-secondary'}
-                onClick={() => handleSort('pnl')}
-                className="sort-btn"
+                variant={pnlView === 'total' ? 'primary' : 'outline-secondary'}
+                onClick={() => setPnlView('total')}
+                className="toggle-btn"
               >
-                P&L {sortConfig.key === 'pnl' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortConfig.key === 'pnlPercent' ? 'primary' : 'outline-secondary'}
-                onClick={() => handleSort('pnlPercent')}
-                className="sort-btn"
-              >
-                % {sortConfig.key === 'pnlPercent' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                Total
               </Button>
             </ButtonGroup>
+            <Button
+              variant="outline-secondary"
+              size="sm"
+              onClick={() => handleSort(pnlView === 'day' ? 'dayPnl' : 'pnl')}
+              className="sort-btn"
+            >
+              {(pnlView === 'day' ? sortConfig.key === 'dayPnl' : sortConfig.key === 'pnl')
+                ? (sortConfig.direction === 'asc' ? '↑' : '↓')
+                : '↕'}
+            </Button>
           </div>
         </Card.Header>
         <Card.Body className="p-0 p-md-3">
           {/* Mobile: Compact card-based layout with P&L display */}
           <div className="d-md-none">
             {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent }) => {
+              const displayPnl = pnlView === 'day' ? dailyChange : pnl;
+              const displayPercent = pnlView === 'day' ? dailyChangePercent : pnlPercent;
+
               return (
                 <div key={symbol} className="holding-item-new px-3 py-2 border-bottom">
                   <div className="d-flex justify-content-between align-items-start">
@@ -378,13 +385,12 @@ const Dashboard = () => {
                     </div>
                     <div className="text-end">
                       <div className="holding-value">₹{currentVal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
-                      <div className={`holding-day-pnl ${dailyChange >= 0 ? 'positive' : 'negative'}`}>
-                        Day: {dailyChange >= 0 ? '+' : ''}₹{dailyChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}
-                        <span className="pnl-percent"> ({dailyChangePercent >= 0 ? '+' : ''}{dailyChangePercent.toFixed(1)}%)</span>
-                      </div>
-                      <div className={`holding-pnl ${pnl >= 0 ? 'positive' : 'negative'}`}>
-                        Total: {pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN', {maximumFractionDigits: 0})}
-                        <span className="pnl-percent"> ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%)</span>
+                      <div
+                        className={`holding-pnl-display ${displayPnl >= 0 ? 'positive' : 'negative'}`}
+                        onClick={() => setPnlView(pnlView === 'day' ? 'total' : 'day')}
+                      >
+                        {displayPnl >= 0 ? '+' : ''}₹{displayPnl.toLocaleString('en-IN', {maximumFractionDigits: 0})}
+                        <span className="pnl-percent"> ({displayPercent >= 0 ? '+' : ''}{displayPercent.toFixed(1)}%)</span>
                       </div>
                     </div>
                   </div>
