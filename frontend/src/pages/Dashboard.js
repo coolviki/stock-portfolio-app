@@ -228,21 +228,13 @@ const Dashboard = () => {
           </Card>
         </Col>
         <Col xs={6} md={3} lg={true}>
-          <Card className="card-stat-new current text-center h-100 border-0">
+          <Card className={`card-stat-new text-center h-100 border-0 ${totalGains >= 0 ? 'profit' : 'loss'}`}>
             <Card.Body className="py-2 px-2">
               <small className="stat-label">Current</small>
               <div className="stat-value">₹{currentValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col xs={6} md={3} lg={true}>
-          <Card className={`card-stat-new text-center h-100 border-0 ${totalGains >= 0 ? 'profit' : 'loss'}`}>
-            <Card.Body className="py-2 px-2">
-              <small className="stat-label">Total P&L</small>
-              <div className="stat-value">
-                {totalGains >= 0 ? '+' : ''}₹{totalGains.toLocaleString('en-IN', {maximumFractionDigits: 0})}
-              </div>
-              <small className="stat-percent">{totalGains >= 0 ? '+' : ''}{totalGainsPercent.toFixed(1)}%</small>
+              <small className="stat-percent">
+                {totalGains >= 0 ? '+' : ''}₹{totalGains.toLocaleString('en-IN', {maximumFractionDigits: 0})} ({totalGains >= 0 ? '+' : ''}{totalGainsPercent.toFixed(1)}%)
+              </small>
             </Card.Body>
           </Card>
         </Col>
