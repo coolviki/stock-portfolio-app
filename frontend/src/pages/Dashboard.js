@@ -447,7 +447,13 @@ const Dashboard = () => {
                   <th>Current Price</th>
                   <th className="d-none d-lg-table-cell">Invested</th>
                   <th>Value</th>
-                  <th>Day P&L</th>
+                  <th
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => handleSort('dayPnl')}
+                    className="sortable-header"
+                  >
+                    Day P&L {sortConfig.key === 'dayPnl' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  </th>
                   <th
                     style={{ cursor: 'pointer' }}
                     onClick={() => handleSort('pnl')}
@@ -458,11 +464,9 @@ const Dashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent }) => {
+                {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent }) => {
                   const currentPrice = stock.quantity > 0 ? currentVal / stock.quantity : 0;
                   const avgPrice = stock.quantity > 0 ? stock.total_invested / stock.quantity : 0;
-                  const dailyChange = stock.todays_change || 0;
-                  const dailyChangePercent = stock.change_percent || 0;
 
                   return (
                     <tr key={symbol}>
