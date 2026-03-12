@@ -9,7 +9,7 @@ import os
 import json
 import tempfile
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 from database import get_db, engine, Base
@@ -1045,10 +1045,21 @@ def get_stock_price_by_isin(isin: str):
         logger.error(f"Error fetching price for ISIN {isin}: {e}")
         return {"isin": isin, "price": 0, "method": "ERROR", "error": str(e)}
 
+# Cache for market indices (5 minute TTL)
+_market_indices_cache = {"data": None, "expires_at": None}
+MARKET_INDICES_CACHE_TTL = 5  # minutes
+
 @app.get("/market-indices")
 def get_market_indices():
-    """Get BSE Sensex and NIFTY 50 current values with change"""
+    """Get BSE Sensex and NIFTY 50 current values with change (cached for 5 minutes)"""
     import requests as req
+
+    # Check cache first
+    if (_market_indices_cache["data"] is not None and
+        _market_indices_cache["expires_at"] is not None and
+        datetime.now() < _market_indices_cache["expires_at"]):
+        logger.debug("Returning cached market indices")
+        return _market_indices_cache["data"]
 
     indices = {
         "SENSEX": {"symbol": "^BSESN", "name": "BSE SENSEX"},
@@ -1111,6 +1122,11 @@ def get_market_indices():
                 "change_percent": 0,
                 "error": str(e)
             }
+
+    # Cache the result
+    _market_indices_cache["data"] = result
+    _market_indices_cache["expires_at"] = datetime.now() + timedelta(minutes=MARKET_INDICES_CACHE_TTL)
+    logger.info(f"Cached market indices, expires at {_market_indices_cache['expires_at']}")
 
     return result
 
