@@ -12,7 +12,7 @@ const Dashboard = () => {
   const [portfolio, setPortfolio] = useState(null);
   const [marketIndices, setMarketIndices] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [sortConfig, setSortConfig] = useState({ key: 'pnlPercent', direction: 'desc' }); // Default: highest % gains on top
+  const [sortConfig, setSortConfig] = useState({ key: 'dayPnlPercent', direction: 'desc' }); // Default: Day P&L % (highest gains on top)
   const [valueView, setValueView] = useState('percent'); // 'percent' or 'actual'
   const { user } = useAuth();
 
@@ -398,13 +398,20 @@ const Dashboard = () => {
               const isDay = sortConfig.key === 'dayPnl' || sortConfig.key === 'dayPnlPercent';
               const displayValue = isDay ? dailyChange : pnl;
               const displayPercent = isDay ? dailyChangePercent : pnlPercent;
+              const currentPrice = stock.quantity > 0 ? currentVal / stock.quantity : 0;
+              const avgPrice = stock.quantity > 0 ? stock.total_invested / stock.quantity : 0;
 
               return (
                 <div key={symbol} className="holding-item-new px-3 py-2 border-bottom">
                   <div className="d-flex justify-content-between align-items-center">
                     <div>
                       <strong className="holding-symbol">{symbol}</strong>
-                      <div className="holding-meta">{stock.quantity} shares @ ₹{(stock.total_invested / stock.quantity).toFixed(0)}</div>
+                      <div className="holding-meta">
+                        {stock.quantity} shares @ ₹{avgPrice.toFixed(0)}, CMP{' '}
+                        <span className={dailyChange >= 0 ? 'text-success' : 'text-danger'}>
+                          ₹{currentPrice.toFixed(0)}
+                        </span>
+                      </div>
                     </div>
                     <div className="text-end">
                       <div className="holding-value">₹{currentVal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
