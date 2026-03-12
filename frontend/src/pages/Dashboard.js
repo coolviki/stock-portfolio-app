@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, Table, Spinner, ButtonGroup, Button } from 'react-bootstrap';
+import { Row, Col, Card, Table, Spinner, Button } from 'react-bootstrap';
 import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
 import { Doughnut, Bar } from 'react-chartjs-2';
 import { apiService } from '../services/apiService';
@@ -13,7 +13,6 @@ const Dashboard = () => {
   const [marketIndices, setMarketIndices] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sortConfig, setSortConfig] = useState({ key: 'dayPnlPercent', direction: 'desc' }); // Default: Day P&L % (highest gains on top)
-  const [valueView, setValueView] = useState('percent'); // 'percent' or 'actual'
   const { user } = useAuth();
 
 
@@ -346,41 +345,13 @@ const Dashboard = () => {
               <h5 className="mb-0 d-none d-md-block">Current Holdings</h5>
             </div>
           </div>
-          {/* Mobile Controls: Day/Total toggle, %/₹ toggle, Sort */}
-          <div className="d-md-none mt-2 d-flex justify-content-between align-items-center">
-            {/* Value View Toggle */}
-            <ButtonGroup size="sm">
-              <Button
-                variant={valueView === 'percent' ? 'primary' : 'outline-secondary'}
-                onClick={() => {
-                  setValueView('percent');
-                  // Update sort key to use percent variant
-                  if (sortConfig.key === 'pnl') setSortConfig(prev => ({ ...prev, key: 'pnlPercent' }));
-                  if (sortConfig.key === 'dayPnl') setSortConfig(prev => ({ ...prev, key: 'dayPnlPercent' }));
-                }}
-                className="view-toggle-btn"
-              >
-                %
-              </Button>
-              <Button
-                variant={valueView === 'actual' ? 'primary' : 'outline-secondary'}
-                onClick={() => {
-                  setValueView('actual');
-                  // Update sort key to use actual variant
-                  if (sortConfig.key === 'pnlPercent') setSortConfig(prev => ({ ...prev, key: 'pnl' }));
-                  if (sortConfig.key === 'dayPnlPercent') setSortConfig(prev => ({ ...prev, key: 'dayPnl' }));
-                }}
-                className="view-toggle-btn"
-              >
-                ₹
-              </Button>
-            </ButtonGroup>
-            {/* Sort Controls */}
+          {/* Mobile Controls: Day/Total sort toggle */}
+          <div className="d-md-none mt-2 d-flex justify-content-end align-items-center">
             <div className="d-flex gap-1">
               <Button
                 variant={(sortConfig.key === 'dayPnl' || sortConfig.key === 'dayPnlPercent') ? 'primary' : 'outline-secondary'}
                 size="sm"
-                onClick={() => handleSort(valueView === 'percent' ? 'dayPnlPercent' : 'dayPnl')}
+                onClick={() => handleSort('dayPnlPercent')}
                 className="sort-btn-label"
               >
                 Day {(sortConfig.key === 'dayPnl' || sortConfig.key === 'dayPnlPercent') && (sortConfig.direction === 'asc' ? '↑' : '↓')}
@@ -388,7 +359,7 @@ const Dashboard = () => {
               <Button
                 variant={(sortConfig.key === 'pnl' || sortConfig.key === 'pnlPercent') ? 'primary' : 'outline-secondary'}
                 size="sm"
-                onClick={() => handleSort(valueView === 'percent' ? 'pnlPercent' : 'pnl')}
+                onClick={() => handleSort('pnlPercent')}
                 className="sort-btn-label"
               >
                 Total {(sortConfig.key === 'pnl' || sortConfig.key === 'pnlPercent') && (sortConfig.direction === 'asc' ? '↑' : '↓')}
