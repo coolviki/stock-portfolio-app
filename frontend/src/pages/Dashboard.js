@@ -414,13 +414,11 @@ const Dashboard = () => {
                       </div>
                     </div>
                     <div className="text-end">
-                      <div className="holding-value">₹{currentVal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
+                      <div className={`holding-value ${displayValue >= 0 ? 'text-success' : 'text-danger'}`}>
+                        {displayValue >= 0 ? '+' : ''}₹{displayValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}
+                      </div>
                       <div className={`holding-pnl-single ${displayValue >= 0 ? 'positive' : 'negative'}`}>
-                        {valueView === 'percent' ? (
-                          <>{displayPercent >= 0 ? '+' : ''}{displayPercent.toFixed(1)}%</>
-                        ) : (
-                          <>{displayValue >= 0 ? '+' : ''}₹{displayValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}</>
-                        )}
+                        {displayPercent >= 0 ? '+' : ''}{displayPercent.toFixed(1)}%
                       </div>
                     </div>
                   </div>
