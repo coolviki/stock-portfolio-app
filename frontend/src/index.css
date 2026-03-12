@@ -86,6 +86,181 @@ code {
   background: linear-gradient(135deg, #f44336 0%, #da190b 100%);
 }
 
+/* New sleek card stat styles */
+.card-stat-new {
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.card-stat-new.invested {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-left: 3px solid #6c757d;
+}
+
+.card-stat-new.current {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border-left: 3px solid #2196F3;
+}
+
+.card-stat-new.holdings {
+  background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+  border-left: 3px solid #9c27b0;
+}
+
+.card-stat-new.profit {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border-left: 3px solid #4CAF50;
+}
+
+.card-stat-new.loss {
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+  border-left: 3px solid #f44336;
+}
+
+.card-stat-new .stat-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #495057;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.card-stat-new .stat-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #212529;
+  line-height: 1.2;
+}
+
+.card-stat-new .stat-percent {
+  font-size: 0.65rem;
+  color: #6c757d;
+  display: block;
+}
+
+.card-stat-new.profit .stat-value,
+.card-stat-new.profit .stat-percent {
+  color: #2e7d32;
+}
+
+.card-stat-new.loss .stat-value,
+.card-stat-new.loss .stat-percent {
+  color: #c62828;
+}
+
+/* Market Index Card Styles */
+.market-index-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  border: 1px solid #e9ecef;
+}
+
+.market-index-card .index-name {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #495057;
+  letter-spacing: 0.5px;
+}
+
+.market-index-card .index-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #212529;
+  margin: 2px 0;
+}
+
+.market-index-card .index-change {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.market-index-card .index-change.positive {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.market-index-card .index-change.negative {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.market-index-card .index-change-value {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.market-index-card .index-change-value.positive {
+  color: #2e7d32;
+}
+
+.market-index-card .index-change-value.negative {
+  color: #c62828;
+}
+
+/* Mobile Holdings Item */
+.holding-item-new {
+  background: #fff;
+}
+
+.holding-item-new:active {
+  background: #f8f9fa;
+}
+
+.holding-item-new .holding-symbol {
+  font-size: 0.9rem;
+  color: #212529;
+}
+
+.holding-item-new .holding-meta {
+  font-size: 0.7rem;
+  color: #6c757d;
+}
+
+.holding-item-new .holding-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #212529;
+}
+
+.holding-item-new .holding-pnl {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.holding-item-new .holding-pnl.positive {
+  color: #2e7d32;
+}
+
+.holding-item-new .holding-pnl.negative {
+  color: #c62828;
+}
+
+.holding-item-new .pnl-percent {
+  font-size: 0.65rem;
+}
+
+/* Sort button styles */
+.sort-btn {
+  font-size: 0.7rem !important;
+  padding: 0.2rem 0.5rem !important;
+}
+
+/* Sortable table header */
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable-header:hover {
+  background-color: #e9ecef;
+}
+
 .navbar-brand {
   font-weight: bold;
   font-size: 1.5rem;
@@ -267,6 +442,49 @@ code {
 
   .holding-item:active {
     background: #f8f9fa;
+  }
+
+  /* New mobile card stat styles */
+  .card-stat-new {
+    border-radius: 8px;
+  }
+
+  .card-stat-new .card-body {
+    padding: 8px 10px !important;
+  }
+
+  .card-stat-new .stat-label {
+    font-size: 0.6rem;
+  }
+
+  .card-stat-new .stat-value {
+    font-size: 0.85rem;
+  }
+
+  .card-stat-new .stat-percent {
+    font-size: 0.6rem;
+  }
+
+  /* Mobile market index adjustments */
+  .market-index-card {
+    padding: 8px 10px;
+  }
+
+  .market-index-card .index-name {
+    font-size: 0.65rem;
+  }
+
+  .market-index-card .index-value {
+    font-size: 0.95rem;
+  }
+
+  .market-index-card .index-change {
+    font-size: 0.6rem;
+    padding: 1px 4px;
+  }
+
+  .market-index-card .index-change-value {
+    font-size: 0.65rem;
   }
 }
 

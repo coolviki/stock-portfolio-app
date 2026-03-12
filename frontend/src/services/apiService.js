@@ -70,6 +70,11 @@ export const apiService = {
     return response.data;
   },
 
+  async getMarketIndices() {
+    const response = await api.get('/market-indices');
+    return response.data;
+  },
+
   async searchStocks(query) {
     if (!query || query.trim().length < 2) {
       return { results: [] };

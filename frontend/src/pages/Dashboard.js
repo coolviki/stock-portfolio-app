@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, Table, Badge, Spinner } from 'react-bootstrap';
+import { Row, Col, Card, Table, Spinner, ButtonGroup, Button } from 'react-bootstrap';
 import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
 import { Doughnut, Bar } from 'react-chartjs-2';
 import { apiService } from '../services/apiService';
@@ -10,13 +10,16 @@ ChartJS.register(ArcElement, ChartTooltip, Legend, CategoryScale, LinearScale, B
 
 const Dashboard = () => {
   const [portfolio, setPortfolio] = useState(null);
+  const [marketIndices, setMarketIndices] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [sortConfig, setSortConfig] = useState({ key: 'symbol', direction: 'asc' });
   const { user } = useAuth();
 
 
 
   useEffect(() => {
     loadPortfolioData();
+    loadMarketIndices();
   }, [user]);
 
   const loadPortfolioData = async () => {
@@ -34,6 +37,53 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadMarketIndices = async () => {
+    try {
+      const data = await apiService.getMarketIndices();
+      setMarketIndices(data);
+    } catch (error) {
+      console.error('Error loading market indices:', error);
+    }
+  };
+
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const getSortedHoldings = (holdings, currentValues, portfolioData) => {
+    const holdingsArray = holdings.map(symbol => {
+      const stock = portfolioData.portfolio[symbol];
+      const currentVal = currentValues[symbol] || 0;
+      const pnl = currentVal - stock.total_invested;
+      const pnlPercent = stock.total_invested > 0 ? (pnl / stock.total_invested) * 100 : 0;
+      return { symbol, stock, currentVal, pnl, pnlPercent };
+    });
+
+    return holdingsArray.sort((a, b) => {
+      let aVal, bVal;
+      switch (sortConfig.key) {
+        case 'pnl':
+          aVal = a.pnl;
+          bVal = b.pnl;
+          break;
+        case 'pnlPercent':
+          aVal = a.pnlPercent;
+          bVal = b.pnlPercent;
+          break;
+        default:
+          aVal = a.symbol;
+          bVal = b.symbol;
+          return sortConfig.direction === 'asc'
+            ? aVal.localeCompare(bVal)
+            : bVal.localeCompare(aVal);
+      }
+      return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+    });
   };
 
   if (loading) {
@@ -56,7 +106,7 @@ const Dashboard = () => {
   const totalInvested = Object.values(portfolio.portfolio || {}).reduce(
     (sum, stock) => sum + stock.total_invested, 0
   );
-  
+
   const currentValue = Object.values(portfolio.current_values || {}).reduce(
     (sum, value) => sum + value, 0
   );
@@ -107,6 +157,8 @@ const Dashboard = () => {
     ]
   };
 
+  const sortedHoldings = getSortedHoldings(portfolioLabels, portfolio.current_values, portfolio);
+
   return (
     <div className="dashboard-container">
       {/* Header - simplified on mobile */}
@@ -116,53 +168,91 @@ const Dashboard = () => {
         <span className="d-sm-none">Dashboard</span>
       </h2>
 
-      {/* Summary Cards - Compact on mobile */}
+      {/* Market Indices - Mobile prominent display */}
+      {marketIndices && (
+        <Row className="mb-3 g-2">
+          <Col xs={6}>
+            <div className="market-index-card">
+              <div className="d-flex justify-content-between align-items-center">
+                <span className="index-name">SENSEX</span>
+                <span className={`index-change ${marketIndices.SENSEX?.change >= 0 ? 'positive' : 'negative'}`}>
+                  {marketIndices.SENSEX?.change >= 0 ? '▲' : '▼'} {Math.abs(marketIndices.SENSEX?.change_percent || 0).toFixed(2)}%
+                </span>
+              </div>
+              <div className="index-value">
+                {(marketIndices.SENSEX?.value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              </div>
+              <div className={`index-change-value ${marketIndices.SENSEX?.change >= 0 ? 'positive' : 'negative'}`}>
+                {marketIndices.SENSEX?.change >= 0 ? '+' : ''}{(marketIndices.SENSEX?.change || 0).toFixed(2)}
+              </div>
+            </div>
+          </Col>
+          <Col xs={6}>
+            <div className="market-index-card">
+              <div className="d-flex justify-content-between align-items-center">
+                <span className="index-name">NIFTY 50</span>
+                <span className={`index-change ${marketIndices.NIFTY?.change >= 0 ? 'positive' : 'negative'}`}>
+                  {marketIndices.NIFTY?.change >= 0 ? '▲' : '▼'} {Math.abs(marketIndices.NIFTY?.change_percent || 0).toFixed(2)}%
+                </span>
+              </div>
+              <div className="index-value">
+                {(marketIndices.NIFTY?.value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              </div>
+              <div className={`index-change-value ${marketIndices.NIFTY?.change >= 0 ? 'positive' : 'negative'}`}>
+                {marketIndices.NIFTY?.change >= 0 ? '+' : ''}{(marketIndices.NIFTY?.change || 0).toFixed(2)}
+              </div>
+            </div>
+          </Col>
+        </Row>
+      )}
+
+      {/* Summary Cards - Compact and sleek on mobile */}
       <Row className="mb-3 mb-md-4 g-2">
         <Col xs={6} md={3} lg={true}>
-          <Card className="card-stat text-center h-100 border-0 shadow-sm">
-            <Card.Body className="p-2 p-md-3">
-              <small className="text-muted d-block mb-1">Invested</small>
-              <strong className="fs-6 fs-md-5">₹{totalInvested.toLocaleString('en-IN', {maximumFractionDigits: 0})}</strong>
+          <Card className="card-stat-new invested text-center h-100 border-0">
+            <Card.Body className="py-2 px-2">
+              <small className="stat-label">Invested</small>
+              <div className="stat-value">₹{totalInvested.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
             </Card.Body>
           </Card>
         </Col>
         <Col xs={6} md={3} lg={true}>
-          <Card className="card-stat text-center h-100 border-0 shadow-sm">
-            <Card.Body className="p-2 p-md-3">
-              <small className="text-muted d-block mb-1">Current</small>
-              <strong className="fs-6 fs-md-5">₹{currentValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}</strong>
+          <Card className="card-stat-new current text-center h-100 border-0">
+            <Card.Body className="py-2 px-2">
+              <small className="stat-label">Current</small>
+              <div className="stat-value">₹{currentValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
             </Card.Body>
           </Card>
         </Col>
         <Col xs={6} md={3} lg={true}>
-          <Card className={`card-stat text-center h-100 border-0 shadow-sm ${totalGains >= 0 ? 'profit' : 'loss'}`}>
-            <Card.Body className="p-2 p-md-3">
-              <small className="text-muted d-block mb-1">P&L</small>
-              <strong className="fs-6 fs-md-5">
+          <Card className={`card-stat-new text-center h-100 border-0 ${totalGains >= 0 ? 'profit' : 'loss'}`}>
+            <Card.Body className="py-2 px-2">
+              <small className="stat-label">Total P&L</small>
+              <div className="stat-value">
                 {totalGains >= 0 ? '+' : ''}₹{totalGains.toLocaleString('en-IN', {maximumFractionDigits: 0})}
-              </strong>
-              <small className="d-block" style={{fontSize: '0.7rem'}}>{totalGainsPercent.toFixed(1)}%</small>
+              </div>
+              <small className="stat-percent">{totalGains >= 0 ? '+' : ''}{totalGainsPercent.toFixed(1)}%</small>
             </Card.Body>
           </Card>
         </Col>
         <Col xs={6} md={3} lg={true}>
-          <Card className={`card-stat text-center h-100 border-0 shadow-sm ${todaysChange >= 0 ? 'profit' : 'loss'}`}>
-            <Card.Body className="p-2 p-md-3">
-              <small className="text-muted d-block mb-1">Today</small>
-              <strong className="fs-6 fs-md-5">
+          <Card className={`card-stat-new text-center h-100 border-0 ${todaysChange >= 0 ? 'profit' : 'loss'}`}>
+            <Card.Body className="py-2 px-2">
+              <small className="stat-label">Today</small>
+              <div className="stat-value">
                 {todaysChange >= 0 ? '+' : ''}₹{todaysChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}
-              </strong>
-              <small className="d-block" style={{fontSize: '0.7rem'}}>{todaysChange >= 0 ? '+' : ''}{todaysChangePercent.toFixed(1)}%</small>
+              </div>
+              <small className="stat-percent">{todaysChange >= 0 ? '+' : ''}{todaysChangePercent.toFixed(1)}%</small>
             </Card.Body>
           </Card>
         </Col>
         {/* Holdings count - hidden on mobile */}
         <Col className="d-none d-lg-block" lg={true}>
-          <Card className="card-stat text-center h-100 border-0 shadow-sm">
-            <Card.Body className="p-2 p-md-3">
-              <small className="text-muted d-block mb-1">Holdings</small>
-              <strong className="fs-6 fs-md-5">{portfolioLabels.length}</strong>
-              <small className="d-block" style={{fontSize: '0.7rem'}}>Securities</small>
+          <Card className="card-stat-new holdings text-center h-100 border-0">
+            <Card.Body className="py-2 px-2">
+              <small className="stat-label">Holdings</small>
+              <div className="stat-value">{portfolioLabels.length}</div>
+              <small className="stat-percent">Securities</small>
             </Card.Body>
           </Card>
         </Col>
@@ -231,35 +321,50 @@ const Dashboard = () => {
         </Col>
       </Row>
 
-      {/* Holdings Table - Clean layout for mobile */}
+      {/* Holdings Table - Clean layout for mobile with sorting */}
       <Card className="border-0 shadow-sm">
-        <Card.Header className="bg-transparent border-bottom">
-          <h6 className="mb-0 d-md-none">Holdings ({portfolioLabels.length})</h6>
-          <h5 className="mb-0 d-none d-md-block">Current Holdings</h5>
+        <Card.Header className="bg-transparent border-bottom d-flex justify-content-between align-items-center">
+          <div>
+            <h6 className="mb-0 d-md-none">Holdings ({portfolioLabels.length})</h6>
+            <h5 className="mb-0 d-none d-md-block">Current Holdings</h5>
+          </div>
+          {/* Mobile Sort Controls */}
+          <div className="d-md-none">
+            <ButtonGroup size="sm">
+              <Button
+                variant={sortConfig.key === 'pnl' ? 'primary' : 'outline-secondary'}
+                onClick={() => handleSort('pnl')}
+                className="sort-btn"
+              >
+                P&L {sortConfig.key === 'pnl' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </Button>
+              <Button
+                variant={sortConfig.key === 'pnlPercent' ? 'primary' : 'outline-secondary'}
+                onClick={() => handleSort('pnlPercent')}
+                className="sort-btn"
+              >
+                % {sortConfig.key === 'pnlPercent' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </Button>
+            </ButtonGroup>
+          </div>
         </Card.Header>
         <Card.Body className="p-0 p-md-3">
-          {/* Mobile: Compact card-based layout */}
+          {/* Mobile: Compact card-based layout with P&L display */}
           <div className="d-md-none">
-            {portfolioLabels.map(symbol => {
-              const stock = portfolio.portfolio[symbol];
-              const currentVal = portfolio.current_values[symbol] || 0;
-              const pnl = currentVal - stock.total_invested;
-              const pnlPercent = stock.total_invested > 0 ? (pnl / stock.total_invested) * 100 : 0;
-              const dailyChange = stock.todays_change || 0;
-              const dailyChangePercent = stock.change_percent || 0;
-
+            {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent }) => {
               return (
-                <div key={symbol} className="holding-item px-3 py-2 border-bottom">
-                  <div className="d-flex justify-content-between align-items-center">
+                <div key={symbol} className="holding-item-new px-3 py-2 border-bottom">
+                  <div className="d-flex justify-content-between align-items-start">
                     <div>
-                      <strong style={{fontSize: '0.9rem'}}>{symbol}</strong>
-                      <small className="text-muted d-block">{stock.quantity} shares</small>
+                      <strong className="holding-symbol">{symbol}</strong>
+                      <div className="holding-meta">{stock.quantity} shares @ ₹{(stock.total_invested / stock.quantity).toFixed(0)}</div>
                     </div>
                     <div className="text-end">
-                      <div style={{fontSize: '0.9rem'}}>₹{currentVal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
-                      <small className={dailyChange >= 0 ? 'text-success' : 'text-danger'} style={{fontSize: '0.75rem'}}>
-                        Today: {dailyChange >= 0 ? '+' : ''}₹{dailyChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}
-                      </small>
+                      <div className="holding-value">₹{currentVal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
+                      <div className={`holding-pnl ${pnl >= 0 ? 'positive' : 'negative'}`}>
+                        {pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN', {maximumFractionDigits: 0})}
+                        <span className="pnl-percent"> ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%)</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -270,7 +375,7 @@ const Dashboard = () => {
             )}
           </div>
 
-          {/* Desktop: Full table */}
+          {/* Desktop: Full table with sortable headers */}
           <div className="d-none d-md-block table-responsive">
             <Table striped hover size="sm" className="mb-0">
               <thead>
@@ -282,17 +387,19 @@ const Dashboard = () => {
                   <th className="d-none d-lg-table-cell">Invested</th>
                   <th>Value</th>
                   <th>Day P&L</th>
-                  <th>Total P&L</th>
+                  <th
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => handleSort('pnl')}
+                    className="sortable-header"
+                  >
+                    Total P&L {sortConfig.key === 'pnl' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {portfolioLabels.map(symbol => {
-                  const stock = portfolio.portfolio[symbol];
-                  const currentVal = portfolio.current_values[symbol] || 0;
+                {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent }) => {
                   const currentPrice = stock.quantity > 0 ? currentVal / stock.quantity : 0;
                   const avgPrice = stock.quantity > 0 ? stock.total_invested / stock.quantity : 0;
-                  const pnl = currentVal - stock.total_invested;
-                  const pnlPercent = stock.total_invested > 0 ? (pnl / stock.total_invested) * 100 : 0;
                   const dailyChange = stock.todays_change || 0;
                   const dailyChangePercent = stock.change_percent || 0;
 
