@@ -182,7 +182,7 @@ const Dashboard = () => {
       {/* Market Indices - Mobile prominent display */}
       {marketIndices && (
         <Row className="mb-3 g-2">
-          <Col xs={6}>
+          <Col xs={6} md={3}>
             <div className="market-index-card">
               <div className="d-flex justify-content-between align-items-center">
                 <span className="index-name">SENSEX</span>
@@ -198,7 +198,7 @@ const Dashboard = () => {
               </div>
             </div>
           </Col>
-          <Col xs={6}>
+          <Col xs={6} md={3}>
             <div className="market-index-card">
               <div className="d-flex justify-content-between align-items-center">
                 <span className="index-name">NIFTY 50</span>
@@ -211,6 +211,38 @@ const Dashboard = () => {
               </div>
               <div className={`index-change-value ${marketIndices.NIFTY?.change >= 0 ? 'positive' : 'negative'}`}>
                 {marketIndices.NIFTY?.change >= 0 ? '+' : ''}{(marketIndices.NIFTY?.change || 0).toFixed(2)}
+              </div>
+            </div>
+          </Col>
+          <Col xs={6} md={3}>
+            <div className="market-index-card">
+              <div className="d-flex justify-content-between align-items-center">
+                <span className="index-name">NASDAQ</span>
+                <span className={`index-change ${marketIndices.NASDAQ?.change >= 0 ? 'positive' : 'negative'}`}>
+                  {marketIndices.NASDAQ?.change >= 0 ? '▲' : '▼'} {Math.abs(marketIndices.NASDAQ?.change_percent || 0).toFixed(2)}%
+                </span>
+              </div>
+              <div className="index-value">
+                {(marketIndices.NASDAQ?.value || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+              </div>
+              <div className={`index-change-value ${marketIndices.NASDAQ?.change >= 0 ? 'positive' : 'negative'}`}>
+                {marketIndices.NASDAQ?.change >= 0 ? '+' : ''}{(marketIndices.NASDAQ?.change || 0).toFixed(2)}
+              </div>
+            </div>
+          </Col>
+          <Col xs={6} md={3}>
+            <div className="market-index-card">
+              <div className="d-flex justify-content-between align-items-center">
+                <span className="index-name">DOW</span>
+                <span className={`index-change ${marketIndices.DJI?.change >= 0 ? 'positive' : 'negative'}`}>
+                  {marketIndices.DJI?.change >= 0 ? '▲' : '▼'} {Math.abs(marketIndices.DJI?.change_percent || 0).toFixed(2)}%
+                </span>
+              </div>
+              <div className="index-value">
+                {(marketIndices.DJI?.value || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+              </div>
+              <div className={`index-change-value ${marketIndices.DJI?.change >= 0 ? 'positive' : 'negative'}`}>
+                {marketIndices.DJI?.change >= 0 ? '+' : ''}{(marketIndices.DJI?.change || 0).toFixed(2)}
               </div>
             </div>
           </Col>

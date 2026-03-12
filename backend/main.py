@@ -1098,7 +1098,9 @@ def get_market_indices():
 
     indices = {
         "SENSEX": {"symbol": "^BSESN", "name": "BSE SENSEX"},
-        "NIFTY": {"symbol": "^NSEI", "name": "NIFTY 50"}
+        "NIFTY": {"symbol": "^NSEI", "name": "NIFTY 50"},
+        "NASDAQ": {"symbol": "^IXIC", "name": "NASDAQ"},
+        "DJI": {"symbol": "^DJI", "name": "DOW JONES"}
     }
 
     result = {}
