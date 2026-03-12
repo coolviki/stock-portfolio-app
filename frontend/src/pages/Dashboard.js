@@ -392,40 +392,29 @@ const Dashboard = () => {
           </div>
         </Card.Header>
         <Card.Body className="p-0 p-md-3">
-          {/* Mobile: Two-row layout showing both Day and Total P&L */}
+          {/* Mobile: Single P&L row based on Day/Total selection */}
           <div className="d-md-none">
             {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent }) => {
+              const isDay = sortConfig.key === 'dayPnl' || sortConfig.key === 'dayPnlPercent';
+              const displayValue = isDay ? dailyChange : pnl;
+              const displayPercent = isDay ? dailyChangePercent : pnlPercent;
+
               return (
                 <div key={symbol} className="holding-item-new px-3 py-2 border-bottom">
-                  <div className="d-flex justify-content-between align-items-start mb-1">
+                  <div className="d-flex justify-content-between align-items-center">
                     <div>
                       <strong className="holding-symbol">{symbol}</strong>
                       <div className="holding-meta">{stock.quantity} shares @ ₹{(stock.total_invested / stock.quantity).toFixed(0)}</div>
                     </div>
                     <div className="text-end">
                       <div className="holding-value">₹{currentVal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
-                    </div>
-                  </div>
-                  <div className="pnl-rows">
-                    <div className="pnl-row">
-                      <span className="pnl-label">Day</span>
-                      <span className={`pnl-value ${dailyChange >= 0 ? 'positive' : 'negative'}`}>
+                      <div className={`holding-pnl-single ${displayValue >= 0 ? 'positive' : 'negative'}`}>
                         {valueView === 'percent' ? (
-                          <>{dailyChangePercent >= 0 ? '+' : ''}{dailyChangePercent.toFixed(1)}%</>
+                          <>{displayPercent >= 0 ? '+' : ''}{displayPercent.toFixed(1)}%</>
                         ) : (
-                          <>{dailyChange >= 0 ? '+' : ''}₹{dailyChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}</>
+                          <>{displayValue >= 0 ? '+' : ''}₹{displayValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}</>
                         )}
-                      </span>
-                    </div>
-                    <div className="pnl-row">
-                      <span className="pnl-label">Total</span>
-                      <span className={`pnl-value ${pnl >= 0 ? 'positive' : 'negative'}`}>
-                        {valueView === 'percent' ? (
-                          <>{pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%</>
-                        ) : (
-                          <>{pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN', {maximumFractionDigits: 0})}</>
-                        )}
-                      </span>
+                      </div>
                     </div>
                   </div>
                 </div>

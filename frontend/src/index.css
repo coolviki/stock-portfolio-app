@@ -293,6 +293,20 @@ code {
   font-weight: 600;
 }
 
+/* Single P&L display for mobile */
+.holding-item-new .holding-pnl-single {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.holding-item-new .holding-pnl-single.positive {
+  color: #2e7d32;
+}
+
+.holding-item-new .holding-pnl-single.negative {
+  color: #c62828;
+}
+
 /* Sort button styles */
 .sort-btn {
   font-size: 0.7rem !important;
