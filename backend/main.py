@@ -124,7 +124,7 @@ try:
                     logger.info(f"Scheduled fetch completed: {results['events_created']} events created "
                                f"for {results['securities_processed']} securities")
                 else:
-                    logger.warning("BSE API not available for scheduled fetch")
+                    logger.warning("BSE API not reachable for scheduled fetch")
             finally:
                 db.close()
         except Exception as e:
@@ -2216,7 +2216,7 @@ def fetch_corporate_events_for_security(
     if not fetcher.is_available():
         raise HTTPException(
             status_code=503,
-            detail="BSE API not available. Please install the 'bse' package."
+            detail="BSE API is not reachable. Please try again later."
         )
 
     # Determine from_date
@@ -2257,7 +2257,7 @@ def fetch_corporate_events_for_all_securities(
     if not fetcher.is_available():
         raise HTTPException(
             status_code=503,
-            detail="BSE API not available. Please install the 'bse' package."
+            detail="BSE API is not reachable. Please try again later."
         )
 
     results = fetcher.fetch_all_securities(force=force)
