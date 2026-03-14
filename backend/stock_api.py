@@ -2,61 +2,14 @@ import requests
 import json
 from typing import Dict, Optional
 
-# ISIN to Symbol mapping for Indian stocks - Extended database
-ISIN_TO_SYMBOL = {
-    # Major Indian stocks with ISIN mapping
-    'INE925R01014': 'CMS',  # CMS Info Systems Ltd
-    'INE002A01018': 'RELIANCE',  # Reliance Industries
-    'INE467B01029': 'TCS',  # Tata Consultancy Services
-    'INE009A01021': 'INFY',  # Infosys
-    'INE040A01034': 'HDFC',  # HDFC Bank
-    'INE090A01013': 'ICICIBANK',  # ICICI Bank
-    'INE154A01025': 'ITC',  # ITC Limited
-    'INE075A01022': 'WIPRO',  # Wipro Limited
-    'INE296A01024': 'BAJFINANCE',  # Bajaj Finance
-    'INE585B01010': 'MARUTI',  # Maruti Suzuki
-    'INE742F01042': 'ADANIPORTS',  # Adani Ports
-    'INE021A01026': 'ASIANPAINT',  # Asian Paints
-    'INE918I01018': 'BAJAJFINSV',  # Bajaj Finserv
-    'INE397D01024': 'BHARTIARTL',  # Bharti Airtel
-    'INE029A01011': 'BPCL',  # Bharat Petroleum
-    'INE216A01030': 'BRITANNIA',  # Britannia Industries
-    'INE059A01026': 'CIPLA',  # Cipla
-    'INE522F01014': 'COALINDIA',  # Coal India
-    'INE361B01024': 'DIVISLAB',  # Divi's Laboratories
-    'INE089A01023': 'DRREDDY',  # Dr. Reddy's Labs
-    'INE066A01021': 'EICHERMOT',  # Eicher Motors
-    'INE047A01021': 'GRASIM',  # Grasim Industries
-    'INE860A01027': 'HCLTECH',  # HCL Technologies
-    'INE040A01034': 'HDFCBANK',  # HDFC Bank
-    'INE795G01014': 'HDFCLIFE',  # HDFC Life
-    'INE158A01026': 'HEROMOTOCO',  # Hero MotoCorp
-    'INE038A01020': 'HINDALCO',  # Hindalco Industries
-    'INE030A01027': 'HINDUNILVR',  # Hindustan Unilever
-    'INE095A01012': 'INDUSINDBK',  # IndusInd Bank
-    'INE213A01029': 'IOC',  # Indian Oil Corp
-    'INE019A01038': 'JSWSTEEL',  # JSW Steel
-    'INE237A01028': 'KOTAKBANK',  # Kotak Mahindra Bank
-    'INE018A01030': 'LT',  # Larsen & Toubro
-    'INE101A01026': 'M&M',  # Mahindra & Mahindra
-    'INE239A01016': 'NESTLEIND',  # Nestle India
-    'INE733E01010': 'NTPC',  # NTPC
-    'INE213A01029': 'ONGC',  # Oil & Natural Gas Corp
-    'INE752E01010': 'POWERGRID',  # Power Grid Corp
-    'INE123W01016': 'SBILIFE',  # SBI Life Insurance
-    'INE062A01020': 'SBIN',  # State Bank of India
-    'INE044A01036': 'SUNPHARMA',  # Sun Pharmaceutical
-    'INE155A01022': 'TATAMOTORS',  # Tata Motors
-    'INE081A01020': 'TATASTEEL',  # Tata Steel
-    'INE669C01036': 'TECHM',  # Tech Mahindra
-    'INE280A01028': 'TITAN',  # Titan Company
-    'INE481G01011': 'ULTRACEMCO',  # UltraTech Cement
-    'INE628A01036': 'UPL',  # UPL Limited
-    'INF204KB17I5': 'GOLDBEES',  # Nippon India ETF Gold BeES
-}
+# Import stock database and generate ISIN mappings dynamically
+from stock_providers.indian_stocks_db import INDIAN_STOCKS
+
+# ISIN to Symbol mapping - generated from comprehensive stock database
+ISIN_TO_SYMBOL = {stock['isin']: stock['symbol'] for stock in INDIAN_STOCKS}
 
 # Symbol to ISIN reverse mapping for lookup
-SYMBOL_TO_ISIN = {v: k for k, v in ISIN_TO_SYMBOL.items()}
+SYMBOL_TO_ISIN = {stock['symbol']: stock['isin'] for stock in INDIAN_STOCKS}
 
 def get_current_price(symbol: str) -> float:
     """
