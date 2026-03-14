@@ -28,6 +28,47 @@ HEADERS = {
     "Referer": "https://www.bseindia.com/"
 }
 
+# Known BSE scrip codes for securities (fallback when search API fails)
+# Format: ticker/name pattern -> BSE scrip code
+KNOWN_SCRIP_CODES = {
+    'BECTORFOOD': '543253',
+    'MRS. BECTORS': '543253',
+    'MRS BECTORS': '543253',
+    'RELIANCE': '500325',
+    'TCS': '532540',
+    'INFY': '500209',
+    'INFOSYS': '500209',
+    'HDFCBANK': '500180',
+    'ICICIBANK': '532174',
+    'ITC': '500875',
+    'SBIN': '500112',
+    'BHARTIARTL': '532454',
+    'KOTAKBANK': '500247',
+    'LT': '500510',
+    'AXISBANK': '532215',
+    'ASIANPAINT': '500820',
+    'MARUTI': '532500',
+    'SUNPHARMA': '524715',
+    'TITAN': '500114',
+    'BAJFINANCE': '500034',
+    'WIPRO': '507685',
+    'TATAMOTORS': '500570',
+    'TATASTEEL': '500470',
+    'NTPC': '532555',
+    'POWERGRID': '532898',
+    'TECHM': '532755',
+    'HCLTECH': '532281',
+    'ONGC': '500312',
+    'COALINDIA': '533278',
+    'JSWSTEEL': '500228',
+    'DIVISLAB': '532488',
+    'DRREDDY': '500124',
+    'BRITANNIA': '500825',
+    'CIPLA': '500087',
+    'AJANTPHARM': '532331',
+    'AJANTA': '532331',
+}
+
 
 class CorporateEventsFetcherHTTP:
     """Fetches and stores corporate events from BSE India via HTTP"""
@@ -80,15 +121,32 @@ class CorporateEventsFetcherHTTP:
 
     def get_scrip_code(self, security: Security) -> Optional[str]:
         """Get BSE scrip code for a security"""
+        # First check if already stored in database
         if security.bse_scrip_code:
             return security.bse_scrip_code
 
-        # Try to find scrip code by ticker or name
-        search_terms = [
-            security.security_ticker,
-            security.security_name[:15] if security.security_name else None
-        ]
+        ticker = security.security_ticker.upper() if security.security_ticker else ""
+        name = security.security_name.upper() if security.security_name else ""
 
+        # Check exact ticker match first (highest priority)
+        if ticker and ticker in KNOWN_SCRIP_CODES:
+            scrip_code = KNOWN_SCRIP_CODES[ticker]
+            security.bse_scrip_code = scrip_code
+            self.db.commit()
+            logger.info(f"Found BSE scrip code {scrip_code} for {security.security_name} from ticker match")
+            return scrip_code
+
+        # Check if any known key is contained in the security name (for longer patterns)
+        # Only match keys that are at least 5 chars to avoid false matches like "LT" in "LIMITED"
+        for key, code in KNOWN_SCRIP_CODES.items():
+            if len(key) >= 5 and key in name:
+                security.bse_scrip_code = code
+                self.db.commit()
+                logger.info(f"Found BSE scrip code {code} for {security.security_name} from name pattern match")
+                return code
+
+        # Try search API as last resort
+        search_terms = [ticker, name[:15]] if name else [ticker]
         for term in search_terms:
             if not term:
                 continue
@@ -97,7 +155,7 @@ class CorporateEventsFetcherHTTP:
                 # Save the scrip code for future use
                 security.bse_scrip_code = scrip_code
                 self.db.commit()
-                logger.info(f"Found BSE scrip code {scrip_code} for {security.security_name}")
+                logger.info(f"Found BSE scrip code {scrip_code} for {security.security_name} from API")
                 return scrip_code
 
         return None
