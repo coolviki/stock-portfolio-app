@@ -172,6 +172,9 @@ INDIAN_STOCKS = [
     {'symbol': 'PFIZER', 'name': 'Pfizer Limited', 'isin': 'INE182A01018'},
     {'symbol': 'GLAXO', 'name': 'GlaxoSmithKline Pharmaceuticals Limited', 'isin': 'INE159A01016'},
     {'symbol': 'SANOFI', 'name': 'Sanofi India Limited', 'isin': 'INE058A01010'},
+
+    # ETFs
+    {'symbol': 'GOLDBEES', 'name': 'Nippon India ETF Gold BeES', 'isin': 'INF204KB17I5'},
 ]
 
 def get_stocks_for_provider(suffix='.NS'):

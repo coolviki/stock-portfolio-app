@@ -411,7 +411,13 @@ const Dashboard = () => {
             <Table striped hover size="sm" className="mb-0">
               <thead>
                 <tr>
-                  <th>Security</th>
+                  <th
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => handleSort('name')}
+                    className="sortable-header"
+                  >
+                    Security {sortConfig.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  </th>
                   <th>Qty</th>
                   <th>Avg. Price</th>
                   <th>Current Price</th>

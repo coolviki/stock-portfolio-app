@@ -52,6 +52,7 @@ ISIN_TO_SYMBOL = {
     'INE280A01028': 'TITAN',  # Titan Company
     'INE481G01011': 'ULTRACEMCO',  # UltraTech Cement
     'INE628A01036': 'UPL',  # UPL Limited
+    'INF204KB17I5': 'GOLDBEES',  # Nippon India ETF Gold BeES
 }
 
 # Symbol to ISIN reverse mapping for lookup
