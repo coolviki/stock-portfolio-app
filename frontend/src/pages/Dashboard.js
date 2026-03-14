@@ -346,7 +346,14 @@ const Dashboard = () => {
         <Card.Header className="bg-transparent border-bottom">
           <div className="d-flex justify-content-between align-items-center">
             <div>
-              <h6 className="mb-0 d-md-none">Holdings ({portfolioLabels.length})</h6>
+              <h6 className="mb-0 d-md-none">
+                Holdings ({portfolioLabels.length})
+                {portfolio.overall_xirr !== null && portfolio.overall_xirr !== undefined && (
+                  <span className={`ms-2 ${portfolio.overall_xirr >= 0 ? 'text-success' : 'text-danger'}`}>
+                    XIRR: {portfolio.overall_xirr >= 0 ? '+' : ''}{portfolio.overall_xirr.toFixed(1)}%
+                  </span>
+                )}
+              </h6>
               <h5 className="mb-0 d-none d-md-block">Current Holdings</h5>
             </div>
             {portfolio.overall_xirr !== null && portfolio.overall_xirr !== undefined && (
@@ -358,7 +365,7 @@ const Dashboard = () => {
               </div>
             )}
           </div>
-          {/* Mobile Controls: Day/Total sort toggle */}
+          {/* Mobile Controls: Day/Total/XIRR sort toggle */}
           <div className="d-md-none mt-2 d-flex justify-content-end align-items-center">
             <div className="d-flex gap-1">
               <Button
@@ -377,16 +384,23 @@ const Dashboard = () => {
               >
                 Total {(sortConfig.key === 'pnl' || sortConfig.key === 'pnlPercent') && (sortConfig.direction === 'asc' ? '↑' : '↓')}
               </Button>
+              <Button
+                variant={sortConfig.key === 'xirr' ? 'primary' : 'outline-secondary'}
+                size="sm"
+                onClick={() => handleSort('xirr')}
+                className="sort-btn-label"
+              >
+                XIRR {sortConfig.key === 'xirr' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </Button>
             </div>
           </div>
         </Card.Header>
         <Card.Body className="p-0 p-md-3">
-          {/* Mobile: Single P&L row based on Day/Total selection */}
+          {/* Mobile: Single P&L row based on Day/Total/XIRR selection */}
           <div className="d-md-none">
-            {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent }) => {
+            {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent, xirr }) => {
               const isDay = sortConfig.key === 'dayPnl' || sortConfig.key === 'dayPnlPercent';
-              const displayValue = isDay ? dailyChange : pnl;
-              const displayPercent = isDay ? dailyChangePercent : pnlPercent;
+              const isXirr = sortConfig.key === 'xirr';
               const currentPrice = stock.quantity > 0 ? currentVal / stock.quantity : 0;
               const avgPrice = stock.quantity > 0 ? stock.total_invested / stock.quantity : 0;
 
@@ -403,12 +417,25 @@ const Dashboard = () => {
                       </div>
                     </div>
                     <div className="text-end">
-                      <div className={`holding-value ${displayValue >= 0 ? 'text-success' : 'text-danger'}`}>
-                        {displayValue >= 0 ? '+' : ''}₹{displayValue.toLocaleString('en-IN', {maximumFractionDigits: 0})}
-                      </div>
-                      <div className={`holding-pnl-single ${displayValue >= 0 ? 'positive' : 'negative'}`}>
-                        {displayPercent >= 0 ? '+' : ''}{displayPercent.toFixed(1)}%
-                      </div>
+                      {isXirr ? (
+                        <>
+                          <div className={`holding-value ${xirr !== null ? (xirr >= 0 ? 'text-success' : 'text-danger') : 'text-muted'}`}>
+                            {xirr !== null ? `${xirr >= 0 ? '+' : ''}${xirr.toFixed(1)}%` : 'N/A'}
+                          </div>
+                          <div className="holding-pnl-single text-muted">
+                            <small>XIRR</small>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className={`holding-value ${(isDay ? dailyChange : pnl) >= 0 ? 'text-success' : 'text-danger'}`}>
+                            {(isDay ? dailyChange : pnl) >= 0 ? '+' : ''}₹{(isDay ? dailyChange : pnl).toLocaleString('en-IN', {maximumFractionDigits: 0})}
+                          </div>
+                          <div className={`holding-pnl-single ${(isDay ? dailyChange : pnl) >= 0 ? 'positive' : 'negative'}`}>
+                            {(isDay ? dailyChangePercent : pnlPercent) >= 0 ? '+' : ''}{(isDay ? dailyChangePercent : pnlPercent).toFixed(1)}%
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
