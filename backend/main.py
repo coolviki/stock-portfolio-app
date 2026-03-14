@@ -32,7 +32,7 @@ from price_config import price_config
 from stock_providers.manager import stock_price_manager
 from corporate_events import CorporateEventProcessor, CorporateEventError
 from lot_capital_gains import LotCapitalGainsCalculator, get_adjusted_portfolio_summary
-from corporate_events_fetcher import CorporateEventsFetcher, get_fetcher
+from corporate_events_fetcher_http import CorporateEventsFetcherHTTP, get_http_fetcher as get_fetcher
 from xirr_calculator import calculate_xirr
 
 load_dotenv()
