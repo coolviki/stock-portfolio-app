@@ -64,7 +64,8 @@ const Dashboard = () => {
       const pnlPercent = stock.total_invested > 0 ? (pnl / stock.total_invested) * 100 : 0;
       const dailyChange = stock.todays_change || 0;
       const dailyChangePercent = stock.change_percent || 0;
-      return { symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent };
+      const xirr = stock.xirr || null;
+      return { symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent, xirr };
     });
 
     return holdingsArray.sort((a, b) => {
@@ -85,6 +86,10 @@ const Dashboard = () => {
         case 'dayPnlPercent':
           aVal = a.dailyChangePercent;
           bVal = b.dailyChangePercent;
+          break;
+        case 'xirr':
+          aVal = a.xirr ?? -Infinity;
+          bVal = b.xirr ?? -Infinity;
           break;
         default:
           aVal = a.symbol;
@@ -344,6 +349,14 @@ const Dashboard = () => {
               <h6 className="mb-0 d-md-none">Holdings ({portfolioLabels.length})</h6>
               <h5 className="mb-0 d-none d-md-block">Current Holdings</h5>
             </div>
+            {portfolio.overall_xirr !== null && portfolio.overall_xirr !== undefined && (
+              <div className="d-none d-md-block text-end">
+                <small className="text-muted">Portfolio XIRR</small>
+                <div className={`fw-bold ${portfolio.overall_xirr >= 0 ? 'text-success' : 'text-danger'}`}>
+                  {portfolio.overall_xirr >= 0 ? '+' : ''}{portfolio.overall_xirr.toFixed(1)}%
+                </div>
+              </div>
+            )}
           </div>
           {/* Mobile Controls: Day/Total sort toggle */}
           <div className="d-md-none mt-2 d-flex justify-content-end align-items-center">
@@ -437,10 +450,17 @@ const Dashboard = () => {
                   >
                     Total P&L {sortConfig.key === 'pnl' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                   </th>
+                  <th
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => handleSort('xirr')}
+                    className="sortable-header"
+                  >
+                    XIRR {sortConfig.key === 'xirr' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent }) => {
+                {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent, xirr }) => {
                   const currentPrice = stock.quantity > 0 ? currentVal / stock.quantity : 0;
                   const avgPrice = stock.quantity > 0 ? stock.total_invested / stock.quantity : 0;
 
@@ -463,6 +483,13 @@ const Dashboard = () => {
                         <small className="d-block" style={{fontSize: '0.7rem'}}>
                           ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%)
                         </small>
+                      </td>
+                      <td className={xirr !== null ? (xirr >= 0 ? 'text-success' : 'text-danger') : 'text-muted'}>
+                        {xirr !== null ? (
+                          <>{xirr >= 0 ? '+' : ''}{xirr.toFixed(1)}%</>
+                        ) : (
+                          <small>N/A</small>
+                        )}
                       </td>
                     </tr>
                   );

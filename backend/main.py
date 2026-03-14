@@ -33,6 +33,7 @@ from stock_providers.manager import stock_price_manager
 from corporate_events import CorporateEventProcessor, CorporateEventError
 from lot_capital_gains import LotCapitalGainsCalculator, get_adjusted_portfolio_summary
 from corporate_events_fetcher import CorporateEventsFetcher, get_fetcher
+from xirr_calculator import calculate_xirr
 
 load_dotenv()
 
@@ -1228,13 +1229,15 @@ def get_portfolio_summary(
 
 def _get_portfolio_from_lots(user_id: int, db: Session):
     """Calculate portfolio summary from lots (includes corporate event adjustments)"""
-    # Get all lots with remaining quantity
-    lots = db.query(Lot).filter(
-        Lot.user_id == user_id,
-        Lot.remaining_quantity > 0
-    ).all()
+    # Get all lots (including closed ones for XIRR calculation)
+    all_lots = db.query(Lot).filter(Lot.user_id == user_id).all()
+
+    # Get lots with remaining quantity for current holdings
+    lots = [lot for lot in all_lots if lot.remaining_quantity > 0]
 
     portfolio = {}
+    # Track cash flows per security for XIRR calculation
+    security_cash_flows = {}
 
     for lot in lots:
         security = db.query(Security).filter(Security.id == lot.security_id).first()
@@ -1251,16 +1254,39 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
                 "security_symbol": security.security_ticker,
                 "transactions": []
             }
+            security_cash_flows[symbol] = []
 
         # Use adjusted values from lots (reflects corporate events like bonus/split)
         portfolio[symbol]["quantity"] += lot.remaining_quantity
         portfolio[symbol]["total_invested"] += lot.adjusted_cost_per_unit * lot.remaining_quantity
 
-    # Calculate realized gains from sale allocations
+    # Collect all cash flows for XIRR (including all lots, not just open ones)
+    for lot in all_lots:
+        security = db.query(Security).filter(Security.id == lot.security_id).first()
+        if not security:
+            continue
+        symbol = security.security_name
+        if symbol not in security_cash_flows:
+            security_cash_flows[symbol] = []
+        # BUY transaction - negative cash flow (original cost)
+        security_cash_flows[symbol].append((lot.purchase_date, -lot.original_total_cost))
+
+    # Calculate realized gains from sale allocations and add to cash flows
     realized_gains = 0
     sale_allocations = db.query(SaleAllocation).join(Lot).filter(Lot.user_id == user_id).all()
     for alloc in sale_allocations:
         realized_gains += alloc.realized_gain_loss or 0
+        # SELL - positive cash flow
+        lot = db.query(Lot).filter(Lot.id == alloc.lot_id).first()
+        if lot:
+            security = db.query(Security).filter(Security.id == lot.security_id).first()
+            if security:
+                symbol = security.security_name
+                if symbol not in security_cash_flows:
+                    security_cash_flows[symbol] = []
+                sell_trans = db.query(Transaction).filter(Transaction.id == alloc.sell_transaction_id).first()
+                if sell_trans:
+                    security_cash_flows[symbol].append((sell_trans.transaction_date, alloc.quantity_sold * alloc.sale_price_per_unit))
 
     # Calculate unrealized gains, current values, and today's change
     unrealized_gains = 0
@@ -1268,6 +1294,9 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
     todays_change = 0
     todays_change_percent = 0
     previous_close_total = 0
+    xirr_values = {}
+    overall_cash_flows = []
+    now = datetime.now()
 
     for symbol, data in portfolio.items():
         if data["quantity"] > 0:
@@ -1294,6 +1323,19 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
 
                     if price_data.previous_close:
                         previous_close_total += price_data.previous_close * data["quantity"]
+
+                    # Calculate XIRR for this stock
+                    if symbol in security_cash_flows and security_cash_flows[symbol]:
+                        stock_cf = security_cash_flows[symbol].copy()
+                        stock_cf.append((now, current_value))  # Current value as final positive flow
+                        overall_cash_flows.extend(security_cash_flows[symbol])
+                        try:
+                            xirr = calculate_xirr(stock_cf)
+                            if xirr is not None:
+                                xirr_values[symbol] = round(xirr * 100, 2)  # Convert to percentage
+                                data["xirr"] = xirr_values[symbol]
+                        except Exception as e:
+                            logger.debug(f"XIRR calculation failed for {symbol}: {e}")
                 else:
                     # Fallback to simple price fetch
                     current_price, method = stock_price_manager.get_price_with_waterfall(
@@ -1305,6 +1347,19 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
                     current_value = current_price * data["quantity"]
                     current_values[symbol] = current_value
                     unrealized_gains += current_value - data["total_invested"]
+
+                    # Calculate XIRR for this stock
+                    if symbol in security_cash_flows and security_cash_flows[symbol] and current_value > 0:
+                        stock_cf = security_cash_flows[symbol].copy()
+                        stock_cf.append((now, current_value))
+                        overall_cash_flows.extend(security_cash_flows[symbol])
+                        try:
+                            xirr = calculate_xirr(stock_cf)
+                            if xirr is not None:
+                                xirr_values[symbol] = round(xirr * 100, 2)
+                                data["xirr"] = xirr_values[symbol]
+                        except Exception as e:
+                            logger.debug(f"XIRR calculation failed for {symbol}: {e}")
             except Exception as e:
                 logger.error(f"Error fetching price for {symbol}: {e}")
                 current_values[symbol] = 0
@@ -1313,13 +1368,27 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
     if previous_close_total > 0:
         todays_change_percent = (todays_change / previous_close_total) * 100
 
+    # Calculate overall portfolio XIRR
+    overall_xirr = None
+    total_current_value = sum(current_values.values())
+    if overall_cash_flows and total_current_value > 0:
+        overall_cash_flows.append((now, total_current_value))
+        try:
+            xirr = calculate_xirr(overall_cash_flows)
+            if xirr is not None:
+                overall_xirr = round(xirr * 100, 2)
+        except Exception as e:
+            logger.debug(f"Overall XIRR calculation failed: {e}")
+
     return {
         "portfolio": portfolio,
         "realized_gains": realized_gains,
         "unrealized_gains": unrealized_gains,
         "current_values": current_values,
         "todays_change": todays_change,
-        "todays_change_percent": todays_change_percent
+        "todays_change_percent": todays_change_percent,
+        "xirr_values": xirr_values,
+        "overall_xirr": overall_xirr
     }
 
 
