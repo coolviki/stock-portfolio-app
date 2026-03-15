@@ -1389,6 +1389,10 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
     # Track cash flows per security for XIRR calculation
     security_cash_flows = {}
 
+    # Track holding days for weighted average calculation
+    security_holding_data = {}  # symbol -> {"total_qty_days": X, "total_qty": Y}
+    today = datetime.now()
+
     for lot in lots:
         security = db.query(Security).filter(Security.id == lot.security_id).first()
         if not security:
@@ -1405,10 +1409,22 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
                 "transactions": []
             }
             security_cash_flows[symbol] = []
+            security_holding_data[symbol] = {"total_qty_days": 0, "total_qty": 0}
 
         # Use adjusted values from lots (reflects corporate events like bonus/split)
         portfolio[symbol]["quantity"] += lot.remaining_quantity
         portfolio[symbol]["total_invested"] += lot.adjusted_cost_per_unit * lot.remaining_quantity
+
+        # Calculate holding days for this lot
+        purchase_date = lot.purchase_date if isinstance(lot.purchase_date, datetime) else datetime.combine(lot.purchase_date, datetime.min.time())
+        days_held = (today - purchase_date).days
+        security_holding_data[symbol]["total_qty_days"] += days_held * lot.remaining_quantity
+        security_holding_data[symbol]["total_qty"] += lot.remaining_quantity
+
+    # Calculate average holding days for each security
+    for symbol, data in security_holding_data.items():
+        if data["total_qty"] > 0:
+            portfolio[symbol]["avg_holding_days"] = int(data["total_qty_days"] / data["total_qty"])
 
     # Collect all cash flows for XIRR (including all lots, not just open ones)
     for lot in all_lots:

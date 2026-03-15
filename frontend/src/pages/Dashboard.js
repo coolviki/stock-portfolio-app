@@ -77,7 +77,8 @@ const Dashboard = () => {
       const dailyChange = stock.todays_change || 0;
       const dailyChangePercent = stock.change_percent || 0;
       const xirr = stock.xirr || null;
-      return { symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent, xirr };
+      const avgHoldingDays = stock.avg_holding_days || null;
+      return { symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent, xirr, avgHoldingDays };
     });
 
     return holdingsArray.sort((a, b) => {
@@ -410,7 +411,7 @@ const Dashboard = () => {
         <Card.Body className="p-0 p-md-3">
           {/* Mobile: Single P&L row based on Day/Total/XIRR selection */}
           <div className="d-md-none">
-            {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent, xirr }) => {
+            {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent, xirr, avgHoldingDays }) => {
               const isDay = sortConfig.key === 'dayPnl' || sortConfig.key === 'dayPnlPercent';
               const isXirr = sortConfig.key === 'xirr';
               const currentPrice = stock.quantity > 0 ? currentVal / stock.quantity : 0;
@@ -435,7 +436,7 @@ const Dashboard = () => {
                             {xirr !== null ? `${xirr >= 0 ? '+' : ''}${xirr.toFixed(1)}%` : 'N/A'}
                           </div>
                           <div className="holding-pnl-single text-muted">
-                            <small>XIRR</small>
+                            <small>{avgHoldingDays !== null ? `${avgHoldingDays} days` : 'XIRR'}</small>
                           </div>
                         </>
                       ) : (
