@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Table, Button, Alert, Spinner, Badge, Pagination, Form } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
-import apiService from '../services/apiService';
+import { apiService } from '../services/apiService';
 
 const DBAdmin = () => {
   const { user, isAdmin } = useAuth();
