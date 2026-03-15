@@ -207,7 +207,7 @@ const DBAdmin = () => {
                   </Button>
                 </div>
               </Card.Header>
-              <Card.Body style={{ overflowX: 'auto' }}>
+              <Card.Body className="p-0">
                 {tableLoading ? (
                   <div className="text-center py-4">
                     <Spinner animation="border" size="sm" />
@@ -215,33 +215,35 @@ const DBAdmin = () => {
                   </div>
                 ) : tableData && tableData.data.length > 0 ? (
                   <>
-                    <Table striped bordered hover size="sm" responsive>
-                      <thead className="table-dark">
-                        <tr>
-                          {tableData.columns.map(col => (
-                            <th key={col} style={{ whiteSpace: 'nowrap' }}>{col}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {tableData.data.map((row, idx) => (
-                          <tr key={idx}>
+                    <div className="table-responsive" style={{ maxHeight: '60vh', overflow: 'auto' }}>
+                      <Table striped bordered hover size="sm" className="mb-0">
+                        <thead className="table-dark" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                          <tr>
                             {tableData.columns.map(col => (
-                              <td key={col} style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {formatValue(row[col], col)}
-                              </td>
+                              <th key={col} style={{ whiteSpace: 'nowrap' }}>{col}</th>
                             ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </Table>
+                        </thead>
+                        <tbody>
+                          {tableData.data.map((row, idx) => (
+                            <tr key={idx}>
+                              {tableData.columns.map(col => (
+                                <td key={col} style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {formatValue(row[col], col)}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </Table>
+                    </div>
 
                     {/* Pagination */}
-                    {totalPages > 1 && (
-                      <div className="d-flex justify-content-between align-items-center mt-3">
-                        <small className="text-muted">
-                          Showing {currentPage * pageSize + 1} - {Math.min((currentPage + 1) * pageSize, tableData.total_count)} of {tableData.total_count}
-                        </small>
+                    <div className="d-flex justify-content-between align-items-center p-3 border-top">
+                      <small className="text-muted">
+                        Showing {currentPage * pageSize + 1} - {Math.min((currentPage + 1) * pageSize, tableData.total_count)} of {tableData.total_count}
+                      </small>
+                      {totalPages > 1 && (
                         <Pagination size="sm" className="mb-0">
                           <Pagination.First
                             onClick={() => handlePageChange(0)}
@@ -281,11 +283,11 @@ const DBAdmin = () => {
                             disabled={currentPage >= totalPages - 1}
                           />
                         </Pagination>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </>
                 ) : (
-                  <Alert variant="info">No data in this table</Alert>
+                  <Alert variant="info" className="m-3">No data in this table</Alert>
                 )}
               </Card.Body>
             </Card>
