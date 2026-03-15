@@ -193,14 +193,14 @@ class CorporateEventsFetcherHTTP:
         if not scrip_code:
             return 0, [f"Could not find BSE scrip code for {security.security_name}"]
 
-        # Determine date range
+        # Determine date range - fetch all events from last 5 years
+        # Don't filter by transaction date; user should see all events for awareness
+        # The apply logic will handle which lots to actually adjust based on purchase dates
         if from_date is None:
-            from_date = self.get_oldest_transaction_date(security.id)
-            if from_date is None:
-                from_date = datetime.now() - timedelta(days=365 * 5)  # Default 5 years
+            from_date = datetime.now() - timedelta(days=365 * 5)  # Default 5 years back
 
         if to_date is None:
-            to_date = datetime.now()
+            to_date = datetime.now() + timedelta(days=365)  # Include upcoming events
 
         try:
             logger.info(f"Fetching corporate events for {security.security_name} "
