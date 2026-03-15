@@ -1203,15 +1203,45 @@ def get_market_indices():
     return result
 
 @app.get("/search-stocks/{query}")
-def search_securities(query: str):
-    """Search for stocks by name or symbol"""
+def search_securities(query: str, db: Session = Depends(get_db)):
+    """Search for stocks by name or symbol - checks securities table, local DB, then Yahoo API"""
     try:
         if len(query.strip()) < 2:
             return {"results": []}
-        
-        results = search_stocks(query)
-        return {"results": results}
+
+        results = []
+        seen_symbols = set()
+        query_upper = query.upper()
+
+        # First, check the securities table (previously used stocks)
+        db_securities = db.query(Security).filter(
+            (Security.security_name.ilike(f"%{query}%")) |
+            (Security.security_ticker.ilike(f"%{query}%")) |
+            (Security.security_ISIN.ilike(f"%{query}%"))
+        ).limit(10).all()
+
+        for sec in db_securities:
+            symbol = sec.security_ticker or sec.security_name
+            if symbol not in seen_symbols:
+                results.append({
+                    "symbol": symbol,
+                    "name": sec.security_name,
+                    "isin": sec.security_ISIN,
+                    "source": "database"
+                })
+                seen_symbols.add(symbol)
+
+        # Then search local DB + Yahoo API (via stock_api)
+        api_results = search_stocks(query)
+        for stock in api_results:
+            symbol = stock.get("symbol", "")
+            if symbol not in seen_symbols:
+                results.append(stock)
+                seen_symbols.add(symbol)
+
+        return {"results": results[:15]}
     except Exception as e:
+        logger.error(f"Search error: {e}")
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 @app.get("/securities/enrich")
