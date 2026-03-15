@@ -3,6 +3,10 @@
 # Contains all NSE-listed equities with ISIN codes
 
 INDIAN_STOCKS = [
+    # Non-equity instruments (Bonds, SGBs, etc.)
+    {'symbol': 'SGB-21FB32', 'name': 'Sovereign Gold Bond 2021-22 Series IV', 'isin': 'IN0020230184'},
+    {'symbol': 'PFCBOND-27', 'name': 'Power Finance Corporation Ltd Bond SR-II 8.3% 2027', 'isin': 'INE134E07208'},
+    # Equities
     {'symbol': '20MICRONS', 'name': '20 Microns Limited', 'isin': 'INE144J01027'},
     {'symbol': '21STCENMGM', 'name': '21st Century Management Services Limited', 'isin': 'INE253B01015'},
     {'symbol': '360ONE', 'name': '360 ONE WAM LIMITED', 'isin': 'INE466L01038'},
