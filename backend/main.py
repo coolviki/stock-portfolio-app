@@ -2495,14 +2495,24 @@ def fetch_corporate_events_for_security(
             detail="BSE API is not reachable. Please try again later."
         )
 
-    # Determine from_date
-    from_date = None
+    # Check if recently fetched (skip if not forced and fetched within last week)
     if not force and security.last_corporate_events_fetch:
-        from_date = security.last_corporate_events_fetch
+        days_since_fetch = (datetime.utcnow() - security.last_corporate_events_fetch).days
+        if days_since_fetch < 7:
+            return {
+                "success": True,
+                "security_id": security_id,
+                "security_name": security.security_name,
+                "events_created": 0,
+                "errors": [],
+                "message": f"Recently fetched {days_since_fetch} days ago. Use force=true to re-fetch.",
+                "last_fetch": security.last_corporate_events_fetch.isoformat()
+            }
 
+    # Always use oldest transaction date as from_date to capture all relevant events
     events_created, errors = fetcher.fetch_corporate_events(
         security,
-        from_date=from_date
+        from_date=None  # Defaults to oldest transaction date in fetch_corporate_events
     )
 
     return {
