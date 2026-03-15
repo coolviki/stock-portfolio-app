@@ -2398,6 +2398,62 @@ def get_corporate_events(
     return query.order_by(CorporateEvent.event_date.desc()).offset(skip).limit(limit).all()
 
 
+@app.get("/corporate-events/user-holdings")
+def get_corporate_events_for_user_holdings(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get corporate events for securities the user currently holds (for ticker display)"""
+    # Get security IDs that user has positions in
+    user_lots = db.query(Lot).filter(
+        Lot.user_id == user_id,
+        Lot.remaining_quantity > 0
+    ).all()
+
+    if not user_lots:
+        return {"events": []}
+
+    security_ids = list(set(lot.security_id for lot in user_lots))
+
+    # Get recent and upcoming events (last 60 days to next 60 days)
+    date_range_start = datetime.now() - timedelta(days=60)
+    date_range_end = datetime.now() + timedelta(days=60)
+
+    events = db.query(CorporateEvent).filter(
+        CorporateEvent.security_id.in_(security_ids),
+        CorporateEvent.event_date >= date_range_start,
+        CorporateEvent.event_date <= date_range_end
+    ).order_by(CorporateEvent.event_date.desc()).all()
+
+    result = []
+    for event in events:
+        security = db.query(Security).filter(Security.id == event.security_id).first()
+
+        # Format event description
+        event_text = ""
+        if event.event_type == "SPLIT":
+            event_text = f"Stock Split {event.ratio_numerator}:{event.ratio_denominator}"
+        elif event.event_type == "BONUS":
+            event_text = f"Bonus {event.ratio_numerator}:{event.ratio_denominator}"
+        elif event.event_type == "DIVIDEND":
+            event_text = f"Dividend ₹{event.dividend_per_share or 0:.2f}"
+        else:
+            event_text = event.event_type
+
+        result.append({
+            "id": event.id,
+            "security_name": security.security_name if security else "Unknown",
+            "security_ticker": security.security_ticker if security else "",
+            "event_type": event.event_type,
+            "event_text": event_text,
+            "event_date": event.event_date.strftime("%d %b %Y") if event.event_date else "",
+            "is_upcoming": event.event_date.date() >= datetime.now().date() if event.event_date else False,
+            "is_applied": event.is_applied
+        })
+
+    return {"events": result}
+
+
 @app.get("/corporate-events/{event_id}", response_model=CorporateEventResponse)
 def get_corporate_event(event_id: int, db: Session = Depends(get_db)):
     """Get a specific corporate event"""
@@ -2525,62 +2581,6 @@ def revert_corporate_event(
     except Exception as e:
         logger.error(f"Error reverting corporate event: {e}")
         raise HTTPException(status_code=500, detail=f"Error reverting event: {str(e)}")
-
-
-@app.get("/corporate-events/user-holdings")
-def get_corporate_events_for_user_holdings(
-    user_id: int,
-    db: Session = Depends(get_db)
-):
-    """Get corporate events for securities the user currently holds (for ticker display)"""
-    # Get security IDs that user has positions in
-    user_lots = db.query(Lot).filter(
-        Lot.user_id == user_id,
-        Lot.remaining_quantity > 0
-    ).all()
-
-    if not user_lots:
-        return {"events": []}
-
-    security_ids = list(set(lot.security_id for lot in user_lots))
-
-    # Get recent and upcoming events (last 60 days to next 60 days)
-    date_range_start = datetime.now() - timedelta(days=60)
-    date_range_end = datetime.now() + timedelta(days=60)
-
-    events = db.query(CorporateEvent).filter(
-        CorporateEvent.security_id.in_(security_ids),
-        CorporateEvent.event_date >= date_range_start,
-        CorporateEvent.event_date <= date_range_end
-    ).order_by(CorporateEvent.event_date.desc()).all()
-
-    result = []
-    for event in events:
-        security = db.query(Security).filter(Security.id == event.security_id).first()
-
-        # Format event description
-        event_text = ""
-        if event.event_type == "SPLIT":
-            event_text = f"Stock Split {event.ratio_numerator}:{event.ratio_denominator}"
-        elif event.event_type == "BONUS":
-            event_text = f"Bonus {event.ratio_numerator}:{event.ratio_denominator}"
-        elif event.event_type == "DIVIDEND":
-            event_text = f"Dividend ₹{event.dividend_per_share or 0:.2f}"
-        else:
-            event_text = event.event_type
-
-        result.append({
-            "id": event.id,
-            "security_name": security.security_name if security else "Unknown",
-            "security_ticker": security.security_ticker if security else "",
-            "event_type": event.event_type,
-            "event_text": event_text,
-            "event_date": event.event_date.strftime("%d %b %Y") if event.event_date else "",
-            "is_upcoming": event.event_date.date() >= datetime.now().date() if event.event_date else False,
-            "is_applied": event.is_applied
-        })
-
-    return {"events": result}
 
 
 # =============================================================================
