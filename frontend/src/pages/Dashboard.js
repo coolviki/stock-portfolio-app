@@ -12,17 +12,28 @@ const Dashboard = () => {
   const [portfolio, setPortfolio] = useState(null);
   const [marketIndices, setMarketIndices] = useState(null);
   const [portfolioHistory, setPortfolioHistory] = useState(null);
+  const [historyTimeRange, setHistoryTimeRange] = useState('5d');
   const [loading, setLoading] = useState(true);
   const [sortConfig, setSortConfig] = useState({ key: 'dayPnlPercent', direction: 'desc' }); // Default: Day P&L % (highest gains on top)
   const { user } = useAuth();
 
-
+  const timeRangeOptions = [
+    { value: '5d', label: '5D' },
+    { value: '1m', label: '1M' },
+    { value: 'ytd', label: 'YTD' },
+    { value: '1y', label: '1Y' },
+    { value: '5y', label: '5Y' },
+    { value: 'max', label: 'MAX' }
+  ];
 
   useEffect(() => {
     loadPortfolioData();
     loadMarketIndices();
-    loadPortfolioHistory();
   }, [user]);
+
+  useEffect(() => {
+    loadPortfolioHistory(historyTimeRange);
+  }, [user, historyTimeRange]);
 
   const loadPortfolioData = async () => {
     try {
@@ -50,10 +61,10 @@ const Dashboard = () => {
     }
   };
 
-  const loadPortfolioHistory = async () => {
+  const loadPortfolioHistory = async (timeRange = '5d') => {
     try {
       if (!user?.id) return;
-      const data = await apiService.getPortfolioHistory(user.id);
+      const data = await apiService.getPortfolioHistory(user.id, timeRange);
       setPortfolioHistory(data);
     } catch (error) {
       console.error('Error loading portfolio history:', error);
@@ -548,10 +559,23 @@ const Dashboard = () => {
           market values instead of computing on-the-fly. The snapshots are captured daily at 6 PM IST.
           Currently shows: invested amount + cost basis over time, with current value only at today's date.
       */}
-      {portfolioHistory && portfolioHistory.data_points && portfolioHistory.data_points.length > 1 && (
+      {portfolioHistory && portfolioHistory.data_points && portfolioHistory.data_points.length > 0 && (
         <Card className="mt-4">
-          <Card.Header>
+          <Card.Header className="d-flex justify-content-between align-items-center flex-wrap gap-2">
             <h5 className="mb-0">Portfolio Value Over Time</h5>
+            <div className="btn-group btn-group-sm">
+              {timeRangeOptions.map(option => (
+                <Button
+                  key={option.value}
+                  variant={historyTimeRange === option.value ? 'primary' : 'outline-secondary'}
+                  size="sm"
+                  onClick={() => setHistoryTimeRange(option.value)}
+                  style={{ minWidth: '40px', fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
           </Card.Header>
           <Card.Body>
             <div style={{ height: '300px' }}>
@@ -559,6 +583,10 @@ const Dashboard = () => {
                 data={{
                   labels: portfolioHistory.data_points.map(dp => {
                     const date = new Date(dp.date);
+                    // Use shorter format for shorter time ranges
+                    if (historyTimeRange === '5d' || historyTimeRange === '1m') {
+                      return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+                    }
                     return date.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
                   }),
                   datasets: [

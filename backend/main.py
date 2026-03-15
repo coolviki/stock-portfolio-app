@@ -1644,6 +1644,7 @@ def _get_portfolio_from_transactions(user_id: int, db: Session):
 @app.get("/portfolio-history/")
 def get_portfolio_history(
     user_id: int,
+    time_range: str = Query("5d", description="Time range: 5d, 1m, ytd, 1y, 5y, max"),
     db: Session = Depends(get_db)
 ):
     """Get portfolio value history over time for charting"""
@@ -1656,7 +1657,7 @@ def get_portfolio_history(
         lots = db.query(Lot).filter(Lot.user_id == user_id).order_by(Lot.purchase_date).all()
 
         if not lots:
-            return {"data_points": [], "current_value": 0, "total_invested": 0}
+            return {"data_points": [], "current_value": 0, "total_invested": 0, "time_range": time_range}
 
         # Get all sale allocations
         sale_allocations = db.query(SaleAllocation).join(Lot).filter(Lot.user_id == user_id).all()
@@ -1683,7 +1684,7 @@ def get_portfolio_history(
                 events.append({
                     "date": trans_date,
                     "type": "SELL",
-                    "amount": alloc.quantity_sold * alloc.cost_basis_per_unit,  # Cost basis of sold shares
+                    "amount": alloc.quantity_sold * alloc.cost_basis_per_unit,
                     "proceeds": alloc.quantity_sold * alloc.sale_price_per_unit,
                     "quantity": alloc.quantity_sold,
                     "security_id": db.query(Lot).filter(Lot.id == alloc.lot_id).first().security_id if alloc.lot_id else None
@@ -1693,20 +1694,52 @@ def get_portfolio_history(
         events.sort(key=lambda x: x["date"])
 
         if not events:
-            return {"data_points": [], "current_value": 0, "total_invested": 0}
+            return {"data_points": [], "current_value": 0, "total_invested": 0, "time_range": time_range}
 
-        # Generate monthly data points from first event to now
-        first_date = events[0]["date"]
+        # Determine date range and interval based on time_range parameter
         today = datetime.now().date()
+        first_event_date = events[0]["date"]
 
-        # Calculate data points at monthly intervals
-        data_points = []
-        current_date = datetime(first_date.year, first_date.month, 1).date()
+        if time_range == "5d":
+            range_start = today - timedelta(days=5)
+            interval_days = 1
+        elif time_range == "1m":
+            range_start = today - timedelta(days=30)
+            interval_days = 1
+        elif time_range == "ytd":
+            range_start = datetime(today.year, 1, 1).date()
+            interval_days = 7  # Weekly
+        elif time_range == "1y":
+            range_start = today - timedelta(days=365)
+            interval_days = 7  # Weekly
+        elif time_range == "5y":
+            range_start = today - timedelta(days=365 * 5)
+            interval_days = 30  # Monthly
+        else:  # max
+            range_start = first_event_date
+            interval_days = 30  # Monthly
 
+        # Ensure range_start is not before first event
+        if range_start < first_event_date:
+            range_start = first_event_date
+
+        # First pass: calculate cumulative values up to range_start
         cumulative_invested = 0
-        cumulative_cost_basis = 0  # Track cost basis of current holdings
-
+        cumulative_cost_basis = 0
         event_idx = 0
+
+        while event_idx < len(events) and events[event_idx]["date"] < range_start:
+            event = events[event_idx]
+            if event["type"] == "BUY":
+                cumulative_invested += event["amount"]
+                cumulative_cost_basis += event["amount"]
+            else:  # SELL
+                cumulative_cost_basis -= event["amount"]
+            event_idx += 1
+
+        # Generate data points within the range
+        data_points = []
+        current_date = range_start
 
         while current_date <= today:
             # Process all events up to this date
@@ -1719,7 +1752,7 @@ def get_portfolio_history(
                     cumulative_cost_basis -= event["amount"]
                 event_idx += 1
 
-            # Add data point for this month
+            # Add data point
             if cumulative_invested > 0:
                 data_points.append({
                     "date": current_date.isoformat(),
@@ -1727,11 +1760,8 @@ def get_portfolio_history(
                     "cost_basis": round(cumulative_cost_basis, 2)
                 })
 
-            # Move to next month
-            if current_date.month == 12:
-                current_date = datetime(current_date.year + 1, 1, 1).date()
-            else:
-                current_date = datetime(current_date.year, current_date.month + 1, 1).date()
+            # Move to next interval
+            current_date += timedelta(days=interval_days)
 
         # Process any remaining events
         while event_idx < len(events):
@@ -1743,7 +1773,7 @@ def get_portfolio_history(
                 cumulative_cost_basis -= event["amount"]
             event_idx += 1
 
-        # Add final point with actual current values
+        # Calculate current portfolio value
         current_value = 0
         for lot in lots:
             if lot.remaining_quantity > 0:
@@ -1757,19 +1787,23 @@ def get_portfolio_history(
                     if price:
                         current_value += price * lot.remaining_quantity
 
-        # Add today's data point
-        data_points.append({
-            "date": today.isoformat(),
-            "invested": round(cumulative_invested, 2),
-            "cost_basis": round(cumulative_cost_basis, 2),
-            "current_value": round(current_value, 2)
-        })
+        # Ensure we have today's data point with current value
+        if data_points and data_points[-1]["date"] != today.isoformat():
+            data_points.append({
+                "date": today.isoformat(),
+                "invested": round(cumulative_invested, 2),
+                "cost_basis": round(cumulative_cost_basis, 2),
+                "current_value": round(current_value, 2)
+            })
+        elif data_points:
+            data_points[-1]["current_value"] = round(current_value, 2)
 
         return {
             "data_points": data_points,
             "current_value": round(current_value, 2),
             "total_invested": round(cumulative_invested, 2),
-            "current_cost_basis": round(cumulative_cost_basis, 2)
+            "current_cost_basis": round(cumulative_cost_basis, 2),
+            "time_range": time_range
         }
 
     except HTTPException:

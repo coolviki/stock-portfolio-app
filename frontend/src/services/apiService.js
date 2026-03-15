@@ -381,12 +381,12 @@ export const apiService = {
   },
 
   // Portfolio History API
-  async getPortfolioHistory(userId) {
+  async getPortfolioHistory(userId, timeRange = '5d') {
     if (!userId) {
       throw new Error('User ID is required');
     }
     const response = await api.get('/portfolio-history/', {
-      params: { user_id: userId }
+      params: { user_id: userId, time_range: timeRange }
     });
     return response.data;
   },
