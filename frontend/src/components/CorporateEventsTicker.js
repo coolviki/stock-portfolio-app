@@ -3,10 +3,27 @@ import { apiService } from '../services/apiService';
 import { useAuth } from '../context/AuthContext';
 import './CorporateEventsTicker.css';
 
+const TICKER_FIRST_SEEN_KEY = 'corporateEventsTickerFirstSeen';
+const PLACEHOLDER_EXPIRY_DAYS = 3;
+
 const CorporateEventsTicker = () => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showPlaceholder, setShowPlaceholder] = useState(true);
   const { user } = useAuth();
+
+  useEffect(() => {
+    // Check if placeholder should still be shown (within 3 days of first view)
+    const firstSeen = localStorage.getItem(TICKER_FIRST_SEEN_KEY);
+    if (!firstSeen) {
+      localStorage.setItem(TICKER_FIRST_SEEN_KEY, Date.now().toString());
+    } else {
+      const daysSinceFirstSeen = (Date.now() - parseInt(firstSeen)) / (1000 * 60 * 60 * 24);
+      if (daysSinceFirstSeen > PLACEHOLDER_EXPIRY_DAYS) {
+        setShowPlaceholder(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     loadEvents();
@@ -28,10 +45,14 @@ const CorporateEventsTicker = () => {
     return null;
   }
 
-  // Show placeholder if no events
   const hasEvents = events.length > 0;
 
-  // Duplicate events for seamless loop, or use placeholder
+  // Hide ticker entirely if no events and placeholder has expired
+  if (!hasEvents && !showPlaceholder) {
+    return null;
+  }
+
+  // Duplicate events for seamless loop
   const tickerEvents = hasEvents
     ? [...events, ...events]
     : [];
@@ -42,7 +63,7 @@ const CorporateEventsTicker = () => {
         <span>Corporate Events</span>
       </div>
       <div className="ticker-wrapper">
-        <div className={`ticker-content ${!hasEvents ? 'no-animation' : ''}`}>
+        <div className="ticker-content">
           {hasEvents ? (
             tickerEvents.map((event, index) => (
               <span key={`${event.id}-${index}`} className="ticker-item">
@@ -59,9 +80,14 @@ const CorporateEventsTicker = () => {
               </span>
             ))
           ) : (
-            <span className="ticker-placeholder">
-              Corporate events for your holdings (stock splits, bonuses, dividends) will appear here when available. Fetch events from Security Master to populate this ticker.
-            </span>
+            <>
+              <span className="ticker-placeholder">
+                Corporate events for your holdings (stock splits, bonuses, dividends) will appear here when available. Fetch events from Security Master to populate this ticker.
+              </span>
+              <span className="ticker-placeholder">
+                Corporate events for your holdings (stock splits, bonuses, dividends) will appear here when available. Fetch events from Security Master to populate this ticker.
+              </span>
+            </>
           )}
         </div>
       </div>

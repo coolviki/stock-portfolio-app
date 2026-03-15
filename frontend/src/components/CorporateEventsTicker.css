@@ -126,16 +126,13 @@
   margin: 0 4px;
 }
 
-.ticker-content.no-animation {
-  animation: none;
-  justify-content: center;
-}
-
 .ticker-placeholder {
   color: #9ca3af;
   font-size: 13px;
   font-style: italic;
   padding: 0 20px;
+  display: inline-block;
+  white-space: nowrap;
 }
 
 /* Mobile adjustments */
