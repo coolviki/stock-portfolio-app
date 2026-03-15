@@ -158,9 +158,12 @@ const Dashboard = () => {
   const todaysChange = portfolio.todays_change || 0;
   const todaysChangePercent = portfolio.todays_change_percent || 0;
 
+  // All holdings for the table (sorted by value)
+  const allHoldingSymbols = Object.keys(portfolio.portfolio || {})
+    .filter(symbol => portfolio.portfolio[symbol].quantity > 0);
+
   // Chart data for portfolio allocation (top 9 + Others)
-  const allHoldings = Object.keys(portfolio.portfolio || {})
-    .filter(symbol => portfolio.portfolio[symbol].quantity > 0)
+  const allHoldingsSorted = allHoldingSymbols
     .map(symbol => ({
       symbol,
       value: portfolio.current_values?.[symbol] || 0
@@ -169,24 +172,24 @@ const Dashboard = () => {
 
   // Take top 9, club rest as "Others"
   const TOP_N = 9;
-  const topHoldings = allHoldings.slice(0, TOP_N);
-  const otherHoldings = allHoldings.slice(TOP_N);
+  const topHoldings = allHoldingsSorted.slice(0, TOP_N);
+  const otherHoldings = allHoldingsSorted.slice(TOP_N);
   const othersValue = otherHoldings.reduce((sum, h) => sum + h.value, 0);
 
-  const portfolioLabels = topHoldings.map(h => h.symbol);
-  const portfolioValues = topHoldings.map(h => h.value);
+  const chartLabels = topHoldings.map(h => h.symbol);
+  const chartValues = topHoldings.map(h => h.value);
 
   // Add "Others" if there are more than TOP_N holdings
   if (othersValue > 0) {
-    portfolioLabels.push('Others');
-    portfolioValues.push(othersValue);
+    chartLabels.push('Others');
+    chartValues.push(othersValue);
   }
 
   const portfolioData = {
-    labels: portfolioLabels,
+    labels: chartLabels,
     datasets: [
       {
-        data: portfolioValues,
+        data: chartValues,
         backgroundColor: [
           '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
           '#FF9F40', '#4BC0C0', '#C9CBCF', '#8B5CF6', '#6B7280'
@@ -217,7 +220,7 @@ const Dashboard = () => {
     ]
   };
 
-  const sortedHoldings = getSortedHoldings(portfolioLabels, portfolio.current_values, portfolio);
+  const sortedHoldings = getSortedHoldings(allHoldingSymbols, portfolio.current_values, portfolio);
 
   return (
     <div className="dashboard-container">
