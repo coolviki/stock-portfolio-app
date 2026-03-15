@@ -134,6 +134,8 @@ logger.info("Setting up scheduled tasks...")
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.triggers.cron import CronTrigger
+    import pytz
+    IST = pytz.timezone('Asia/Kolkata')
     logger.info("APScheduler imported successfully")
 
     def scheduled_corporate_events_fetch():
@@ -224,22 +226,22 @@ try:
         except Exception as e:
             logger.error(f"Error in scheduled portfolio snapshots: {e}")
 
-    # Initialize scheduler
-    scheduler = BackgroundScheduler()
+    # Initialize scheduler with IST timezone
+    scheduler = BackgroundScheduler(timezone=IST)
 
-    # Run every Sunday at 2:00 AM IST (Saturday 8:30 PM UTC)
+    # Run every Sunday at 2:00 AM IST
     scheduler.add_job(
         scheduled_corporate_events_fetch,
-        CronTrigger(day_of_week='sun', hour=2, minute=0),
+        CronTrigger(day_of_week='sun', hour=2, minute=0, timezone=IST),
         id='corporate_events_fetch',
         name='Weekly Corporate Events Fetch',
         replace_existing=True
     )
 
-    # Run daily at 6:00 PM IST (12:30 PM UTC) - after market close
+    # Run daily at 6:00 PM IST - after market close
     scheduler.add_job(
         scheduled_portfolio_snapshots,
-        CronTrigger(hour=18, minute=0),
+        CronTrigger(hour=18, minute=0, timezone=IST),
         id='portfolio_snapshots',
         name='Daily Portfolio Snapshots',
         replace_existing=True
@@ -2260,6 +2262,80 @@ def get_price_cache_stats(
     return {
         "stats": stats,
         "recent_cached": cached_securities
+    }
+
+
+@app.post("/admin/trigger-snapshots")
+def trigger_portfolio_snapshots(
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Manually trigger portfolio snapshot creation for all users (admin only)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    today = datetime.now().date()
+    users = db.query(User).all()
+    snapshots_created = 0
+    errors = []
+
+    for user in users:
+        try:
+            # Check if snapshot already exists for today
+            existing = db.query(PortfolioSnapshot).filter(
+                PortfolioSnapshot.user_id == user.id,
+                PortfolioSnapshot.snapshot_date == today
+            ).first()
+
+            if existing:
+                continue
+
+            # Calculate portfolio values
+            open_lots = db.query(Lot).filter(
+                Lot.user_id == user.id,
+                Lot.remaining_quantity > 0
+            ).all()
+
+            if not open_lots:
+                continue
+
+            cost_basis = 0.0
+            market_value = 0.0
+
+            for lot in open_lots:
+                cost_basis += lot.adjusted_cost_per_unit * lot.remaining_quantity
+                security = db.query(Security).filter(Security.id == lot.security_id).first()
+                if security:
+                    from stock_api import get_stock_price
+                    price = get_stock_price(
+                        ticker=security.security_ticker,
+                        isin=security.security_ISIN,
+                        security_name=security.security_name
+                    )
+                    if price:
+                        market_value += price * lot.remaining_quantity
+
+            # Create snapshot
+            snapshot = PortfolioSnapshot(
+                user_id=user.id,
+                snapshot_date=today,
+                cost_basis=cost_basis,
+                market_value=market_value
+            )
+            db.add(snapshot)
+            snapshots_created += 1
+
+        except Exception as e:
+            errors.append(f"User {user.id}: {str(e)}")
+
+    db.commit()
+
+    return {
+        "message": f"Created {snapshots_created} snapshots for {len(users)} users",
+        "snapshots_created": snapshots_created,
+        "total_users": len(users),
+        "date": str(today),
+        "errors": errors if errors else None
     }
 
 
