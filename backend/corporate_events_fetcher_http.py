@@ -467,13 +467,13 @@ class CorporateEventsFetcherHTTP:
 
         for security in securities:
             try:
-                from_date = None
-                if security.last_corporate_events_fetch:
-                    from_date = security.last_corporate_events_fetch
-
+                # Always use oldest transaction date as from_date, NOT last_corporate_events_fetch
+                # The last_corporate_events_fetch is only used to decide WHETHER to fetch (above),
+                # not to filter the date range. This ensures we don't miss events that were
+                # announced after our last fetch but have ex-dates before it.
                 events_created, errors = self.fetch_corporate_events(
                     security,
-                    from_date=from_date
+                    from_date=None  # Will default to oldest transaction date
                 )
 
                 results['securities_processed'] += 1
