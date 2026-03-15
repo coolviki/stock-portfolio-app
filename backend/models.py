@@ -53,6 +53,12 @@ class Security(Base):
     security_ticker = Column(String, nullable=False, index=True)
     bse_scrip_code = Column(String, nullable=True, index=True)  # BSE scrip code for corporate events
     last_corporate_events_fetch = Column(DateTime, nullable=True)  # Last time corporate events were fetched
+
+    # Price cache - fallback when APIs fail
+    last_price = Column(Float, nullable=True)  # Last successfully fetched price
+    last_price_timestamp = Column(DateTime, nullable=True)  # When price was fetched
+    last_price_source = Column(String, nullable=True)  # e.g., "YAHOO_FINANCE", "SGB_MANUAL"
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

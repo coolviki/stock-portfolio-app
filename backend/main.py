@@ -34,6 +34,7 @@ from corporate_events import CorporateEventProcessor, CorporateEventError
 from lot_capital_gains import LotCapitalGainsCalculator, get_adjusted_portfolio_summary
 from corporate_events_fetcher_http import CorporateEventsFetcherHTTP, get_http_fetcher as get_fetcher
 from xirr_calculator import calculate_xirr
+from price_cache import update_price_cache, get_cached_price
 
 load_dotenv()
 
@@ -54,30 +55,46 @@ except Exception as e:
 
 # Run database migrations for new columns
 def run_startup_migrations():
-    """Add missing columns to existing tables"""
-    from sqlalchemy import text
+    """Add missing columns to existing tables (SQLite compatible)"""
+    from sqlalchemy import text, inspect
     from database import engine as db_engine
-    try:
-        with db_engine.connect() as conn:
-            # Check and add bse_scrip_code column
-            result = conn.execute(text("""
-                SELECT column_name FROM information_schema.columns
-                WHERE table_name = 'securities' AND column_name = 'bse_scrip_code'
-            """))
-            if not result.fetchone():
-                conn.execute(text("ALTER TABLE securities ADD COLUMN bse_scrip_code VARCHAR"))
-                conn.commit()
-                logger.info("Added bse_scrip_code column to securities table")
 
-            # Check and add last_corporate_events_fetch column
-            result = conn.execute(text("""
-                SELECT column_name FROM information_schema.columns
-                WHERE table_name = 'securities' AND column_name = 'last_corporate_events_fetch'
-            """))
-            if not result.fetchone():
-                conn.execute(text("ALTER TABLE securities ADD COLUMN last_corporate_events_fetch TIMESTAMP"))
+    def get_existing_columns(inspector, table_name):
+        """Get list of existing column names for a table"""
+        try:
+            columns = inspector.get_columns(table_name)
+            return {col['name'] for col in columns}
+        except Exception:
+            return set()
+
+    def add_column_if_missing(conn, table, column, col_type, existing_cols):
+        """Add column if it doesn't exist"""
+        if column not in existing_cols:
+            try:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
                 conn.commit()
-                logger.info("Added last_corporate_events_fetch column to securities table")
+                logger.info(f"Added {column} column to {table} table")
+                return True
+            except Exception as e:
+                logger.debug(f"Column {column} may already exist: {e}")
+        return False
+
+    try:
+        inspector = inspect(db_engine)
+        existing_cols = get_existing_columns(inspector, 'securities')
+
+        with db_engine.connect() as conn:
+            # Add bse_scrip_code column
+            add_column_if_missing(conn, 'securities', 'bse_scrip_code', 'VARCHAR', existing_cols)
+
+            # Add last_corporate_events_fetch column
+            add_column_if_missing(conn, 'securities', 'last_corporate_events_fetch', 'TIMESTAMP', existing_cols)
+
+            # Add price cache columns
+            add_column_if_missing(conn, 'securities', 'last_price', 'REAL', existing_cols)
+            add_column_if_missing(conn, 'securities', 'last_price_timestamp', 'TIMESTAMP', existing_cols)
+            add_column_if_missing(conn, 'securities', 'last_price_source', 'VARCHAR', existing_cols)
+
     except Exception as e:
         logger.error(f"Migration error (non-fatal): {e}")
 
@@ -1406,6 +1423,7 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
                 "total_invested": 0,
                 "isin": security.security_ISIN,
                 "security_symbol": security.security_ticker,
+                "security_id": security.id,  # For price cache updates
                 "transactions": []
             }
             security_cash_flows[symbol] = []
@@ -1467,6 +1485,10 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
     for symbol, data in portfolio.items():
         if data["quantity"] > 0:
             try:
+                current_price = 0
+                price_source = "UNAVAILABLE"
+                is_stale_price = False
+
                 # Get full price data including change info
                 price_data = stock_price_manager.get_full_price_data(
                     ticker=data["security_symbol"],
@@ -1475,10 +1497,16 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
                 )
 
                 if price_data and price_data.price > 0:
-                    data["price_method"] = price_data.source_method or "API"
-                    current_value = price_data.price * data["quantity"]
-                    current_values[symbol] = current_value
-                    unrealized_gains += current_value - data["total_invested"]
+                    current_price = price_data.price
+                    price_source = price_data.source_method or "API"
+
+                    # Update price cache with fresh price
+                    update_price_cache(
+                        db=db,
+                        security_id=data.get("security_id"),
+                        price=current_price,
+                        source=price_source
+                    )
 
                     # Calculate today's change for this stock
                     if price_data.change is not None:
@@ -1490,42 +1518,56 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
                     if price_data.previous_close:
                         previous_close_total += price_data.previous_close * data["quantity"]
 
-                    # Calculate XIRR for this stock
-                    if symbol in security_cash_flows and security_cash_flows[symbol]:
-                        stock_cf = security_cash_flows[symbol].copy()
-                        stock_cf.append((now, current_value))  # Current value as final positive flow
-                        overall_cash_flows.extend(security_cash_flows[symbol])
-                        try:
-                            xirr = calculate_xirr(stock_cf)
-                            if xirr is not None:
-                                xirr_values[symbol] = round(xirr * 100, 2)  # Convert to percentage
-                                data["xirr"] = xirr_values[symbol]
-                        except Exception as e:
-                            logger.debug(f"XIRR calculation failed for {symbol}: {e}")
                 else:
-                    # Fallback to simple price fetch
-                    current_price, method = stock_price_manager.get_price_with_waterfall(
+                    # Try simple price fetch
+                    fetched_price, method = stock_price_manager.get_price_with_waterfall(
                         ticker=data["security_symbol"],
                         isin=data["isin"],
                         security_name=symbol
                     )
-                    data["price_method"] = method
-                    current_value = current_price * data["quantity"]
-                    current_values[symbol] = current_value
-                    unrealized_gains += current_value - data["total_invested"]
 
-                    # Calculate XIRR for this stock
-                    if symbol in security_cash_flows and security_cash_flows[symbol] and current_value > 0:
-                        stock_cf = security_cash_flows[symbol].copy()
-                        stock_cf.append((now, current_value))
-                        overall_cash_flows.extend(security_cash_flows[symbol])
-                        try:
-                            xirr = calculate_xirr(stock_cf)
-                            if xirr is not None:
-                                xirr_values[symbol] = round(xirr * 100, 2)
-                                data["xirr"] = xirr_values[symbol]
-                        except Exception as e:
-                            logger.debug(f"XIRR calculation failed for {symbol}: {e}")
+                    if fetched_price > 0 and method != "UNAVAILABLE":
+                        current_price = fetched_price
+                        price_source = method
+
+                        # Update price cache with fresh price
+                        update_price_cache(
+                            db=db,
+                            security_id=data.get("security_id"),
+                            price=current_price,
+                            source=price_source
+                        )
+                    else:
+                        # All providers failed - try database cache fallback
+                        cached = get_cached_price(
+                            db=db,
+                            security_id=data.get("security_id")
+                        )
+                        if cached:
+                            current_price, cache_source, cache_timestamp, is_stale_price = cached
+                            price_source = f"CACHED_{cache_source}" if cache_source else "CACHED"
+                            logger.info(f"Using cached price for {symbol}: {current_price} (stale: {is_stale_price})")
+
+                # Set price data
+                data["price_method"] = price_source
+                data["is_stale_price"] = is_stale_price
+                current_value = current_price * data["quantity"]
+                current_values[symbol] = current_value
+                unrealized_gains += current_value - data["total_invested"]
+
+                # Calculate XIRR for this stock
+                if symbol in security_cash_flows and security_cash_flows[symbol] and current_value > 0:
+                    stock_cf = security_cash_flows[symbol].copy()
+                    stock_cf.append((now, current_value))
+                    overall_cash_flows.extend(security_cash_flows[symbol])
+                    try:
+                        xirr = calculate_xirr(stock_cf)
+                        if xirr is not None:
+                            xirr_values[symbol] = round(xirr * 100, 2)
+                            data["xirr"] = xirr_values[symbol]
+                    except Exception as e:
+                        logger.debug(f"XIRR calculation failed for {symbol}: {e}")
+
             except Exception as e:
                 logger.error(f"Error fetching price for {symbol}: {e}")
                 current_values[symbol] = 0
@@ -2184,6 +2226,40 @@ def get_table_data(
         "skip": skip,
         "limit": limit,
         "has_more": skip + limit < total_count
+    }
+
+
+@app.get("/admin/price-cache/stats")
+def get_price_cache_stats(
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Get statistics about the price cache (admin only)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    from price_cache import get_cache_stats
+    stats = get_cache_stats(db)
+
+    # Also get list of securities with cached prices
+    securities_with_cache = db.query(Security).filter(
+        Security.last_price.isnot(None)
+    ).order_by(Security.last_price_timestamp.desc()).limit(20).all()
+
+    cached_securities = []
+    for sec in securities_with_cache:
+        cached_securities.append({
+            "id": sec.id,
+            "name": sec.security_name,
+            "ticker": sec.security_ticker,
+            "last_price": sec.last_price,
+            "last_price_timestamp": sec.last_price_timestamp.isoformat() if sec.last_price_timestamp else None,
+            "last_price_source": sec.last_price_source
+        })
+
+    return {
+        "stats": stats,
+        "recent_cached": cached_securities
     }
 
 
