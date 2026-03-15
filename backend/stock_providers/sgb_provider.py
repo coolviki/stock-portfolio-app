@@ -1,43 +1,39 @@
 """
 Sovereign Gold Bond (SGB) Price Provider
 
-Fetches SGB secondary market prices from NSE India's unofficial API.
+Provides SGB prices using hardcoded manual values.
 SGBs trade on the secondary market with symbols like SGBFEB32IV.
+
+TODO: Replace hardcoded prices with a cloud-friendly data source.
+NSE blocks cloud server IPs, so we use manually updated prices.
+Update SGB_PRICE_PER_UNIT below every few days.
 """
 
-import requests
 from typing import Dict, Optional, List
 from datetime import datetime
 import logging
-import time
 
 from .base import StockPriceProvider, StockPrice, ProviderStatus
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# MANUAL SGB PRICE - UPDATE THIS VALUE EVERY FEW DAYS
+# =============================================================================
+# Last updated: 2026-03-15
+# Check current price at: https://www.nseindia.com/ (search for SGBFEB32 etc)
+# All SGBs trade at approximately the same price (tracks gold price)
+SGB_PRICE_PER_UNIT = 16674.0
+# =============================================================================
+
 
 class SGBProvider(StockPriceProvider):
-    """NSE India provider for Sovereign Gold Bond prices"""
+    """Provider for Sovereign Gold Bond prices using hardcoded manual values"""
 
     def __init__(self, config: Dict = None):
         super().__init__("SGBProvider", config)
-        self.base_url = "https://www.nseindia.com"
-        self.timeout = config.get("timeout", 15) if config else 15
-        self.session = requests.Session()
-        self._session_initialized = False
 
-        # Headers required by NSE
-        self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Referer': 'https://www.nseindia.com/',
-            'Connection': 'keep-alive',
-        }
-
-        # Internal symbol to NSE trading symbol mapping
-        # Format: Internal Symbol -> NSE Trading Symbol
+        # Internal symbol to NSE trading symbol mapping (for reference/search)
         self.sgb_symbol_map = {
             'SGB-21FB32': 'SGBFEB32IV',      # 2021-22 Series IV, matures Feb 2032
             'SGB-22FB33': 'SGBFEB33',         # 2022-23 Series, matures Feb 2033
@@ -82,62 +78,13 @@ class SGBProvider(StockPriceProvider):
             {'symbol': 'SGB-24FB35', 'name': 'Sovereign Gold Bond Feb 2035', 'isin': 'IN0020240019', 'maturity': 'Feb 2035'},
         ]
 
-    def _initialize_session(self) -> bool:
-        """
-        Initialize NSE session by visiting the main page first.
-        NSE requires valid cookies from the main site before API calls work.
-        """
-        if self._session_initialized:
-            return True
-
-        try:
-            logger.info("SGBProvider: Initializing NSE session...")
-
-            # First, visit the main NSE page to get cookies
-            response = self.session.get(
-                self.base_url,
-                headers=self.headers,
-                timeout=self.timeout
-            )
-
-            if response.status_code == 200:
-                self._session_initialized = True
-                logger.info("SGBProvider: NSE session initialized successfully")
-                return True
-            else:
-                logger.warning(f"SGBProvider: Failed to initialize session, status {response.status_code}")
-                return False
-
-        except Exception as e:
-            logger.error(f"SGBProvider: Session initialization error: {e}")
-            return False
-
     def _strip_exchange_suffix(self, symbol: str) -> str:
-        """
-        Strip exchange suffix from symbol (e.g., .BSE, .NSE, .NS, .BO).
-        """
+        """Strip exchange suffix from symbol (e.g., .BSE, .NSE, .NS, .BO)."""
         symbol_upper = symbol.upper()
         for suffix in ['.BSE', '.NSE', '.NS', '.BO']:
             if symbol_upper.endswith(suffix):
                 return symbol_upper[:-len(suffix)]
         return symbol_upper
-
-    def _get_nse_symbol(self, symbol: str) -> Optional[str]:
-        """
-        Map internal SGB symbol to NSE trading symbol.
-        Returns None if symbol is not an SGB or mapping not found.
-        """
-        symbol_upper = self._strip_exchange_suffix(symbol)
-
-        # Direct lookup in mapping
-        if symbol_upper in self.sgb_symbol_map:
-            return self.sgb_symbol_map[symbol_upper]
-
-        # Check if it's already an NSE symbol (starts with SGB)
-        if symbol_upper.startswith('SGB') and not symbol_upper.startswith('SGB-'):
-            return symbol_upper
-
-        return None
 
     def _is_sgb_symbol(self, symbol: str) -> bool:
         """Check if the symbol is a known SGB symbol"""
@@ -149,99 +96,37 @@ class SGBProvider(StockPriceProvider):
         )
 
     def is_available(self) -> bool:
-        """Check if provider is available"""
-        if self.status == ProviderStatus.UNAVAILABLE:
-            return False
+        """Provider is always available (uses hardcoded prices)"""
         return True
 
     def get_price(self, symbol: str) -> Optional[StockPrice]:
-        """Get SGB price from NSE"""
-        if not self.is_available():
-            return None
+        """
+        Get SGB price using hardcoded manual price.
 
-        # Check if this is an SGB symbol
+        TODO: Replace with a cloud-friendly data source.
+        Currently uses SGB_PRICE_PER_UNIT constant (no API calls).
+        Update the constant at the top of this file every few days.
+        """
         if not self._is_sgb_symbol(symbol):
             logger.debug(f"SGBProvider: {symbol} is not an SGB symbol, skipping")
             return None
 
-        # Get NSE trading symbol
-        nse_symbol = self._get_nse_symbol(symbol)
-        if not nse_symbol:
-            logger.warning(f"SGBProvider: No NSE symbol mapping for {symbol}")
-            return None
+        logger.info(f"SGBProvider: Using hardcoded price {SGB_PRICE_PER_UNIT} for {symbol}")
 
-        try:
-            # Initialize session if needed
-            if not self._initialize_session():
-                logger.warning("SGBProvider: Failed to initialize NSE session")
-                return None
-
-            # Fetch quote from NSE API
-            quote_url = f"{self.base_url}/api/quote-equity?symbol={nse_symbol}"
-
-            logger.info(f"SGBProvider: Fetching price for {nse_symbol} (original: {symbol})")
-
-            response = self.session.get(
-                quote_url,
-                headers=self.headers,
-                timeout=self.timeout
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-
-                # Extract price info
-                price_info = data.get('priceInfo', {})
-                last_price = price_info.get('lastPrice')
-
-                if last_price is not None and last_price > 0:
-                    previous_close = price_info.get('previousClose')
-                    change = price_info.get('change')
-                    change_percent = price_info.get('pChange')
-
-                    self.record_success()
-
-                    return StockPrice(
-                        symbol=symbol,
-                        price=float(last_price),
-                        currency='INR',
-                        timestamp=datetime.now().isoformat(),
-                        provider=self.name,
-                        source_method='SGB_NSE',
-                        previous_close=float(previous_close) if previous_close else None,
-                        change=float(change) if change else None,
-                        change_percent=float(change_percent) if change_percent else None
-                    )
-                else:
-                    logger.warning(f"SGBProvider: No lastPrice in response for {nse_symbol}")
-
-            elif response.status_code == 401:
-                # Session expired, reset and retry once
-                logger.warning("SGBProvider: Session expired, reinitializing...")
-                self._session_initialized = False
-                self.session = requests.Session()
-
-                if self._initialize_session():
-                    # Retry the request
-                    time.sleep(0.5)
-                    return self.get_price(symbol)
-            else:
-                logger.warning(f"SGBProvider: HTTP {response.status_code} for {nse_symbol}")
-
-            self.record_error(Exception(f"No price data for {nse_symbol}"))
-            return None
-
-        except requests.RequestException as e:
-            logger.error(f"SGBProvider: Network error for {symbol}: {e}")
-            self.record_error(e)
-            return None
-        except Exception as e:
-            logger.error(f"SGBProvider: Error for {symbol}: {e}")
-            self.record_error(e)
-            return None
+        return StockPrice(
+            symbol=symbol,
+            price=SGB_PRICE_PER_UNIT,
+            currency='INR',
+            timestamp=datetime.now().isoformat(),
+            provider=self.name,
+            source_method='SGB_MANUAL',
+            previous_close=None,
+            change=None,
+            change_percent=None
+        )
 
     def get_price_by_isin(self, isin: str) -> Optional[StockPrice]:
-        """Get SGB price by ISIN"""
+        """Get SGB price by ISIN using hardcoded manual price"""
         isin_upper = isin.upper()
 
         if isin_upper in self.isin_to_symbol:
@@ -249,7 +134,7 @@ class SGBProvider(StockPriceProvider):
             price_data = self.get_price(internal_symbol)
 
             if price_data:
-                price_data.source_method = 'SGB_NSE_ISIN'
+                price_data.source_method = 'SGB_MANUAL_ISIN'
 
             return price_data
         else:
@@ -281,10 +166,11 @@ class SGBProvider(StockPriceProvider):
         return {
             'name': self.name,
             'status': self.status.value,
-            'api_key_configured': True,  # No API key required
+            'api_key_configured': True,
             'error_count': self.error_count,
             'max_errors': self.max_errors,
-            'supported_markets': ['NSE'],
+            'supported_markets': ['NSE', 'BSE'],
             'supported_instruments': ['SGB'],
-            'rate_limits': 'No official rate limits (unofficial API)'
+            'price_source': 'Manual (hardcoded)',
+            'current_price': SGB_PRICE_PER_UNIT
         }
