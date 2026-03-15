@@ -67,6 +67,7 @@ KNOWN_SCRIP_CODES = {
     'CIPLA': '500087',
     'AJANTPHARM': '532331',
     'AJANTA': '532331',
+    'SAREGAMA': '532163',
 }
 
 
