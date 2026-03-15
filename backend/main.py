@@ -2079,6 +2079,114 @@ def remove_admin_user_endpoint(email: str = Form(...)):
     else:
         raise HTTPException(status_code=404, detail=f"User {email} not found in admin whitelist")
 
+
+# =============================================================================
+# DB BROWSER - Admin only view of all tables
+# =============================================================================
+
+@app.get("/admin/db-browser/stats")
+def get_db_stats(
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Get statistics for all database tables (admin only)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    stats = {
+        "users": {
+            "count": db.query(User).count(),
+            "table_name": "users"
+        },
+        "securities": {
+            "count": db.query(Security).count(),
+            "table_name": "securities"
+        },
+        "transactions": {
+            "count": db.query(Transaction).count(),
+            "table_name": "transactions"
+        },
+        "lots": {
+            "count": db.query(Lot).count(),
+            "table_name": "lots"
+        },
+        "corporate_events": {
+            "count": db.query(CorporateEvent).count(),
+            "table_name": "corporate_events"
+        },
+        "lot_adjustments": {
+            "count": db.query(LotAdjustment).count(),
+            "table_name": "lot_adjustments"
+        },
+        "sale_allocations": {
+            "count": db.query(SaleAllocation).count(),
+            "table_name": "sale_allocations"
+        },
+        "portfolio_snapshots": {
+            "count": db.query(PortfolioSnapshot).count(),
+            "table_name": "portfolio_snapshots"
+        }
+    }
+
+    return {"stats": stats, "total_records": sum(s["count"] for s in stats.values())}
+
+
+@app.get("/admin/db-browser/table/{table_name}")
+def get_table_data(
+    table_name: str,
+    admin_email: str = Query(...),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db)
+):
+    """Get data from a specific table with pagination (admin only)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    table_map = {
+        "users": User,
+        "securities": Security,
+        "transactions": Transaction,
+        "lots": Lot,
+        "corporate_events": CorporateEvent,
+        "lot_adjustments": LotAdjustment,
+        "sale_allocations": SaleAllocation,
+        "portfolio_snapshots": PortfolioSnapshot
+    }
+
+    if table_name not in table_map:
+        raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
+
+    model = table_map[table_name]
+    total_count = db.query(model).count()
+    rows = db.query(model).offset(skip).limit(limit).all()
+
+    # Convert to dict format
+    data = []
+    for row in rows:
+        row_dict = {}
+        for column in row.__table__.columns:
+            value = getattr(row, column.name)
+            # Handle datetime serialization
+            if isinstance(value, datetime):
+                value = value.isoformat()
+            row_dict[column.name] = value
+        data.append(row_dict)
+
+    # Get column names
+    columns = [col.name for col in model.__table__.columns]
+
+    return {
+        "table_name": table_name,
+        "columns": columns,
+        "data": data,
+        "total_count": total_count,
+        "skip": skip,
+        "limit": limit,
+        "has_more": skip + limit < total_count
+    }
+
+
 @app.delete("/admin/clear-database")
 def clear_database(
     admin_email: str = Form(...),

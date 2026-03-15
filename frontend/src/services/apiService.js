@@ -400,5 +400,20 @@ export const apiService = {
       params: { user_id: userId }
     });
     return response.data;
+  },
+
+  // DB Browser APIs (Admin only)
+  async getDBStats(adminEmail) {
+    const response = await api.get('/admin/db-browser/stats', {
+      params: { admin_email: adminEmail }
+    });
+    return response.data;
+  },
+
+  async getTableData(tableName, adminEmail, skip = 0, limit = 50) {
+    const response = await api.get(`/admin/db-browser/table/${tableName}`, {
+      params: { admin_email: adminEmail, skip, limit }
+    });
+    return response.data;
   }
 };

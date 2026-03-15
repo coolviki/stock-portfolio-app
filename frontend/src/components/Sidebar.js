@@ -27,7 +27,8 @@ const Sidebar = ({ isOpen, onClose }) => {
     { path: '/security-master', icon: '🔐', label: 'Security Master', adminOnly: true },
     { path: '/users', icon: '👥', label: 'Manage Users', adminOnly: true },
     { path: '/price-providers', icon: '🌐', label: 'Price Providers', adminOnly: true },
-    { path: '/admin', icon: '⚙️', label: 'Admin', adminOnly: true }
+    { path: '/admin', icon: '⚙️', label: 'Admin', adminOnly: true },
+    { path: '/db-admin', icon: '🗄️', label: 'DB Browser', adminOnly: true }
   ];
 
   const menuItems = [

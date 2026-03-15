@@ -15,6 +15,7 @@ import Upload from './pages/Upload';
 import ManualEntry from './pages/ManualEntry';
 import ManageUsers from './pages/ManageUsers';
 import Admin from './pages/Admin';
+import DBAdmin from './pages/DBAdmin';
 import CapitalGains from './pages/CapitalGains';
 import SecurityMaster from './pages/SecurityMaster';
 import PriceProviders from './pages/PriceProviders';
@@ -105,6 +106,7 @@ function App() {
                 <Route path="/users" element={<ManageUsers />} />
                 <Route path="/price-providers" element={<PriceProviders />} />
                 <Route path="/admin" element={<Admin />} />
+                <Route path="/db-admin" element={<DBAdmin />} />
                 <Route path="*" element={<Navigate to="/dashboard" />} />
               </Routes>
             </ErrorBoundary>
