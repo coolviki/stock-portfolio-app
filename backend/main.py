@@ -1539,6 +1539,140 @@ def _get_portfolio_from_transactions(user_id: int, db: Session):
     }
 
 
+@app.get("/portfolio-history/")
+def get_portfolio_history(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get portfolio value history over time for charting"""
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Get all lots with purchase dates
+        lots = db.query(Lot).filter(Lot.user_id == user_id).order_by(Lot.purchase_date).all()
+
+        if not lots:
+            return {"data_points": [], "current_value": 0, "total_invested": 0}
+
+        # Get all sale allocations
+        sale_allocations = db.query(SaleAllocation).join(Lot).filter(Lot.user_id == user_id).all()
+
+        # Build timeline of events (buys and sells)
+        events = []
+
+        for lot in lots:
+            events.append({
+                "date": lot.purchase_date,
+                "type": "BUY",
+                "amount": lot.original_total_cost,
+                "quantity": lot.original_quantity,
+                "security_id": lot.security_id
+            })
+
+        for alloc in sale_allocations:
+            sell_trans = db.query(Transaction).filter(Transaction.id == alloc.sell_transaction_id).first()
+            if sell_trans:
+                events.append({
+                    "date": sell_trans.transaction_date,
+                    "type": "SELL",
+                    "amount": alloc.quantity_sold * alloc.cost_basis_per_unit,  # Cost basis of sold shares
+                    "proceeds": alloc.quantity_sold * alloc.sale_price_per_unit,
+                    "quantity": alloc.quantity_sold,
+                    "security_id": db.query(Lot).filter(Lot.id == alloc.lot_id).first().security_id if alloc.lot_id else None
+                })
+
+        # Sort events by date
+        events.sort(key=lambda x: x["date"])
+
+        if not events:
+            return {"data_points": [], "current_value": 0, "total_invested": 0}
+
+        # Generate monthly data points from first event to now
+        first_date = events[0]["date"]
+        today = datetime.now().date()
+
+        # Calculate data points at monthly intervals
+        data_points = []
+        current_date = datetime(first_date.year, first_date.month, 1).date()
+
+        cumulative_invested = 0
+        cumulative_cost_basis = 0  # Track cost basis of current holdings
+
+        event_idx = 0
+
+        while current_date <= today:
+            # Process all events up to this date
+            while event_idx < len(events) and events[event_idx]["date"] <= current_date:
+                event = events[event_idx]
+                if event["type"] == "BUY":
+                    cumulative_invested += event["amount"]
+                    cumulative_cost_basis += event["amount"]
+                else:  # SELL
+                    cumulative_cost_basis -= event["amount"]
+                event_idx += 1
+
+            # Add data point for this month
+            if cumulative_invested > 0:
+                data_points.append({
+                    "date": current_date.isoformat(),
+                    "invested": round(cumulative_invested, 2),
+                    "cost_basis": round(cumulative_cost_basis, 2)
+                })
+
+            # Move to next month
+            if current_date.month == 12:
+                current_date = datetime(current_date.year + 1, 1, 1).date()
+            else:
+                current_date = datetime(current_date.year, current_date.month + 1, 1).date()
+
+        # Process any remaining events
+        while event_idx < len(events):
+            event = events[event_idx]
+            if event["type"] == "BUY":
+                cumulative_invested += event["amount"]
+                cumulative_cost_basis += event["amount"]
+            else:  # SELL
+                cumulative_cost_basis -= event["amount"]
+            event_idx += 1
+
+        # Add final point with actual current values
+        current_value = 0
+        for lot in lots:
+            if lot.remaining_quantity > 0:
+                security = db.query(Security).filter(Security.id == lot.security_id).first()
+                if security:
+                    price, _ = stock_price_manager.get_price_with_waterfall(
+                        ticker=security.security_ticker,
+                        isin=security.security_ISIN,
+                        security_name=security.security_name
+                    )
+                    if price:
+                        current_value += price * lot.remaining_quantity
+
+        # Add today's data point
+        data_points.append({
+            "date": today.isoformat(),
+            "invested": round(cumulative_invested, 2),
+            "cost_basis": round(cumulative_cost_basis, 2),
+            "current_value": round(current_value, 2)
+        })
+
+        return {
+            "data_points": data_points,
+            "current_value": round(current_value, 2),
+            "total_invested": round(cumulative_invested, 2),
+            "current_cost_basis": round(cumulative_cost_basis, 2)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in portfolio-history for user {user_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
 @app.get("/admin/export")
 def export_database(user_email: str = Query(...), db: Session = Depends(get_db)):
     """Export all database data to JSON format"""

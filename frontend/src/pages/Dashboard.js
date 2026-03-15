@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Row, Col, Card, Table, Spinner, Button } from 'react-bootstrap';
-import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
-import { Doughnut, Bar } from 'react-chartjs-2';
+import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend, CategoryScale, LinearScale, BarElement, Title, PointElement, LineElement, Filler } from 'chart.js';
+import { Doughnut, Bar, Line } from 'react-chartjs-2';
 import { apiService } from '../services/apiService';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 
-ChartJS.register(ArcElement, ChartTooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
+ChartJS.register(ArcElement, ChartTooltip, Legend, CategoryScale, LinearScale, BarElement, Title, PointElement, LineElement, Filler);
 
 const Dashboard = () => {
   const [portfolio, setPortfolio] = useState(null);
   const [marketIndices, setMarketIndices] = useState(null);
+  const [portfolioHistory, setPortfolioHistory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sortConfig, setSortConfig] = useState({ key: 'dayPnlPercent', direction: 'desc' }); // Default: Day P&L % (highest gains on top)
   const { user } = useAuth();
@@ -20,6 +21,7 @@ const Dashboard = () => {
   useEffect(() => {
     loadPortfolioData();
     loadMarketIndices();
+    loadPortfolioHistory();
   }, [user]);
 
   const loadPortfolioData = async () => {
@@ -45,6 +47,16 @@ const Dashboard = () => {
       setMarketIndices(data);
     } catch (error) {
       console.error('Error loading market indices:', error);
+    }
+  };
+
+  const loadPortfolioHistory = async () => {
+    try {
+      if (!user?.id) return;
+      const data = await apiService.getPortfolioHistory(user.id);
+      setPortfolioHistory(data);
+    } catch (error) {
+      console.error('Error loading portfolio history:', error);
     }
   };
 
@@ -529,6 +541,112 @@ const Dashboard = () => {
           </div>
         </Card.Body>
       </Card>
+
+      {/* Portfolio Value Over Time Chart */}
+      {portfolioHistory && portfolioHistory.data_points && portfolioHistory.data_points.length > 1 && (
+        <Card className="mt-4">
+          <Card.Header>
+            <h5 className="mb-0">Portfolio Value Over Time</h5>
+          </Card.Header>
+          <Card.Body>
+            <div style={{ height: '300px' }}>
+              <Line
+                data={{
+                  labels: portfolioHistory.data_points.map(dp => {
+                    const date = new Date(dp.date);
+                    return date.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
+                  }),
+                  datasets: [
+                    {
+                      label: 'Amount Invested',
+                      data: portfolioHistory.data_points.map(dp => dp.invested),
+                      borderColor: 'rgb(75, 192, 192)',
+                      backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                      fill: true,
+                      tension: 0.3,
+                      pointRadius: 2,
+                      pointHoverRadius: 5
+                    },
+                    {
+                      label: 'Current Value',
+                      data: portfolioHistory.data_points.map((dp, idx) => {
+                        // Show current value only for the last data point
+                        if (idx === portfolioHistory.data_points.length - 1 && dp.current_value) {
+                          return dp.current_value;
+                        }
+                        // For other points, show cost basis (what remains invested after sells)
+                        return dp.cost_basis;
+                      }),
+                      borderColor: portfolioHistory.current_value >= portfolioHistory.current_cost_basis
+                        ? 'rgb(34, 197, 94)'
+                        : 'rgb(239, 68, 68)',
+                      backgroundColor: portfolioHistory.current_value >= portfolioHistory.current_cost_basis
+                        ? 'rgba(34, 197, 94, 0.1)'
+                        : 'rgba(239, 68, 68, 0.1)',
+                      fill: true,
+                      tension: 0.3,
+                      pointRadius: 2,
+                      pointHoverRadius: 5
+                    }
+                  ]
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  interaction: {
+                    mode: 'index',
+                    intersect: false,
+                  },
+                  plugins: {
+                    legend: {
+                      position: 'top',
+                    },
+                    tooltip: {
+                      callbacks: {
+                        label: function(context) {
+                          return `${context.dataset.label}: ₹${context.parsed.y.toLocaleString('en-IN')}`;
+                        }
+                      }
+                    }
+                  },
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      ticks: {
+                        callback: function(value) {
+                          if (value >= 10000000) {
+                            return '₹' + (value / 10000000).toFixed(1) + 'Cr';
+                          } else if (value >= 100000) {
+                            return '₹' + (value / 100000).toFixed(1) + 'L';
+                          } else if (value >= 1000) {
+                            return '₹' + (value / 1000).toFixed(0) + 'K';
+                          }
+                          return '₹' + value;
+                        }
+                      }
+                    }
+                  }
+                }}
+              />
+            </div>
+            <div className="text-center mt-3">
+              <small className="text-muted">
+                Total Invested: ₹{portfolioHistory.total_invested?.toLocaleString('en-IN')} |
+                Current Value: ₹{portfolioHistory.current_value?.toLocaleString('en-IN')} |
+                {portfolioHistory.current_value >= portfolioHistory.current_cost_basis ? (
+                  <span className="text-success">
+                    Gain: ₹{(portfolioHistory.current_value - portfolioHistory.current_cost_basis).toLocaleString('en-IN')}
+                  </span>
+                ) : (
+                  <span className="text-danger">
+                    Loss: ₹{(portfolioHistory.current_cost_basis - portfolioHistory.current_value).toLocaleString('en-IN')}
+                  </span>
+                )}
+              </small>
+            </div>
+          </Card.Body>
+        </Card>
+      )}
     </div>
   );
 };

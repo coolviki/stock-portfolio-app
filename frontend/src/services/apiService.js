@@ -378,5 +378,16 @@ export const apiService = {
 
     const response = await api.post(`/admin/migrate-to-lots?${params}`);
     return response.data;
+  },
+
+  // Portfolio History API
+  async getPortfolioHistory(userId) {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+    const response = await api.get('/portfolio-history/', {
+      params: { user_id: userId }
+    });
+    return response.data;
   }
 };
