@@ -2306,12 +2306,12 @@ def trigger_portfolio_snapshots(
                 cost_basis += lot.adjusted_cost_per_unit * lot.remaining_quantity
                 security = db.query(Security).filter(Security.id == lot.security_id).first()
                 if security:
-                    price, _, _ = get_current_price_with_waterfall(
+                    price, _ = get_current_price_with_waterfall(
                         ticker=security.security_ticker,
                         isin=security.security_ISIN,
                         security_name=security.security_name
                     )
-                    if price:
+                    if price and price > 0:
                         market_value += price * lot.remaining_quantity
 
             # Create snapshot
