@@ -318,7 +318,7 @@ const Dashboard = () => {
           <Card className="card-stat-new holdings text-center h-100 border-0">
             <Card.Body className="py-2 px-2">
               <small className="stat-label">Holdings</small>
-              <div className="stat-value">{portfolioLabels.length}</div>
+              <div className="stat-value">{allHoldingSymbols.length}</div>
               <small className="stat-percent">Securities</small>
             </Card.Body>
           </Card>
@@ -333,7 +333,7 @@ const Dashboard = () => {
               <h5>Portfolio Allocation</h5>
             </Card.Header>
             <Card.Body>
-              {portfolioLabels.length > 0 ? (
+              {allHoldingSymbols.length > 0 ? (
                 <Doughnut
                   data={portfolioData}
                   options={{
@@ -394,7 +394,7 @@ const Dashboard = () => {
           <div className="d-flex justify-content-between align-items-center">
             <div>
               <h6 className="mb-0 d-md-none">
-                Holdings ({portfolioLabels.length})
+                Holdings ({allHoldingSymbols.length})
                 {portfolio.overall_xirr !== null && portfolio.overall_xirr !== undefined && (
                   <span className={`ms-2 ${portfolio.overall_xirr >= 0 ? 'text-success' : 'text-danger'}`}>
                     XIRR: {portfolio.overall_xirr >= 0 ? '+' : ''}{portfolio.overall_xirr.toFixed(1)}%
@@ -488,7 +488,7 @@ const Dashboard = () => {
                 </div>
               );
             })}
-            {portfolioLabels.length === 0 && (
+            {allHoldingSymbols.length === 0 && (
               <p className="text-center text-muted py-4">No current holdings</p>
             )}
           </div>
@@ -570,7 +570,7 @@ const Dashboard = () => {
                 })}
               </tbody>
             </Table>
-            {portfolioLabels.length === 0 && (
+            {allHoldingSymbols.length === 0 && (
               <p className="text-center text-muted py-3">No current holdings</p>
             )}
           </div>
