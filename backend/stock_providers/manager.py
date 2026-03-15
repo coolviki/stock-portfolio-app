@@ -58,32 +58,42 @@ class StockPriceManager:
     
     def _initialize_providers(self):
         """Initialize all available providers"""
+        logger.info("Initializing stock price providers...")
+
         # SGB Provider (highest priority for Sovereign Gold Bonds)
         sgb_config = price_config.get_provider_config("sgb_provider")
-        if sgb_config:
+        if sgb_config and sgb_config.get("enabled", False):
             try:
                 self.providers["sgb_provider"] = SGBProvider(sgb_config.get("config", {}))
                 logger.info("Initialized SGB provider")
             except Exception as e:
                 logger.error(f"Failed to initialize SGB provider: {e}")
+        else:
+            logger.info("SGB provider not configured or disabled")
 
         # Alpha Vantage
         av_config = price_config.get_provider_config("alpha_vantage")
-        if av_config:
+        if av_config and av_config.get("enabled", False):
             try:
                 self.providers["alpha_vantage"] = AlphaVantageProvider(av_config.get("config", {}))
                 logger.info("Initialized Alpha Vantage provider")
             except Exception as e:
                 logger.error(f"Failed to initialize Alpha Vantage provider: {e}")
+        else:
+            logger.info("Alpha Vantage provider not configured or disabled")
 
         # Yahoo Finance
         yf_config = price_config.get_provider_config("yahoo_finance")
-        if yf_config:
+        if yf_config and yf_config.get("enabled", False):
             try:
                 self.providers["yahoo_finance"] = YahooFinanceProvider(yf_config.get("config", {}))
                 logger.info("Initialized Yahoo Finance provider")
             except Exception as e:
                 logger.error(f"Failed to initialize Yahoo Finance provider: {e}")
+        else:
+            logger.info("Yahoo Finance provider not configured or disabled")
+
+        logger.info(f"Initialized {len(self.providers)} providers: {list(self.providers.keys())}")
     
     def _should_retry_provider(self, provider_name: str) -> bool:
         """Check if we should retry a disabled provider"""
@@ -102,21 +112,26 @@ class StockPriceManager:
         """Get list of available providers in priority order"""
         enabled_providers = price_config.get_enabled_providers()
         available_providers = []
-        
+
         for provider_name in enabled_providers:
-            if provider_name in self.providers:
-                provider = self.providers[provider_name]
-                
-                # Check if provider is available or if we should retry
-                if provider.is_available() or self._should_retry_provider(provider_name):
-                    available_providers.append(provider_name)
-                    
-                    # If we're retrying a disabled provider, reset its status
-                    if provider.get_status() == ProviderStatus.UNAVAILABLE and self._should_retry_provider(provider_name):
-                        provider.reset_status()
-                        self.last_retry_times[provider_name] = datetime.now()
-                        logger.info(f"Retrying previously disabled provider: {provider_name}")
-        
+            if provider_name not in self.providers:
+                logger.warning(f"Provider {provider_name} is enabled but not initialized")
+                continue
+
+            provider = self.providers[provider_name]
+
+            # Check if provider is available or if we should retry
+            if provider.is_available() or self._should_retry_provider(provider_name):
+                available_providers.append(provider_name)
+
+                # If we're retrying a disabled provider, reset its status
+                if provider.get_status() == ProviderStatus.UNAVAILABLE and self._should_retry_provider(provider_name):
+                    provider.reset_status()
+                    self.last_retry_times[provider_name] = datetime.now()
+                    logger.info(f"Retrying previously disabled provider: {provider_name}")
+            else:
+                logger.debug(f"Provider {provider_name} is unavailable (status: {provider.get_status()}, errors: {provider.error_count})")
+
         return available_providers
     
     def get_price(self, symbol: str) -> Tuple[float, str]:
@@ -132,25 +147,33 @@ class StockPriceManager:
         
         for provider_name in available_providers:
             provider = self.providers[provider_name]
-            
+
             for attempt in range(max_retries):
                 try:
-                    logger.info(f"Attempting to get price for {symbol} from {provider_name} (attempt {attempt + 1})")
+                    logger.debug(f"Attempting to get price for {symbol} from {provider_name} (attempt {attempt + 1})")
                     price_data = provider.get_price(symbol)
-                    
-                    if price_data and price_data.price > 0:
-                        logger.info(f"Successfully got price {price_data.price} for {symbol} from {provider_name}")
+
+                    # None means provider doesn't handle this symbol - skip to next provider
+                    if price_data is None:
+                        logger.debug(f"{provider_name} returned None for {symbol}, trying next provider")
+                        break
+
+                    if price_data.price > 0:
+                        logger.info(f"Got price {price_data.price} for {symbol} from {provider_name}")
                         return price_data.price, f"{provider_name.upper()}_SYMBOL"
-                    
+
+                    # Price is 0 - might be a temporary issue, retry
+                    logger.warning(f"{provider_name} returned price 0 for {symbol}, retrying...")
+
                 except Exception as e:
                     logger.error(f"Error getting price from {provider_name} (attempt {attempt + 1}): {e}")
                     provider.record_error(e)
-                    
+
                     if attempt < max_retries - 1:
                         continue
                     else:
                         break
-            
+
             # If all attempts failed for this provider, mark retry time
             if provider.get_status() == ProviderStatus.UNAVAILABLE:
                 self.last_retry_times[provider_name] = datetime.now()
@@ -176,25 +199,33 @@ class StockPriceManager:
         
         for provider_name in available_providers:
             provider = self.providers[provider_name]
-            
+
             for attempt in range(max_retries):
                 try:
-                    logger.info(f"Attempting to get price for ISIN {isin} from {provider_name} (attempt {attempt + 1})")
+                    logger.debug(f"Attempting to get price for ISIN {isin} from {provider_name} (attempt {attempt + 1})")
                     price_data = provider.get_price_by_isin(isin)
-                    
-                    if price_data and price_data.price > 0:
-                        logger.info(f"Successfully got price {price_data.price} for ISIN {isin} from {provider_name}")
+
+                    # None means provider doesn't handle this ISIN - skip to next provider
+                    if price_data is None:
+                        logger.debug(f"{provider_name} returned None for ISIN {isin}, trying next provider")
+                        break
+
+                    if price_data.price > 0:
+                        logger.info(f"Got price {price_data.price} for ISIN {isin} from {provider_name}")
                         return price_data.price, f"{provider_name.upper()}_ISIN"
-                    
+
+                    # Price is 0 - might be a temporary issue, retry
+                    logger.warning(f"{provider_name} returned price 0 for ISIN {isin}, retrying...")
+
                 except Exception as e:
                     logger.error(f"Error getting price by ISIN from {provider_name} (attempt {attempt + 1}): {e}")
                     provider.record_error(e)
-                    
+
                     if attempt < max_retries - 1:
                         continue
                     else:
                         break
-            
+
             # If all attempts failed for this provider, mark retry time
             if provider.get_status() == ProviderStatus.UNAVAILABLE:
                 self.last_retry_times[provider_name] = datetime.now()
