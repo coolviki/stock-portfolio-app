@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean, Enum, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, Date, ForeignKey, Boolean, Enum, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
@@ -42,6 +42,7 @@ class User(Base):
     transactions = relationship("Transaction", back_populates="user")
     lots = relationship("Lot", back_populates="user")
     created_corporate_events = relationship("CorporateEvent", back_populates="created_by_user")
+    portfolio_snapshots = relationship("PortfolioSnapshot", back_populates="user")
 
 class Security(Base):
     __tablename__ = "securities"
@@ -223,3 +224,26 @@ class SaleAllocation(Base):
     # Relationships
     sell_transaction = relationship("Transaction", back_populates="sale_allocations")
     lot = relationship("Lot", back_populates="sale_allocations")
+
+
+class PortfolioSnapshot(Base):
+    """Daily snapshots of portfolio value for historical tracking"""
+    __tablename__ = "portfolio_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    snapshot_date = Column(Date, nullable=False)
+
+    # Portfolio values at snapshot time
+    cost_basis = Column(Float, nullable=False)      # Cost basis of current holdings
+    market_value = Column(Float, nullable=False)    # Market value at snapshot time
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Unique constraint: one snapshot per user per day
+    __table_args__ = (
+        UniqueConstraint('user_id', 'snapshot_date', name='uq_user_snapshot_date'),
+    )
+
+    # Relationships
+    user = relationship("User", back_populates="portfolio_snapshots")

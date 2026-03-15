@@ -542,7 +542,11 @@ const Dashboard = () => {
         </Card.Body>
       </Card>
 
-      {/* Portfolio Value Over Time Chart */}
+      {/* Portfolio Value Over Time Chart
+          TODO: Revisit this chart to use portfolio_snapshots table data for accurate historical
+          market values instead of computing on-the-fly. The snapshots are captured daily at 6 PM IST.
+          Currently shows: invested amount + cost basis over time, with current value only at today's date.
+      */}
       {portfolioHistory && portfolioHistory.data_points && portfolioHistory.data_points.length > 1 && (
         <Card className="mt-4">
           <Card.Header>

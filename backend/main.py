@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 from database import get_db, engine, Base
-from models import User, Transaction, Security, Lot, CorporateEvent, LotAdjustment, SaleAllocation, LotStatus
+from models import User, Transaction, Security, Lot, CorporateEvent, LotAdjustment, SaleAllocation, LotStatus, PortfolioSnapshot
 from schemas import (
     UserCreate, UserResponse, FirebaseUserCreate,
     TransactionCreate, TransactionResponse, TransactionUpdate,
@@ -105,7 +105,7 @@ if IS_PRODUCTION:
     app.mount("/static", StaticFiles(directory=f"{FRONTEND_BUILD_PATH}/static"), name="static")
 
 # =============================================================================
-# SCHEDULED TASKS - Weekly Corporate Events Fetch
+# SCHEDULED TASKS - Weekly Corporate Events Fetch & Daily Portfolio Snapshots
 # =============================================================================
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
@@ -130,6 +130,75 @@ try:
         except Exception as e:
             logger.error(f"Error in scheduled corporate events fetch: {e}")
 
+    def scheduled_portfolio_snapshots():
+        """Daily task to capture portfolio snapshots for all users"""
+        logger.info("Starting daily portfolio snapshots...")
+        try:
+            from database import SessionLocal
+            db = SessionLocal()
+            try:
+                today = datetime.now().date()
+                users = db.query(User).all()
+                snapshots_created = 0
+
+                for user in users:
+                    try:
+                        # Check if snapshot already exists for today
+                        existing = db.query(PortfolioSnapshot).filter(
+                            PortfolioSnapshot.user_id == user.id,
+                            PortfolioSnapshot.snapshot_date == today
+                        ).first()
+
+                        if existing:
+                            continue
+
+                        # Get lots with remaining quantity
+                        lots = db.query(Lot).filter(
+                            Lot.user_id == user.id,
+                            Lot.remaining_quantity > 0
+                        ).all()
+
+                        if not lots:
+                            continue
+
+                        # Calculate cost basis and market value
+                        cost_basis = 0
+                        market_value = 0
+
+                        for lot in lots:
+                            cost_basis += lot.adjusted_cost_per_unit * lot.remaining_quantity
+
+                            security = db.query(Security).filter(Security.id == lot.security_id).first()
+                            if security:
+                                price, _ = stock_price_manager.get_price_with_waterfall(
+                                    ticker=security.security_ticker,
+                                    isin=security.security_ISIN,
+                                    security_name=security.security_name
+                                )
+                                if price:
+                                    market_value += price * lot.remaining_quantity
+
+                        # Create snapshot
+                        snapshot = PortfolioSnapshot(
+                            user_id=user.id,
+                            snapshot_date=today,
+                            cost_basis=cost_basis,
+                            market_value=market_value
+                        )
+                        db.add(snapshot)
+                        snapshots_created += 1
+
+                    except Exception as e:
+                        logger.error(f"Error creating snapshot for user {user.id}: {e}")
+
+                db.commit()
+                logger.info(f"Daily snapshots completed: {snapshots_created} snapshots created for {len(users)} users")
+
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error in scheduled portfolio snapshots: {e}")
+
     # Initialize scheduler
     scheduler = BackgroundScheduler()
 
@@ -142,20 +211,29 @@ try:
         replace_existing=True
     )
 
+    # Run daily at 6:00 PM IST (12:30 PM UTC) - after market close
+    scheduler.add_job(
+        scheduled_portfolio_snapshots,
+        CronTrigger(hour=18, minute=0),
+        id='portfolio_snapshots',
+        name='Daily Portfolio Snapshots',
+        replace_existing=True
+    )
+
     @app.on_event("startup")
     def start_scheduler():
         if not scheduler.running:
             scheduler.start()
-            logger.info("Corporate events scheduler started - runs every Sunday at 2:00 AM")
+            logger.info("Schedulers started - Corporate events: Sundays 2:00 AM, Portfolio snapshots: Daily 6:00 PM IST")
 
     @app.on_event("shutdown")
     def shutdown_scheduler():
         if scheduler.running:
             scheduler.shutdown()
-            logger.info("Corporate events scheduler stopped")
+            logger.info("Schedulers stopped")
 
 except ImportError:
-    logger.warning("APScheduler not installed. Scheduled corporate events fetch disabled.")
+    logger.warning("APScheduler not installed. Scheduled tasks disabled.")
 
 @app.get("/api")
 async def api_root():
