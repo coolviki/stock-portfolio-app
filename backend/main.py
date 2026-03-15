@@ -2565,16 +2565,21 @@ def fetch_corporate_events_for_security(
                 "last_fetch": security.last_corporate_events_fetch.isoformat()
             }
 
+    # Get scrip code for debugging
+    scrip_code = fetcher.get_scrip_code(security)
+
     # Always use oldest transaction date as from_date to capture all relevant events
     events_created, errors = fetcher.fetch_corporate_events(
         security,
-        from_date=None  # Defaults to oldest transaction date in fetch_corporate_events
+        from_date=None  # Defaults to 5 years back in fetch_corporate_events
     )
 
     return {
         "success": True,
         "security_id": security_id,
         "security_name": security.security_name,
+        "security_ticker": security.security_ticker,
+        "bse_scrip_code": scrip_code,
         "events_created": events_created,
         "errors": errors,
         "last_fetch": security.last_corporate_events_fetch.isoformat() if security.last_corporate_events_fetch else None
