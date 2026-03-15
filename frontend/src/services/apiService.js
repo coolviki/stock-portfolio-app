@@ -389,5 +389,16 @@ export const apiService = {
       params: { user_id: userId }
     });
     return response.data;
+  },
+
+  // Corporate Events for User Holdings (for ticker)
+  async getCorporateEventsForUserHoldings(userId) {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+    const response = await api.get('/corporate-events/user-holdings', {
+      params: { user_id: userId }
+    });
+    return response.data;
   }
 };

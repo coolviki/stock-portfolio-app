@@ -20,6 +20,7 @@ import SecurityMaster from './pages/SecurityMaster';
 import PriceProviders from './pages/PriceProviders';
 import CorporateEvents from './pages/CorporateEvents';
 import LotView from './pages/LotView';
+import CorporateEventsTicker from './components/CorporateEventsTicker';
 
 function App() {
   const { user, loading } = useAuth();
@@ -110,6 +111,7 @@ function App() {
           </div>
         </div>
       </div>
+      <CorporateEventsTicker />
       <ToastContainer position="top-right" autoClose={3000} />
     </div>
   );
