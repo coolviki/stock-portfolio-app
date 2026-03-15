@@ -75,6 +75,16 @@ export const apiService = {
     return response.data;
   },
 
+  /**
+   * Search for stocks - used by all typeahead components (Manual Entry, Transactions)
+   *
+   * Search order (waterfall):
+   * 1. Securities table (previously used stocks from transactions)
+   * 2. Local database (2250+ NSE stocks from indian_stocks_db.py)
+   * 3. Yahoo Finance API (fallback for stocks not in local DB)
+   *
+   * Once a stock is used in a transaction, it appears in future searches immediately.
+   */
   async searchStocks(query) {
     if (!query || query.trim().length < 2) {
       return { results: [] };

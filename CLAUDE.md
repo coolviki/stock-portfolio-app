@@ -100,6 +100,38 @@ mock_prices = {
 }
 ```
 
+## Stock Search System
+
+### Search Flow (Typeahead)
+The stock search is used across all screens with typeahead behavior (Manual Entry, Transactions edit). The search follows a waterfall approach:
+
+1. **Securities Table** (Database)
+   - Searches previously used stocks from transactions
+   - Matches on: `security_name`, `security_ticker`, `security_ISIN`
+   - Fastest lookup, no external API call
+
+2. **Local Stock Database** (`indian_stocks_db.py`)
+   - Contains 2250+ NSE-listed equities with ISIN codes
+   - Auto-generated from official NSE equity list
+   - Includes popular ETFs (GOLDBEES, NIFTYBEES, etc.)
+
+3. **Yahoo Finance API** (Fallback)
+   - Only called if no results from steps 1 & 2
+   - Searches Yahoo's stock database
+   - Filters results for Indian stocks (NSE/BSE exchanges)
+   - Results are NOT cached in local database
+
+### Key Files
+- `main.py`: `/search-stocks/{query}` endpoint
+- `stock_api.py`: `search_stocks()` function
+- `stock_providers/yahoo_finance.py`: Yahoo API integration
+- `stock_providers/indian_stocks_db.py`: Local stock database
+
+### Behavior
+- Once a stock is used in a transaction, it's stored in the `securities` table
+- Future searches will find it immediately (no Yahoo API call needed)
+- All typeahead components use `apiService.searchStocks()` for consistency
+
 ## PDF Contract Note Processing
 
 ### Supported Formats
