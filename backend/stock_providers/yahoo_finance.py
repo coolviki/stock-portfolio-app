@@ -159,38 +159,105 @@ class YahooFinanceProvider(StockPriceProvider):
             return None
     
     def search_stocks(self, query: str) -> List[Dict]:
-        """Search for stocks in local database (Yahoo Finance doesn't have public search API)"""
+        """Search for stocks using Yahoo Finance search API, with local database fallback"""
         try:
             results = []
-            query_upper = query.upper()
-            
-            for stock in self.indian_stocks:
-                if (query_upper in stock['symbol'] or 
-                    query_upper in stock['name'].upper()):
+
+            # First try Yahoo Finance search API
+            yahoo_results = self._search_yahoo_api(query)
+            if yahoo_results:
+                results.extend(yahoo_results)
+
+            # Also search local database for additional matches
+            local_results = self._search_local_database(query)
+
+            # Merge results, avoiding duplicates
+            seen_symbols = {r['symbol'] for r in results}
+            for stock in local_results:
+                if stock['symbol'] not in seen_symbols:
                     results.append(stock)
-            
-            # Sort results to prioritize exact matches
-            def sort_key(stock):
-                symbol_exact = stock['symbol'].replace('.NS', '') == query_upper
-                symbol_starts = stock['symbol'].startswith(query_upper)
-                name_starts = stock['name'].upper().startswith(query_upper)
-                
-                if symbol_exact:
-                    return (0, stock['symbol'])
-                elif symbol_starts:
-                    return (1, stock['symbol'])
-                elif name_starts:
-                    return (2, stock['name'])
-                else:
-                    return (3, stock['symbol'])
-            
-            results.sort(key=sort_key)
-            logger.info(f"Yahoo Finance: Found {len(results)} matches for '{query}'")
-            return results[:10]
-            
+                    seen_symbols.add(stock['symbol'])
+
+            logger.info(f"Yahoo Finance: Found {len(results)} total matches for '{query}'")
+            return results[:15]
+
         except Exception as e:
             logger.error(f"Yahoo Finance search error: {e}")
             return []
+
+    def _search_yahoo_api(self, query: str) -> List[Dict]:
+        """Search using Yahoo Finance search API"""
+        try:
+            url = "https://query1.finance.yahoo.com/v1/finance/search"
+            params = {
+                "q": query,
+                "quotesCount": 10,
+                "newsCount": 0,
+                "enableFuzzyQuery": True,
+                "quotesQueryId": "tss_match_phrase_query"
+            }
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json'
+            }
+
+            response = requests.get(url, params=params, headers=headers, timeout=self.timeout)
+
+            if response.status_code == 200:
+                data = response.json()
+                quotes = data.get("quotes", [])
+                results = []
+
+                for quote in quotes:
+                    symbol = quote.get("symbol", "")
+                    exchange = quote.get("exchange", "")
+
+                    # Filter for Indian stocks (NSE/BSE)
+                    if symbol.endswith(".NS") or symbol.endswith(".BO") or exchange in ["NSE", "BSE", "NSI", "BOM"]:
+                        results.append({
+                            "symbol": symbol,
+                            "name": quote.get("shortname") or quote.get("longname") or symbol,
+                            "isin": "",  # Yahoo doesn't return ISIN
+                            "exchange": exchange
+                        })
+
+                logger.info(f"Yahoo API search: Found {len(results)} Indian stocks for '{query}'")
+                return results
+            else:
+                logger.warning(f"Yahoo search API returned {response.status_code}")
+                return []
+
+        except Exception as e:
+            logger.error(f"Yahoo API search error: {e}")
+            return []
+
+    def _search_local_database(self, query: str) -> List[Dict]:
+        """Search in local Indian stocks database"""
+        results = []
+        query_upper = query.upper()
+
+        for stock in self.indian_stocks:
+            if (query_upper in stock['symbol'] or
+                query_upper in stock['name'].upper()):
+                results.append(stock)
+
+        # Sort results to prioritize exact matches
+        def sort_key(stock):
+            symbol_exact = stock['symbol'].replace('.NS', '') == query_upper
+            symbol_starts = stock['symbol'].startswith(query_upper)
+            name_starts = stock['name'].upper().startswith(query_upper)
+
+            if symbol_exact:
+                return (0, stock['symbol'])
+            elif symbol_starts:
+                return (1, stock['symbol'])
+            elif name_starts:
+                return (2, stock['name'])
+            else:
+                return (3, stock['symbol'])
+
+        results.sort(key=sort_key)
+        return results[:10]
     
     def get_provider_info(self) -> Dict:
         """Get provider information"""
