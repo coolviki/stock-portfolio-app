@@ -1,6 +1,13 @@
 {
   "version": "1.0",
   "providers": {
+    "sgb_provider": {
+      "enabled": true,
+      "priority": 0,
+      "config": {
+        "timeout": 15
+      }
+    },
     "alpha_vantage": {
       "enabled": true,
       "priority": 1,

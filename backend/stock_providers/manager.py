@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from .base import StockPriceProvider, StockPrice, ProviderStatus
 from .alpha_vantage import AlphaVantageProvider
 from .yahoo_finance import YahooFinanceProvider
+from .sgb_provider import SGBProvider
 from price_config import price_config
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,15 @@ class StockPriceManager:
     
     def _initialize_providers(self):
         """Initialize all available providers"""
+        # SGB Provider (highest priority for Sovereign Gold Bonds)
+        sgb_config = price_config.get_provider_config("sgb_provider")
+        if sgb_config:
+            try:
+                self.providers["sgb_provider"] = SGBProvider(sgb_config.get("config", {}))
+                logger.info("Initialized SGB provider")
+            except Exception as e:
+                logger.error(f"Failed to initialize SGB provider: {e}")
+
         # Alpha Vantage
         av_config = price_config.get_provider_config("alpha_vantage")
         if av_config:
@@ -65,7 +75,7 @@ class StockPriceManager:
                 logger.info("Initialized Alpha Vantage provider")
             except Exception as e:
                 logger.error(f"Failed to initialize Alpha Vantage provider: {e}")
-        
+
         # Yahoo Finance
         yf_config = price_config.get_provider_config("yahoo_finance")
         if yf_config:
