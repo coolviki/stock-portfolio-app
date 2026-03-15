@@ -112,12 +112,22 @@ class SGBProvider(StockPriceProvider):
             logger.error(f"SGBProvider: Session initialization error: {e}")
             return False
 
+    def _strip_exchange_suffix(self, symbol: str) -> str:
+        """
+        Strip exchange suffix from symbol (e.g., .BSE, .NSE, .NS, .BO).
+        """
+        symbol_upper = symbol.upper()
+        for suffix in ['.BSE', '.NSE', '.NS', '.BO']:
+            if symbol_upper.endswith(suffix):
+                return symbol_upper[:-len(suffix)]
+        return symbol_upper
+
     def _get_nse_symbol(self, symbol: str) -> Optional[str]:
         """
         Map internal SGB symbol to NSE trading symbol.
         Returns None if symbol is not an SGB or mapping not found.
         """
-        symbol_upper = symbol.upper()
+        symbol_upper = self._strip_exchange_suffix(symbol)
 
         # Direct lookup in mapping
         if symbol_upper in self.sgb_symbol_map:
@@ -131,7 +141,7 @@ class SGBProvider(StockPriceProvider):
 
     def _is_sgb_symbol(self, symbol: str) -> bool:
         """Check if the symbol is a known SGB symbol"""
-        symbol_upper = symbol.upper()
+        symbol_upper = self._strip_exchange_suffix(symbol)
         return (
             symbol_upper in self.sgb_symbol_map or
             symbol_upper.startswith('SGB') or
