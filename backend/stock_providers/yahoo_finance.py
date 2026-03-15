@@ -159,26 +159,20 @@ class YahooFinanceProvider(StockPriceProvider):
             return None
     
     def search_stocks(self, query: str) -> List[Dict]:
-        """Search for stocks using Yahoo Finance search API, with local database fallback"""
+        """Search for stocks - local database first, Yahoo API as fallback"""
         try:
-            results = []
+            # First search local database (faster, no network call)
+            results = self._search_local_database(query)
+            logger.info(f"Local database: Found {len(results)} matches for '{query}'")
 
-            # First try Yahoo Finance search API
-            yahoo_results = self._search_yahoo_api(query)
-            if yahoo_results:
-                results.extend(yahoo_results)
+            # If no results in local database, try Yahoo Finance search API
+            if not results:
+                logger.info(f"No local results for '{query}', trying Yahoo API...")
+                yahoo_results = self._search_yahoo_api(query)
+                if yahoo_results:
+                    results.extend(yahoo_results)
+                    logger.info(f"Yahoo API: Found {len(yahoo_results)} matches for '{query}'")
 
-            # Also search local database for additional matches
-            local_results = self._search_local_database(query)
-
-            # Merge results, avoiding duplicates
-            seen_symbols = {r['symbol'] for r in results}
-            for stock in local_results:
-                if stock['symbol'] not in seen_symbols:
-                    results.append(stock)
-                    seen_symbols.add(stock['symbol'])
-
-            logger.info(f"Yahoo Finance: Found {len(results)} total matches for '{query}'")
             return results[:15]
 
         except Exception as e:
