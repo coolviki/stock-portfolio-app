@@ -1649,8 +1649,10 @@ def get_portfolio_history(
         events = []
 
         for lot in lots:
+            # Convert datetime to date for consistent comparison
+            purchase_date = lot.purchase_date.date() if hasattr(lot.purchase_date, 'date') else lot.purchase_date
             events.append({
-                "date": lot.purchase_date,
+                "date": purchase_date,
                 "type": "BUY",
                 "amount": lot.original_total_cost,
                 "quantity": lot.original_quantity,
@@ -1660,8 +1662,10 @@ def get_portfolio_history(
         for alloc in sale_allocations:
             sell_trans = db.query(Transaction).filter(Transaction.id == alloc.sell_transaction_id).first()
             if sell_trans:
+                # Convert datetime to date for consistent comparison
+                trans_date = sell_trans.transaction_date.date() if hasattr(sell_trans.transaction_date, 'date') else sell_trans.transaction_date
                 events.append({
-                    "date": sell_trans.transaction_date,
+                    "date": trans_date,
                     "type": "SELL",
                     "amount": alloc.quantity_sold * alloc.cost_basis_per_unit,  # Cost basis of sold shares
                     "proceeds": alloc.quantity_sold * alloc.sale_price_per_unit,
