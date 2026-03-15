@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, Table, Spinner, Button } from 'react-bootstrap';
+import { Row, Col, Card, Table, Spinner, Button, Modal, Badge } from 'react-bootstrap';
 import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend, CategoryScale, LinearScale, BarElement, Title, PointElement, LineElement, Filler } from 'chart.js';
 import { Doughnut, Bar, Line } from 'react-chartjs-2';
 import { apiService } from '../services/apiService';
@@ -16,6 +16,12 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [sortConfig, setSortConfig] = useState({ key: 'dayPnlPercent', direction: 'desc' }); // Default: Day P&L % (highest gains on top)
   const { user } = useAuth();
+
+  // Transaction history modal state
+  const [showTxModal, setShowTxModal] = useState(false);
+  const [selectedStock, setSelectedStock] = useState(null);
+  const [stockTransactions, setStockTransactions] = useState([]);
+  const [txLoading, setTxLoading] = useState(false);
 
   const timeRangeOptions = [
     { value: '5d', label: '5D' },
@@ -77,6 +83,26 @@ const Dashboard = () => {
       // Default to desc (highest first), toggle to asc on second click
       direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
     }));
+  };
+
+  const handleStockClick = async (symbol, stockData) => {
+    setSelectedStock({ symbol, ...stockData });
+    setShowTxModal(true);
+    setTxLoading(true);
+    setStockTransactions([]);
+
+    try {
+      // Fetch transactions for this stock
+      const transactions = await apiService.getTransactions(user.id, { security_name: symbol });
+      // Sort by date descending (most recent first)
+      const sorted = transactions.sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
+      setStockTransactions(sorted);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      toast.error('Failed to load transaction history');
+    } finally {
+      setTxLoading(false);
+    }
   };
 
   const getSortedHoldings = (holdings, currentValues, portfolioData) => {
@@ -455,7 +481,11 @@ const Dashboard = () => {
                 <div key={symbol} className="holding-item-new px-3 py-2 border-bottom">
                   <div className="d-flex justify-content-between align-items-center">
                     <div>
-                      <strong className="holding-symbol">{symbol}</strong>
+                      <strong
+                        className="holding-symbol"
+                        style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
+                        onClick={() => handleStockClick(symbol, stock)}
+                      >{symbol}</strong>
                       <div className="holding-meta">
                         {stock.quantity} shares @ ₹{avgPrice.toFixed(0)}, CMP{' '}
                         <span className={currentPrice >= avgPrice ? 'text-success' : 'text-danger'}>
@@ -540,7 +570,12 @@ const Dashboard = () => {
 
                   return (
                     <tr key={symbol}>
-                      <td><strong>{symbol}</strong></td>
+                      <td>
+                        <strong
+                          style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
+                          onClick={() => handleStockClick(symbol, stock)}
+                        >{symbol}</strong>
+                      </td>
                       <td>{stock.quantity}</td>
                       <td>₹{avgPrice.toFixed(2)}</td>
                       <td>₹{currentPrice.toFixed(2)}</td>
@@ -703,6 +738,81 @@ const Dashboard = () => {
           </Card.Body>
         </Card>
       )}
+
+      {/* Transaction History Modal */}
+      <Modal show={showTxModal} onHide={() => setShowTxModal(false)} size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            {selectedStock?.symbol}
+            <small className="text-muted ms-2" style={{ fontSize: '0.6em' }}>Transaction History</small>
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+          {txLoading ? (
+            <div className="text-center py-4">
+              <Spinner animation="border" size="sm" />
+              <span className="ms-2">Loading transactions...</span>
+            </div>
+          ) : stockTransactions.length > 0 ? (
+            <Table striped bordered hover size="sm" responsive>
+              <thead className="table-dark">
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Qty</th>
+                  <th>Price</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stockTransactions.map((tx) => (
+                  <tr key={tx.id}>
+                    <td>{new Date(tx.transaction_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                    <td>
+                      <Badge bg={tx.transaction_type === 'BUY' ? 'success' : 'danger'}>
+                        {tx.transaction_type}
+                      </Badge>
+                    </td>
+                    <td>{tx.quantity}</td>
+                    <td>₹{tx.price_per_unit?.toFixed(2)}</td>
+                    <td>₹{tx.total_amount?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="table-light">
+                <tr>
+                  <td colSpan="2"><strong>Summary</strong></td>
+                  <td>
+                    <strong>
+                      {stockTransactions.reduce((sum, tx) =>
+                        sum + (tx.transaction_type === 'BUY' ? tx.quantity : -tx.quantity), 0
+                      )}
+                    </strong>
+                  </td>
+                  <td></td>
+                  <td>
+                    <strong>
+                      ₹{stockTransactions.reduce((sum, tx) =>
+                        sum + (tx.transaction_type === 'BUY' ? tx.total_amount : -tx.total_amount), 0
+                      ).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </strong>
+                  </td>
+                </tr>
+              </tfoot>
+            </Table>
+          ) : (
+            <p className="text-center text-muted py-4">No transactions found for this stock</p>
+          )}
+        </Modal.Body>
+        <Modal.Footer className="justify-content-between">
+          <small className="text-muted">
+            {stockTransactions.length} transaction{stockTransactions.length !== 1 ? 's' : ''}
+          </small>
+          <Button variant="secondary" size="sm" onClick={() => setShowTxModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };
