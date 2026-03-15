@@ -44,7 +44,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-Base.metadata.create_all(bind=engine)
+logger.info("Creating database tables...")
+try:
+    Base.metadata.create_all(bind=engine)
+    logger.info("Database tables created successfully")
+except Exception as e:
+    logger.error(f"Error creating database tables: {e}")
+    raise
 
 # Run database migrations for new columns
 def run_startup_migrations():
@@ -107,9 +113,11 @@ if IS_PRODUCTION:
 # =============================================================================
 # SCHEDULED TASKS - Weekly Corporate Events Fetch & Daily Portfolio Snapshots
 # =============================================================================
+logger.info("Setting up scheduled tasks...")
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.triggers.cron import CronTrigger
+    logger.info("APScheduler imported successfully")
 
     def scheduled_corporate_events_fetch():
         """Scheduled task to fetch corporate events for all securities"""
