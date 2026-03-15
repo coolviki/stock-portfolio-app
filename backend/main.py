@@ -699,22 +699,56 @@ def update_transaction(
     db_transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
     if not db_transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    
+
     update_data = transaction.model_dump(exclude_unset=True)
-    
+
     # If security_id is being updated, verify the security exists
     if 'security_id' in update_data:
         security = db.query(Security).filter(Security.id == update_data['security_id']).first()
         if not security:
             raise HTTPException(status_code=404, detail="Security not found")
-    
+
     # Update transaction fields
     for field, value in update_data.items():
         setattr(db_transaction, field, value)
-    
+
     # Update the updated_at timestamp
     db_transaction.updated_at = datetime.utcnow()
-    
+
+    # If transaction_date was updated, also update the associated lot's purchase_date
+    if 'transaction_date' in update_data:
+        lot = db.query(Lot).filter(Lot.transaction_id == transaction_id).first()
+        if lot:
+            lot.purchase_date = update_data['transaction_date']
+            lot.updated_at = datetime.utcnow()
+            logger.info(f"Updated lot {lot.id} purchase_date to {update_data['transaction_date']}")
+
+    # If price or quantity was updated, also update the associated lot's cost values
+    if any(field in update_data for field in ['price_per_unit', 'quantity', 'total_amount']):
+        lot = db.query(Lot).filter(Lot.transaction_id == transaction_id).first()
+        if lot:
+            new_quantity = update_data.get('quantity', db_transaction.quantity)
+            new_price = update_data.get('price_per_unit', db_transaction.price_per_unit)
+            new_total = update_data.get('total_amount', db_transaction.total_amount)
+
+            # Update original values
+            lot.original_quantity = new_quantity
+            lot.original_cost_per_unit = new_price
+            lot.original_total_cost = new_total
+
+            # Update adjusted values (assuming no corporate events have been applied yet or need recalc)
+            # Note: If corporate events have been applied, this could be incorrect
+            # For now, update adjusted values proportionally
+            if lot.original_quantity > 0:
+                adjustment_ratio = lot.current_quantity / lot.original_quantity
+                lot.current_quantity = new_quantity * adjustment_ratio
+                lot.adjusted_cost_per_unit = new_total / lot.current_quantity if lot.current_quantity > 0 else new_price
+                lot.adjusted_total_cost = new_total
+                lot.remaining_quantity = min(lot.remaining_quantity, lot.current_quantity)
+
+            lot.updated_at = datetime.utcnow()
+            logger.info(f"Updated lot {lot.id} cost values")
+
     db.commit()
     db.refresh(db_transaction)
     return db_transaction
