@@ -2306,8 +2306,7 @@ def trigger_portfolio_snapshots(
                 cost_basis += lot.adjusted_cost_per_unit * lot.remaining_quantity
                 security = db.query(Security).filter(Security.id == lot.security_id).first()
                 if security:
-                    from stock_api import get_stock_price
-                    price = get_stock_price(
+                    price, _, _ = get_current_price_with_waterfall(
                         ticker=security.security_ticker,
                         isin=security.security_ISIN,
                         security_name=security.security_name
