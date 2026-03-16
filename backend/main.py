@@ -1781,6 +1781,14 @@ def get_portfolio_history(
                 cumulative_cost_basis -= event["amount"]
             event_idx += 1
 
+        # Get all portfolio snapshots for this user within the date range
+        snapshots = db.query(PortfolioSnapshot).filter(
+            PortfolioSnapshot.user_id == user_id,
+            PortfolioSnapshot.snapshot_date >= range_start,
+            PortfolioSnapshot.snapshot_date <= today
+        ).all()
+        snapshot_map = {s.snapshot_date: s.market_value for s in snapshots}
+
         # Generate data points within the range
         data_points = []
         current_date = range_start
@@ -1796,13 +1804,17 @@ def get_portfolio_history(
                     cumulative_cost_basis -= event["amount"]
                 event_idx += 1
 
-            # Add data point
+            # Add data point with snapshot market value if available
             if cumulative_invested > 0:
-                data_points.append({
+                data_point = {
                     "date": current_date.isoformat(),
                     "invested": round(cumulative_invested, 2),
                     "cost_basis": round(cumulative_cost_basis, 2)
-                })
+                }
+                # Add market value from snapshot if available
+                if current_date in snapshot_map:
+                    data_point["current_value"] = round(snapshot_map[current_date], 2)
+                data_points.append(data_point)
 
             # Move to next interval
             current_date += timedelta(days=interval_days)
