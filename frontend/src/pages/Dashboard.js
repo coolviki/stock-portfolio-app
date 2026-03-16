@@ -21,6 +21,7 @@ const Dashboard = () => {
   const [showTxModal, setShowTxModal] = useState(false);
   const [selectedStock, setSelectedStock] = useState(null);
   const [stockTransactions, setStockTransactions] = useState([]);
+  const [stockCorporateEvents, setStockCorporateEvents] = useState([]);
   const [txLoading, setTxLoading] = useState(false);
 
   const timeRangeOptions = [
@@ -90,6 +91,7 @@ const Dashboard = () => {
     setShowTxModal(true);
     setTxLoading(true);
     setStockTransactions([]);
+    setStockCorporateEvents([]);
 
     try {
       // Fetch transactions for this stock
@@ -97,6 +99,24 @@ const Dashboard = () => {
       // Sort by date descending (most recent first)
       const sorted = transactions.sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
       setStockTransactions(sorted);
+
+      // Fetch corporate events for this security (if we have transactions)
+      if (sorted.length > 0 && sorted[0].security_id) {
+        try {
+          const events = await apiService.getCorporateEvents({
+            security_id: sorted[0].security_id,
+            is_applied: true
+          });
+          // Filter to only SPLIT and BONUS events (the ones that affect holdings)
+          const relevantEvents = events.filter(e =>
+            ['SPLIT', 'BONUS'].includes(e.event_type)
+          );
+          setStockCorporateEvents(relevantEvents);
+        } catch (eventError) {
+          console.error('Error fetching corporate events:', eventError);
+          // Don't show error toast - corporate events are optional
+        }
+      }
     } catch (error) {
       console.error('Error fetching transactions:', error);
       toast.error('Failed to load transaction history');
@@ -750,52 +770,99 @@ const Dashboard = () => {
               <span className="ms-2">Loading transactions...</span>
             </div>
           ) : stockTransactions.length > 0 ? (
-            <Table striped bordered hover size="sm" responsive>
-              <thead className="table-dark">
-                <tr>
-                  <th>Date</th>
-                  <th>Type</th>
-                  <th>Qty</th>
-                  <th>Price</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stockTransactions.map((tx) => (
-                  <tr key={tx.id}>
-                    <td>{new Date(tx.transaction_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                    <td>
-                      <Badge bg={tx.transaction_type === 'BUY' ? 'success' : 'danger'}>
-                        {tx.transaction_type}
-                      </Badge>
-                    </td>
-                    <td>{tx.quantity}</td>
-                    <td>₹{tx.price_per_unit?.toFixed(2)}</td>
-                    <td>₹{tx.total_amount?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="table-light">
-                <tr>
-                  <td colSpan="2"><strong>Summary</strong></td>
-                  <td>
-                    <strong>
-                      {stockTransactions.reduce((sum, tx) =>
-                        sum + (tx.transaction_type === 'BUY' ? tx.quantity : -tx.quantity), 0
-                      )}
-                    </strong>
-                  </td>
-                  <td></td>
-                  <td>
-                    <strong>
-                      ₹{stockTransactions.reduce((sum, tx) =>
-                        sum + (tx.transaction_type === 'BUY' ? tx.total_amount : -tx.total_amount), 0
-                      ).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                    </strong>
-                  </td>
-                </tr>
-              </tfoot>
-            </Table>
+            (() => {
+              // Merge transactions and corporate events into a unified timeline
+              const timeline = [
+                ...stockTransactions.map(tx => ({
+                  type: 'transaction',
+                  date: new Date(tx.transaction_date),
+                  data: tx
+                })),
+                ...stockCorporateEvents.map(evt => ({
+                  type: 'corporate_event',
+                  date: new Date(evt.event_date),
+                  data: evt
+                }))
+              ].sort((a, b) => b.date - a.date); // Sort descending (most recent first)
+
+              // Calculate summary
+              const txQty = stockTransactions.reduce((sum, tx) =>
+                sum + (tx.transaction_type === 'BUY' ? tx.quantity : -tx.quantity), 0
+              );
+              const txTotal = stockTransactions.reduce((sum, tx) =>
+                sum + (tx.transaction_type === 'BUY' ? tx.total_amount : -tx.total_amount), 0
+              );
+
+              return (
+                <Table bordered hover size="sm" responsive>
+                  <thead className="table-dark">
+                    <tr>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>Qty</th>
+                      <th>Price</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {timeline.map((item, idx) => {
+                      if (item.type === 'transaction') {
+                        const tx = item.data;
+                        return (
+                          <tr key={`tx-${tx.id}`}>
+                            <td>{item.date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                            <td>
+                              <Badge bg={tx.transaction_type === 'BUY' ? 'success' : 'danger'}>
+                                {tx.transaction_type}
+                              </Badge>
+                            </td>
+                            <td>{tx.quantity}</td>
+                            <td>₹{tx.price_per_unit?.toFixed(2)}</td>
+                            <td>₹{tx.total_amount?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                          </tr>
+                        );
+                      } else {
+                        const evt = item.data;
+                        const ratioStr = evt.ratio_numerator && evt.ratio_denominator
+                          ? `${evt.ratio_numerator}:${evt.ratio_denominator}`
+                          : '';
+                        return (
+                          <tr key={`evt-${evt.id}`} style={{ backgroundColor: '#e8f4f8' }}>
+                            <td>{item.date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                            <td>
+                              <Badge bg="info">
+                                {evt.event_type} {ratioStr}
+                              </Badge>
+                            </td>
+                            <td colSpan="3" className="text-muted fst-italic">
+                              {evt.event_type === 'BONUS' && ratioStr && (
+                                <>+{evt.ratio_numerator} share(s) for every {evt.ratio_denominator} held</>
+                              )}
+                              {evt.event_type === 'SPLIT' && ratioStr && (
+                                <>Each share split into {evt.ratio_numerator} shares</>
+                              )}
+                              {!ratioStr && evt.description}
+                            </td>
+                          </tr>
+                        );
+                      }
+                    })}
+                  </tbody>
+                  <tfoot className="table-light">
+                    <tr>
+                      <td colSpan="2"><strong>Summary (Purchases)</strong></td>
+                      <td>
+                        <strong>{txQty}</strong>
+                      </td>
+                      <td></td>
+                      <td>
+                        <strong>₹{txTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</strong>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </Table>
+              );
+            })()
           ) : (
             <p className="text-center text-muted py-4">No transactions found for this stock</p>
           )}
@@ -803,6 +870,9 @@ const Dashboard = () => {
         <Modal.Footer className="justify-content-between">
           <small className="text-muted">
             {stockTransactions.length} transaction{stockTransactions.length !== 1 ? 's' : ''}
+            {stockCorporateEvents.length > 0 && (
+              <>, {stockCorporateEvents.length} corporate event{stockCorporateEvents.length !== 1 ? 's' : ''}</>
+            )}
           </small>
           <Button variant="secondary" size="sm" onClick={() => setShowTxModal(false)}>
             Close
