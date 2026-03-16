@@ -160,6 +160,24 @@ code {
   border: 1px solid #e9ecef;
 }
 
+.market-index-card.positive {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border: 1px solid #a5d6a7;
+}
+
+.market-index-card.negative {
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+  border: 1px solid #ef9a9a;
+}
+
+.market-index-card.positive .index-value {
+  color: #2e7d32;
+}
+
+.market-index-card.negative .index-value {
+  color: #c62828;
+}
+
 .market-index-card .index-name {
   font-size: 0.7rem;
   font-weight: 700;
@@ -181,13 +199,13 @@ code {
   border-radius: 4px;
 }
 
-.market-index-card .index-change.positive {
-  background: #e8f5e9;
+.market-index-card.positive .index-change {
+  background: rgba(46, 125, 50, 0.15);
   color: #2e7d32;
 }
 
-.market-index-card .index-change.negative {
-  background: #ffebee;
+.market-index-card.negative .index-change {
+  background: rgba(198, 40, 40, 0.15);
   color: #c62828;
 }
 
