@@ -783,15 +783,48 @@ const Dashboard = () => {
                   date: new Date(evt.event_date),
                   data: evt
                 }))
-              ].sort((a, b) => b.date - a.date); // Sort descending (most recent first)
+              ];
+
+              // Sort ascending (oldest first) to calculate running holdings
+              timeline.sort((a, b) => a.date - b.date);
+
+              // Calculate running holdings after each event
+              let runningHoldings = 0;
+              timeline.forEach(item => {
+                if (item.type === 'transaction') {
+                  const tx = item.data;
+                  if (tx.transaction_type === 'BUY') {
+                    runningHoldings += tx.quantity;
+                  } else {
+                    runningHoldings -= tx.quantity;
+                  }
+                  item.qtyChange = tx.transaction_type === 'BUY' ? tx.quantity : -tx.quantity;
+                } else {
+                  // Corporate event - calculate quantity change
+                  const evt = item.data;
+                  let qtyChange = 0;
+                  if (evt.event_type === 'BONUS' && evt.ratio_numerator && evt.ratio_denominator) {
+                    // Bonus: get ratio_numerator shares for every ratio_denominator held
+                    qtyChange = Math.floor(runningHoldings * evt.ratio_numerator / evt.ratio_denominator);
+                  } else if (evt.event_type === 'SPLIT' && evt.ratio_numerator && evt.ratio_denominator) {
+                    // Split: each share becomes ratio_numerator/ratio_denominator shares
+                    const newHoldings = Math.floor(runningHoldings * evt.ratio_numerator / evt.ratio_denominator);
+                    qtyChange = newHoldings - runningHoldings;
+                  }
+                  runningHoldings += qtyChange;
+                  item.qtyChange = qtyChange;
+                }
+                item.holdingsAfter = runningHoldings;
+              });
+
+              // Reverse to show most recent first
+              timeline.reverse();
 
               // Calculate summary
-              const txQty = stockTransactions.reduce((sum, tx) =>
-                sum + (tx.transaction_type === 'BUY' ? tx.quantity : -tx.quantity), 0
-              );
               const txTotal = stockTransactions.reduce((sum, tx) =>
                 sum + (tx.transaction_type === 'BUY' ? tx.total_amount : -tx.total_amount), 0
               );
+              const currentHoldings = timeline.length > 0 ? timeline[0].holdingsAfter : 0;
 
               return (
                 <Table bordered hover size="sm" responsive>
@@ -802,6 +835,7 @@ const Dashboard = () => {
                       <th>Qty</th>
                       <th>Price</th>
                       <th>Total</th>
+                      <th>Holdings</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -816,9 +850,10 @@ const Dashboard = () => {
                                 {tx.transaction_type}
                               </Badge>
                             </td>
-                            <td>{tx.quantity}</td>
+                            <td>{tx.transaction_type === 'BUY' ? '+' : '-'}{tx.quantity}</td>
                             <td>₹{tx.price_per_unit?.toFixed(2)}</td>
                             <td>₹{tx.total_amount?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                            <td><strong>{item.holdingsAfter}</strong></td>
                           </tr>
                         );
                       } else {
@@ -834,15 +869,19 @@ const Dashboard = () => {
                                 {evt.event_type} {ratioStr}
                               </Badge>
                             </td>
-                            <td colSpan="3" className="text-muted fst-italic">
+                            <td className="text-info">
+                              {item.qtyChange > 0 ? '+' : ''}{item.qtyChange}
+                            </td>
+                            <td colSpan="2" className="text-muted fst-italic small">
                               {evt.event_type === 'BONUS' && ratioStr && (
-                                <>+{evt.ratio_numerator} share(s) for every {evt.ratio_denominator} held</>
+                                <>+{evt.ratio_numerator} for every {evt.ratio_denominator} held</>
                               )}
                               {evt.event_type === 'SPLIT' && ratioStr && (
-                                <>Each share split into {evt.ratio_numerator} shares</>
+                                <>{evt.ratio_numerator}:{evt.ratio_denominator} split</>
                               )}
                               {!ratioStr && evt.description}
                             </td>
+                            <td><strong>{item.holdingsAfter}</strong></td>
                           </tr>
                         );
                       }
@@ -850,14 +889,13 @@ const Dashboard = () => {
                   </tbody>
                   <tfoot className="table-light">
                     <tr>
-                      <td colSpan="2"><strong>Summary (Purchases)</strong></td>
-                      <td>
-                        <strong>{txQty}</strong>
-                      </td>
+                      <td colSpan="2"><strong>Summary</strong></td>
+                      <td></td>
                       <td></td>
                       <td>
                         <strong>₹{txTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</strong>
                       </td>
+                      <td><strong>{currentHoldings}</strong></td>
                     </tr>
                   </tfoot>
                 </Table>
