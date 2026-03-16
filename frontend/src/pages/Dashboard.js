@@ -660,13 +660,9 @@ const Dashboard = () => {
                     },
                     {
                       label: 'Current Value',
-                      data: portfolioHistory.data_points.map((dp, idx) => {
-                        // Show current value only for the last data point
-                        if (idx === portfolioHistory.data_points.length - 1 && dp.current_value) {
-                          return dp.current_value;
-                        }
-                        // For other points, show cost basis (what remains invested after sells)
-                        return dp.cost_basis;
+                      data: portfolioHistory.data_points.map((dp) => {
+                        // Use current_value from snapshot if available, otherwise fall back to cost_basis
+                        return dp.current_value !== undefined ? dp.current_value : dp.cost_basis;
                       }),
                       borderColor: portfolioHistory.current_value >= portfolioHistory.current_cost_basis
                         ? 'rgb(34, 197, 94)'
