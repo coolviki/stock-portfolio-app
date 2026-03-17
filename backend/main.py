@@ -855,6 +855,8 @@ def update_transaction(
                 logger.error(f"Failed to recreate lot for transaction {transaction_id}: {e}")
                 # Don't fail the update, just log the error
 
+            # Refresh transaction after lot operations (which do their own commits)
+            db.refresh(db_transaction)
             return db_transaction
 
         elif db_transaction.transaction_type.upper() == 'SELL':
@@ -882,6 +884,9 @@ def update_transaction(
             except Exception as e:
                 logger.error(f"Failed to recreate allocations for transaction {transaction_id}: {e}")
                 # Don't fail the update, just log the error
+
+            # Refresh transaction after lot operations (which do their own commits)
+            db.refresh(db_transaction)
             return db_transaction
     else:
         # If no lot-affecting fields were updated, just commit the transaction update
