@@ -854,7 +854,9 @@ def update_transaction(
             except Exception as e:
                 logger.error(f"Failed to recreate lot for transaction {transaction_id}: {e}")
                 # Don't fail the update, just log the error
-                
+
+            return db_transaction
+
         elif db_transaction.transaction_type.upper() == 'SELL':
             # For SELL transactions, we need to clean up and recreate allocations
             existing_allocations = db.query(SaleAllocation).filter(SaleAllocation.transaction_id == transaction_id).all()
