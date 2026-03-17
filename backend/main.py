@@ -820,43 +820,72 @@ def update_transaction(
     # Update the updated_at timestamp
     db_transaction.updated_at = datetime.utcnow()
 
-    # If transaction_date was updated, also update the associated lot's purchase_date
-    if 'transaction_date' in update_data:
-        lot = db.query(Lot).filter(Lot.transaction_id == transaction_id).first()
-        if lot:
-            lot.purchase_date = update_data['transaction_date']
-            lot.updated_at = datetime.utcnow()
-            logger.info(f"Updated lot {lot.id} purchase_date to {update_data['transaction_date']}")
+    # If any transaction data that affects lot calculations was updated, 
+    # recreate the lot to ensure proper calculations including corporate events
+    if any(field in update_data for field in ['price_per_unit', 'quantity', 'total_amount', 'transaction_date']):
+        # Only handle BUY transactions as they create lots
+        if db_transaction.transaction_type.upper() == 'BUY':
+            # First, clean up the existing lot
+            existing_lot = db.query(Lot).filter(Lot.transaction_id == transaction_id).first()
+            if existing_lot:
+                # Remove any sale allocations that reference this lot
+                sale_allocations = db.query(SaleAllocation).filter(SaleAllocation.lot_id == existing_lot.id).all()
+                for allocation in sale_allocations:
+                    db.delete(allocation)
+                
+                # Remove any lot adjustments
+                lot_adjustments = db.query(LotAdjustment).filter(LotAdjustment.lot_id == existing_lot.id).all()
+                for adjustment in lot_adjustments:
+                    db.delete(adjustment)
+                
+                # Delete the lot itself
+                db.delete(existing_lot)
+                db.flush()  # Ensure deletion is committed before creating new lot
+                logger.info(f"Cleaned up existing lot {existing_lot.id} for transaction {transaction_id}")
 
-    # If price or quantity was updated, also update the associated lot's cost values
-    if any(field in update_data for field in ['price_per_unit', 'quantity', 'total_amount']):
-        lot = db.query(Lot).filter(Lot.transaction_id == transaction_id).first()
-        if lot:
-            new_quantity = update_data.get('quantity', db_transaction.quantity)
-            new_price = update_data.get('price_per_unit', db_transaction.price_per_unit)
-            new_total = update_data.get('total_amount', db_transaction.total_amount)
+            # Commit the transaction update first
+            db.commit()
+            db.refresh(db_transaction)
+            
+            # Now recreate the lot with updated transaction data
+            try:
+                handle_lot_for_transaction(db, db_transaction)
+                logger.info(f"Recreated lot for updated transaction {transaction_id}")
+            except Exception as e:
+                logger.error(f"Failed to recreate lot for transaction {transaction_id}: {e}")
+                # Don't fail the update, just log the error
+                
+        elif db_transaction.transaction_type.upper() == 'SELL':
+            # For SELL transactions, we need to clean up and recreate allocations
+            existing_allocations = db.query(SaleAllocation).filter(SaleAllocation.transaction_id == transaction_id).all()
+            if existing_allocations:
+                # Restore quantities to lots that were allocated from
+                for allocation in existing_allocations:
+                    lot = db.query(Lot).filter(Lot.id == allocation.lot_id).first()
+                    if lot:
+                        lot.remaining_quantity += allocation.quantity_sold
+                        lot.updated_at = datetime.utcnow()
+                    db.delete(allocation)
+                db.flush()
+                logger.info(f"Cleaned up existing allocations for SELL transaction {transaction_id}")
 
-            # Update original values
-            lot.original_quantity = new_quantity
-            lot.original_cost_per_unit = new_price
-            lot.original_total_cost = new_total
-
-            # Update adjusted values (assuming no corporate events have been applied yet or need recalc)
-            # Note: If corporate events have been applied, this could be incorrect
-            # For now, update adjusted values proportionally
-            if lot.original_quantity > 0:
-                adjustment_ratio = lot.current_quantity / lot.original_quantity
-                lot.current_quantity = new_quantity * adjustment_ratio
-                lot.adjusted_cost_per_unit = new_total / lot.current_quantity if lot.current_quantity > 0 else new_price
-                lot.adjusted_total_cost = new_total
-                lot.remaining_quantity = min(lot.remaining_quantity, lot.current_quantity)
-
-            lot.updated_at = datetime.utcnow()
-            logger.info(f"Updated lot {lot.id} cost values")
-
-    db.commit()
-    db.refresh(db_transaction)
-    return db_transaction
+            # Commit the transaction update first
+            db.commit()
+            db.refresh(db_transaction)
+            
+            # Now recreate allocations with updated transaction data
+            try:
+                handle_lot_for_transaction(db, db_transaction)
+                logger.info(f"Recreated allocations for updated SELL transaction {transaction_id}")
+            except Exception as e:
+                logger.error(f"Failed to recreate allocations for transaction {transaction_id}: {e}")
+                # Don't fail the update, just log the error
+            return db_transaction
+    else:
+        # If no lot-affecting fields were updated, just commit the transaction update
+        db.commit()
+        db.refresh(db_transaction)
+        return db_transaction
 
 # Legacy form-based update endpoint for backward compatibility
 @app.put("/transactions/{transaction_id}/legacy", response_model=TransactionResponse)
