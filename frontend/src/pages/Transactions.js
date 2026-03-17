@@ -692,15 +692,20 @@ const Transactions = () => {
                       type="number"
                       step="0.01"
                       value={editingTransaction.quantity}
-                      onChange={(e) => setEditingTransaction({
-                        ...editingTransaction,
-                        quantity: parseFloat(e.target.value)
-                      })}
+                      onChange={(e) => {
+                        const newQty = parseFloat(e.target.value) || 0;
+                        const price = editingTransaction.price_per_unit || 0;
+                        setEditingTransaction({
+                          ...editingTransaction,
+                          quantity: newQty,
+                          total_amount: parseFloat((newQty * price).toFixed(2))
+                        });
+                      }}
                     />
                   </Form.Group>
                 </Col>
               </Row>
-              
+
               <Row>
                 <Col md={6}>
                   <Form.Group className="mb-3">
@@ -709,10 +714,15 @@ const Transactions = () => {
                       type="number"
                       step="0.01"
                       value={editingTransaction.price_per_unit}
-                      onChange={(e) => setEditingTransaction({
-                        ...editingTransaction,
-                        price_per_unit: parseFloat(e.target.value)
-                      })}
+                      onChange={(e) => {
+                        const newPrice = parseFloat(e.target.value) || 0;
+                        const qty = editingTransaction.quantity || 0;
+                        setEditingTransaction({
+                          ...editingTransaction,
+                          price_per_unit: newPrice,
+                          total_amount: parseFloat((qty * newPrice).toFixed(2))
+                        });
+                      }}
                     />
                   </Form.Group>
                 </Col>
@@ -723,11 +733,11 @@ const Transactions = () => {
                       type="number"
                       step="0.01"
                       value={editingTransaction.total_amount}
-                      onChange={(e) => setEditingTransaction({
-                        ...editingTransaction,
-                        total_amount: parseFloat(e.target.value)
-                      })}
+                      readOnly
+                      disabled
+                      style={{ backgroundColor: '#f8f9fa' }}
                     />
+                    <Form.Text className="text-muted">Auto-calculated from Qty × Price</Form.Text>
                   </Form.Group>
                 </Col>
               </Row>
