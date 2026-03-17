@@ -188,11 +188,16 @@ const Transactions = () => {
 
   const handleSaveEdit = async () => {
     try {
+      // Only send fields that the backend TransactionUpdate schema accepts
       const updatedTransaction = {
-        ...editingTransaction,
-        transaction_date: editingTransaction.transaction_date.toISOString()
+        transaction_type: editingTransaction.transaction_type,
+        quantity: editingTransaction.quantity,
+        price_per_unit: editingTransaction.price_per_unit,
+        total_amount: editingTransaction.total_amount,
+        transaction_date: editingTransaction.transaction_date.toISOString(),
+        exchange: editingTransaction.exchange || null
       };
-      
+
       await apiService.updateTransaction(editingTransaction.id, updatedTransaction, user?.id);
       toast.success('Transaction updated successfully');
       setShowEditModal(false);
