@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Container, Row, Col, Card, Form, Table, Button, Alert, Spinner, ToggleButtonGroup, ToggleButton } from 'react-bootstrap';
+import { Container, Row, Col, Card, Form, Table, Button, Alert, Spinner, ToggleButtonGroup, ToggleButton, ButtonGroup } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/apiService';
 import { toast } from 'react-toastify';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 const Reports = () => {
   const { user } = useAuth();
@@ -108,6 +110,13 @@ const Reports = () => {
     }).format(amount || 0);
   };
 
+  const formatCurrencyPlain = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount || 0);
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-IN');
   };
@@ -200,6 +209,326 @@ const Reports = () => {
     });
 
     exportToCSV(csvData, `statement_${startDate}_to_${endDate}`);
+  };
+
+  // PDF Export Functions
+  const exportHoldingsToPDF = () => {
+    if (!holdingsData?.holdings || holdingsData.holdings.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Colors
+    const primaryColor = [41, 128, 185]; // Blue
+    const headerBg = [52, 73, 94]; // Dark blue-gray
+    const lightBg = [236, 240, 241]; // Light gray
+
+    // Header with gradient effect
+    doc.setFillColor(...primaryColor);
+    doc.rect(0, 0, pageWidth, 40, 'F');
+
+    // Title
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Portfolio Holdings Report', pageWidth / 2, 20, { align: 'center' });
+
+    // Subtitle
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`As of ${formatDate(holdingsData.as_of_date)}`, pageWidth / 2, 30, { align: 'center' });
+
+    // User info
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.text(`Generated for: ${user?.username || 'User'}`, 14, 50);
+    doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, 14, 56);
+
+    // Summary Box
+    doc.setFillColor(...lightBg);
+    doc.roundedRect(14, 62, pageWidth - 28, 25, 3, 3, 'F');
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...headerBg);
+    doc.text('Summary', 20, 72);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.text(`Total Securities: ${holdingsData.total_securities}`, 20, 80);
+    doc.text(`Total Invested: ${formatCurrency(holdingsData.total_invested)}`, 100, 80);
+
+    // Table
+    const tableData = holdingsData.holdings.map((h, index) => [
+      index + 1,
+      h.security_name,
+      h.security_ticker || '-',
+      formatQuantity(h.quantity),
+      formatCurrencyPlain(h.avg_cost),
+      formatCurrencyPlain(h.total_invested),
+      `${h.portfolio_percentage}%`
+    ]);
+
+    // Add total row
+    tableData.push([
+      '',
+      'TOTAL',
+      '',
+      '',
+      '',
+      formatCurrencyPlain(holdingsData.total_invested),
+      '100%'
+    ]);
+
+    doc.autoTable({
+      startY: 95,
+      head: [['#', 'Security', 'Ticker', 'Quantity', 'Avg Cost (₹)', 'Invested (₹)', '% Portfolio']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: {
+        fillColor: headerBg,
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 9
+      },
+      bodyStyles: {
+        fontSize: 8,
+        cellPadding: 3
+      },
+      alternateRowStyles: {
+        fillColor: [248, 249, 250]
+      },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 50 },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 25, halign: 'right' },
+        4: { cellWidth: 25, halign: 'right' },
+        5: { cellWidth: 30, halign: 'right' },
+        6: { cellWidth: 22, halign: 'right' }
+      },
+      footStyles: {
+        fillColor: lightBg,
+        textColor: [0, 0, 0],
+        fontStyle: 'bold'
+      },
+      didParseCell: function(data) {
+        // Style the total row
+        if (data.row.index === tableData.length - 1) {
+          data.cell.styles.fillColor = lightBg;
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
+    });
+
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(128, 128, 128);
+      doc.text(
+        `Page ${i} of ${pageCount} | Stock Portfolio App`,
+        pageWidth / 2,
+        doc.internal.pageSize.getHeight() - 10,
+        { align: 'center' }
+      );
+    }
+
+    doc.save(`holdings_as_of_${asOfDate}.pdf`);
+    toast.success('PDF exported successfully');
+  };
+
+  const exportStatementToPDF = () => {
+    if (!statementData?.items || statementData.items.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    const doc = new jsPDF('landscape');
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Colors
+    const primaryColor = [46, 204, 113]; // Green
+    const headerBg = [52, 73, 94]; // Dark blue-gray
+    const lightBg = [236, 240, 241]; // Light gray
+    const buyColor = [39, 174, 96]; // Green
+    const sellColor = [231, 76, 60]; // Red
+
+    // Header
+    doc.setFillColor(...primaryColor);
+    doc.rect(0, 0, pageWidth, 35, 'F');
+
+    // Title
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Transaction Statement', pageWidth / 2, 18, { align: 'center' });
+
+    // Date range
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text(
+      `${formatDate(statementData.start_date)} to ${formatDate(statementData.end_date)}`,
+      pageWidth / 2,
+      28,
+      { align: 'center' }
+    );
+
+    // User info
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(9);
+    doc.text(`Generated for: ${user?.username || 'User'}`, 14, 42);
+    doc.text(`Generated on: ${new Date().toLocaleString('en-IN')}`, 14, 48);
+
+    // Summary Boxes
+    const boxWidth = 50;
+    const boxHeight = 18;
+    const boxY = 42;
+    const startX = pageWidth - 220;
+
+    // Transactions box
+    doc.setFillColor(...lightBg);
+    doc.roundedRect(startX, boxY, boxWidth, boxHeight, 2, 2, 'F');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.text('Transactions', startX + boxWidth / 2, boxY + 6, { align: 'center' });
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'bold');
+    doc.text(statementData.total_transactions.toString(), startX + boxWidth / 2, boxY + 14, { align: 'center' });
+
+    // Total Bought box
+    doc.setFillColor(...buyColor);
+    doc.roundedRect(startX + 55, boxY, boxWidth, boxHeight, 2, 2, 'F');
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Total Bought', startX + 55 + boxWidth / 2, boxY + 6, { align: 'center' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(formatCurrencyPlain(statementData.total_bought), startX + 55 + boxWidth / 2, boxY + 14, { align: 'center' });
+
+    // Total Sold box
+    doc.setFillColor(...sellColor);
+    doc.roundedRect(startX + 110, boxY, boxWidth, boxHeight, 2, 2, 'F');
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Total Sold', startX + 110 + boxWidth / 2, boxY + 6, { align: 'center' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(formatCurrencyPlain(statementData.total_sold), startX + 110 + boxWidth / 2, boxY + 14, { align: 'center' });
+
+    // Net Investment box
+    const netColor = statementData.net_investment >= 0 ? [52, 152, 219] : [243, 156, 18];
+    doc.setFillColor(...netColor);
+    doc.roundedRect(startX + 165, boxY, boxWidth, boxHeight, 2, 2, 'F');
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Net Investment', startX + 165 + boxWidth / 2, boxY + 6, { align: 'center' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(formatCurrencyPlain(statementData.net_investment), startX + 165 + boxWidth / 2, boxY + 14, { align: 'center' });
+
+    // Table
+    const tableData = statementData.items.map(item => {
+      if (item.type === 'TRANSACTION') {
+        return [
+          formatDate(item.date),
+          item.transaction_type,
+          item.security_name,
+          item.security_ticker || '-',
+          formatQuantity(item.quantity),
+          formatCurrencyPlain(item.price_per_unit),
+          formatCurrencyPlain(item.total_amount),
+          item.exchange || '-',
+          formatQuantity(item.running_balance)
+        ];
+      } else {
+        return [
+          formatDate(item.date),
+          item.event_type,
+          item.security_name,
+          item.security_ticker || '-',
+          '-',
+          '-',
+          '-',
+          '-',
+          item.description || '-'
+        ];
+      }
+    });
+
+    doc.autoTable({
+      startY: 65,
+      head: [['Date', 'Type', 'Security', 'Ticker', 'Qty', 'Price (₹)', 'Amount (₹)', 'Exchange', 'Balance']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: {
+        fillColor: headerBg,
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 8
+      },
+      bodyStyles: {
+        fontSize: 7,
+        cellPadding: 2
+      },
+      alternateRowStyles: {
+        fillColor: [248, 249, 250]
+      },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 18 },
+        2: { cellWidth: 55 },
+        3: { cellWidth: 25 },
+        4: { cellWidth: 20, halign: 'right' },
+        5: { cellWidth: 25, halign: 'right' },
+        6: { cellWidth: 30, halign: 'right' },
+        7: { cellWidth: 20 },
+        8: { cellWidth: 35, halign: 'right' }
+      },
+      didParseCell: function(data) {
+        // Color code BUY/SELL
+        if (data.column.index === 1 && data.section === 'body') {
+          const value = data.cell.raw;
+          if (value === 'BUY') {
+            data.cell.styles.textColor = buyColor;
+            data.cell.styles.fontStyle = 'bold';
+          } else if (value === 'SELL') {
+            data.cell.styles.textColor = sellColor;
+            data.cell.styles.fontStyle = 'bold';
+          } else {
+            // Corporate event
+            data.cell.styles.textColor = [243, 156, 18];
+            data.cell.styles.fontStyle = 'bold';
+          }
+        }
+      }
+    });
+
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(128, 128, 128);
+      doc.text(
+        `Page ${i} of ${pageCount} | Stock Portfolio App`,
+        pageWidth / 2,
+        doc.internal.pageSize.getHeight() - 10,
+        { align: 'center' }
+      );
+    }
+
+    doc.save(`statement_${startDate}_to_${endDate}.pdf`);
+    toast.success('PDF exported successfully');
   };
 
   return (
@@ -373,13 +702,14 @@ const Reports = () => {
                 <h5 className="mb-0">
                   Holdings as of {formatDate(holdingsData.as_of_date)}
                 </h5>
-                <Button
-                  variant="outline-success"
-                  size="sm"
-                  onClick={exportHoldingsToCSV}
-                >
-                  Export CSV
-                </Button>
+                <ButtonGroup size="sm">
+                  <Button variant="outline-success" onClick={exportHoldingsToCSV}>
+                    Export CSV
+                  </Button>
+                  <Button variant="outline-danger" onClick={exportHoldingsToPDF}>
+                    Export PDF
+                  </Button>
+                </ButtonGroup>
               </Card.Header>
               <Card.Body>
                 {/* Summary Row */}
@@ -455,13 +785,14 @@ const Reports = () => {
                 <h5 className="mb-0">
                   Transaction Statement: {formatDate(statementData.start_date)} to {formatDate(statementData.end_date)}
                 </h5>
-                <Button
-                  variant="outline-success"
-                  size="sm"
-                  onClick={exportStatementToCSV}
-                >
-                  Export CSV
-                </Button>
+                <ButtonGroup size="sm">
+                  <Button variant="outline-success" onClick={exportStatementToCSV}>
+                    Export CSV
+                  </Button>
+                  <Button variant="outline-danger" onClick={exportStatementToPDF}>
+                    Export PDF
+                  </Button>
+                </ButtonGroup>
               </Card.Header>
               <Card.Body>
                 {/* Summary Row */}
