@@ -240,18 +240,15 @@ def get_gold_price_calculated():
         except Exception:
             pass
 
-        # Source 2: Use a typical spot price if APIs fail
-        # As of March 2026, gold is around $2900-3200/oz
+        # Source 2: Use PAXG (Pax Gold) - 1 PAXG = 1 troy ounce of gold
         if not gold_usd:
-            # Fetch approximate from a currency/commodity endpoint
             try:
                 data = fetch_url("https://api.coingecko.com/api/v3/simple/price?ids=pax-gold&vs_currencies=usd")
                 if data:
-                    # PAX Gold is 1:1 backed by physical gold
+                    # PAX Gold is 1:1 backed by 1 troy ounce of physical gold
                     gold_usd = data.get("pax-gold", {}).get("usd")
                     if gold_usd:
-                        # Convert from per gram to per ounce (PAXG is per gram)
-                        gold_usd = gold_usd * TROY_OUNCE_TO_GRAM
+                        # PAXG price IS the price per troy ounce (no conversion needed)
                         logger.info(f"Gold USD via PAXG: ${gold_usd:.2f}/oz")
             except Exception:
                 pass
@@ -287,28 +284,38 @@ def get_gold_price_ibja():
     return None
 
 
+def is_valid_gold_price(price):
+    """Check if gold price is within reasonable range (INR per gram)"""
+    # Gold price per gram in INR should be between 5000 and 15000 (as of 2026)
+    if price and 5000 < price < 15000:
+        return True
+    if price:
+        logger.warning(f"Gold price {price:.2f} INR/gram is outside valid range (5000-15000)")
+    return False
+
+
 def get_current_gold_price():
     """Get current gold price using multiple sources"""
     # Try sources in order of preference
 
     # 1. GoldAPI.io (most reliable, requires API key)
     price = get_gold_price_goldapi()
-    if price and price > 5000:  # Sanity check
+    if is_valid_gold_price(price):
         return price, "GoldAPI.io"
 
     # 2. GoldPriceZ (free)
     price = get_gold_price_goldpricez()
-    if price and price > 5000:
+    if is_valid_gold_price(price):
         return price, "GoldPriceZ"
 
     # 3. IBJA/GoodReturns (Indian source)
     price = get_gold_price_ibja()
-    if price and price > 5000:
+    if is_valid_gold_price(price):
         return price, "GoodReturns/IBJA"
 
     # 4. Calculated from USD spot + forex
     price = get_gold_price_calculated()
-    if price and price > 5000:
+    if is_valid_gold_price(price):
         return price, "Calculated (USD spot + INR rate)"
 
     return None, None
