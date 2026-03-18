@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/apiService';
 import { toast } from 'react-toastify';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 const Reports = () => {
   const { user } = useAuth();
@@ -284,7 +284,7 @@ const Reports = () => {
       '100%'
     ]);
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 95,
       head: [['#', 'Security', 'Ticker', 'Quantity', 'Avg Cost (₹)', 'Invested (₹)', '% Portfolio']],
       body: tableData,
@@ -465,7 +465,7 @@ const Reports = () => {
       }
     });
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 65,
       head: [['Date', 'Type', 'Security', 'Ticker', 'Qty', 'Price (₹)', 'Amount (₹)', 'Exchange', 'Balance']],
       body: tableData,
