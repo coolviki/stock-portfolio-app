@@ -3227,6 +3227,342 @@ def run_lot_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+# =============================================================================
+# REPORTS ENDPOINTS
+# =============================================================================
+
+@app.get("/reports/financial-years")
+def get_report_financial_years(
+    user_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Get list of financial years that have transactions.
+    Returns available FYs for generating reports.
+    """
+    if user_id:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+    # Get min and max transaction dates
+    query = db.query(Transaction)
+    if user_id:
+        query = query.filter(Transaction.user_id == user_id)
+
+    transactions = query.all()
+
+    if not transactions:
+        return {
+            "financial_years": [],
+            "current_financial_year": get_current_financial_year()
+        }
+
+    # Find all unique financial years
+    financial_years = set()
+    for tx in transactions:
+        tx_date = tx.transaction_date
+        if tx_date.month >= 4:  # April onwards
+            fy = tx_date.year
+        else:  # Jan-March
+            fy = tx_date.year - 1
+        financial_years.add(fy)
+
+    sorted_years = sorted(financial_years, reverse=True)
+
+    return {
+        "financial_years": sorted_years,
+        "current_financial_year": get_current_financial_year()
+    }
+
+
+@app.get("/reports/holdings-as-of-date")
+def get_holdings_as_of_date(
+    as_of_date: str,
+    user_id: Optional[int] = None,
+    include_zero_holdings: bool = False,
+    db: Session = Depends(get_db)
+):
+    """
+    Get portfolio holdings as of a specific date.
+    Uses lot-based FIFO calculation with corporate event adjustments.
+    """
+    from datetime import datetime as dt
+
+    # Parse date
+    try:
+        report_date = dt.strptime(as_of_date, "%Y-%m-%d")
+        # Set to end of day
+        report_date = report_date.replace(hour=23, minute=59, second=59)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    if user_id:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+    # Get all lots created before or on the as_of_date
+    lot_query = db.query(Lot).filter(Lot.purchase_date <= report_date)
+    if user_id:
+        lot_query = lot_query.filter(Lot.user_id == user_id)
+
+    lots = lot_query.all()
+
+    # Get all sale allocations before or on the as_of_date
+    # We need to calculate remaining quantity as of that date
+    holdings = {}
+
+    for lot in lots:
+        security = db.query(Security).filter(Security.id == lot.security_id).first()
+        if not security:
+            continue
+
+        # Get lot adjustments applied before as_of_date
+        adjustments = db.query(LotAdjustment).filter(
+            LotAdjustment.lot_id == lot.id
+        ).join(CorporateEvent).filter(
+            CorporateEvent.record_date <= report_date
+        ).all()
+
+        # Calculate adjusted quantity and cost as of the date
+        if adjustments:
+            # Use the latest adjustment values
+            latest_adj = max(adjustments, key=lambda a: a.created_at)
+            adjusted_quantity = latest_adj.quantity_after
+            adjusted_cost_per_unit = latest_adj.cost_per_unit_after
+        else:
+            # No adjustments applied by that date, use original values
+            adjusted_quantity = lot.original_quantity
+            adjusted_cost_per_unit = lot.original_cost_per_unit
+
+        # Get sales from this lot up to as_of_date
+        sale_allocations = db.query(SaleAllocation).filter(
+            SaleAllocation.lot_id == lot.id
+        ).join(Transaction, SaleAllocation.sell_transaction_id == Transaction.id).filter(
+            Transaction.transaction_date <= report_date
+        ).all()
+
+        sold_quantity = sum(alloc.quantity_sold for alloc in sale_allocations)
+        remaining_quantity = adjusted_quantity - sold_quantity
+
+        if remaining_quantity <= 0 and not include_zero_holdings:
+            continue
+
+        security_key = security.id
+        if security_key not in holdings:
+            holdings[security_key] = {
+                "security_id": security.id,
+                "security_name": security.security_name,
+                "security_ticker": security.security_ticker,
+                "isin": security.security_ISIN,
+                "quantity": 0,
+                "total_invested": 0,
+                "lots": []
+            }
+
+        if remaining_quantity > 0:
+            holdings[security_key]["quantity"] += remaining_quantity
+            holdings[security_key]["total_invested"] += remaining_quantity * adjusted_cost_per_unit
+            holdings[security_key]["lots"].append({
+                "lot_id": lot.id,
+                "purchase_date": lot.purchase_date.strftime("%Y-%m-%d"),
+                "quantity": remaining_quantity,
+                "cost_per_unit": round(adjusted_cost_per_unit, 2)
+            })
+
+    # Calculate average cost and portfolio allocation
+    holdings_list = []
+    total_portfolio_value = sum(h["total_invested"] for h in holdings.values())
+
+    for security_id, holding in holdings.items():
+        if holding["quantity"] > 0:
+            holding["avg_cost"] = round(holding["total_invested"] / holding["quantity"], 2)
+        else:
+            holding["avg_cost"] = 0
+
+        holding["total_invested"] = round(holding["total_invested"], 2)
+
+        if total_portfolio_value > 0:
+            holding["portfolio_percentage"] = round(
+                (holding["total_invested"] / total_portfolio_value) * 100, 2
+            )
+        else:
+            holding["portfolio_percentage"] = 0
+
+        holdings_list.append(holding)
+
+    # Sort by portfolio percentage descending
+    holdings_list.sort(key=lambda x: x["portfolio_percentage"], reverse=True)
+
+    return {
+        "as_of_date": as_of_date,
+        "user_id": user_id,
+        "total_securities": len(holdings_list),
+        "total_invested": round(total_portfolio_value, 2),
+        "holdings": holdings_list
+    }
+
+
+@app.get("/reports/transaction-statement")
+def get_transaction_statement(
+    start_date: str,
+    end_date: str,
+    user_id: Optional[int] = None,
+    include_zero_holdings: bool = False,
+    db: Session = Depends(get_db)
+):
+    """
+    Get transaction statement for a date range.
+    Includes all transactions and corporate events in the period.
+    """
+    from datetime import datetime as dt
+
+    # Parse dates
+    try:
+        start_dt = dt.strptime(start_date, "%Y-%m-%d")
+        end_dt = dt.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    if start_dt > end_dt:
+        raise HTTPException(status_code=400, detail="Start date must be before end date")
+
+    if user_id:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+    # Get transactions in the date range
+    tx_query = db.query(Transaction).filter(
+        Transaction.transaction_date >= start_dt,
+        Transaction.transaction_date <= end_dt
+    )
+    if user_id:
+        tx_query = tx_query.filter(Transaction.user_id == user_id)
+
+    transactions = tx_query.order_by(Transaction.transaction_date.asc()).all()
+
+    # Get current holdings to filter if include_zero_holdings is False
+    current_holdings_securities = set()
+    if not include_zero_holdings:
+        lot_query = db.query(Lot).filter(Lot.remaining_quantity > 0)
+        if user_id:
+            lot_query = lot_query.filter(Lot.user_id == user_id)
+        current_lots = lot_query.all()
+        current_holdings_securities = {lot.security_id for lot in current_lots}
+
+    # Get corporate events in the date range
+    ce_query = db.query(CorporateEvent).filter(
+        CorporateEvent.record_date >= start_dt,
+        CorporateEvent.record_date <= end_dt
+    )
+    corporate_events = ce_query.all()
+
+    # Build transaction list with running balance
+    statement_items = []
+    running_balance = {}  # security_id -> quantity
+
+    # Calculate opening balance (holdings before start_date)
+    if user_id:
+        lots_before = db.query(Lot).filter(
+            Lot.user_id == user_id,
+            Lot.purchase_date < start_dt
+        ).all()
+    else:
+        lots_before = db.query(Lot).filter(Lot.purchase_date < start_dt).all()
+
+    for lot in lots_before:
+        # Get sales before start_date
+        sales_before = db.query(SaleAllocation).filter(
+            SaleAllocation.lot_id == lot.id
+        ).join(Transaction, SaleAllocation.sell_transaction_id == Transaction.id).filter(
+            Transaction.transaction_date < start_dt
+        ).all()
+
+        sold_qty = sum(alloc.quantity_sold for alloc in sales_before)
+        opening_qty = lot.current_quantity - sold_qty
+
+        if opening_qty > 0:
+            if lot.security_id not in running_balance:
+                running_balance[lot.security_id] = 0
+            running_balance[lot.security_id] += opening_qty
+
+    # Process transactions
+    for tx in transactions:
+        security = tx.security
+
+        # Filter by current holdings if needed
+        if not include_zero_holdings and security.id not in current_holdings_securities:
+            continue
+
+        # Update running balance
+        if security.id not in running_balance:
+            running_balance[security.id] = 0
+
+        if tx.transaction_type.upper() == 'BUY':
+            running_balance[security.id] += tx.quantity
+        else:  # SELL
+            running_balance[security.id] -= tx.quantity
+
+        statement_items.append({
+            "date": tx.transaction_date.strftime("%Y-%m-%d"),
+            "type": "TRANSACTION",
+            "transaction_type": tx.transaction_type,
+            "security_name": security.security_name,
+            "security_ticker": security.security_ticker,
+            "isin": security.security_ISIN,
+            "quantity": tx.quantity,
+            "price_per_unit": round(tx.price_per_unit, 2),
+            "total_amount": round(tx.total_amount, 2),
+            "exchange": tx.exchange,
+            "running_balance": round(running_balance[security.id], 4),
+            "transaction_id": tx.id
+        })
+
+    # Add corporate events
+    for ce in corporate_events:
+        security = ce.security
+
+        # Filter by current holdings if needed
+        if not include_zero_holdings and security.id not in current_holdings_securities:
+            continue
+
+        statement_items.append({
+            "date": ce.record_date.strftime("%Y-%m-%d") if ce.record_date else ce.event_date.strftime("%Y-%m-%d"),
+            "type": "CORPORATE_EVENT",
+            "event_type": ce.event_type,
+            "security_name": security.security_name,
+            "security_ticker": security.security_ticker,
+            "isin": security.security_ISIN,
+            "description": ce.description or f"{ce.event_type}: {ce.ratio_numerator}:{ce.ratio_denominator}",
+            "is_applied": ce.is_applied,
+            "corporate_event_id": ce.id
+        })
+
+    # Sort by date
+    statement_items.sort(key=lambda x: x["date"])
+
+    # Summary statistics
+    buy_transactions = [t for t in statement_items if t.get("transaction_type") == "BUY"]
+    sell_transactions = [t for t in statement_items if t.get("transaction_type") == "SELL"]
+
+    total_bought = sum(t["total_amount"] for t in buy_transactions)
+    total_sold = sum(t["total_amount"] for t in sell_transactions)
+
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "user_id": user_id,
+        "total_transactions": len([i for i in statement_items if i["type"] == "TRANSACTION"]),
+        "total_corporate_events": len([i for i in statement_items if i["type"] == "CORPORATE_EVENT"]),
+        "total_bought": round(total_bought, 2),
+        "total_sold": round(total_sold, 2),
+        "net_investment": round(total_bought - total_sold, 2),
+        "items": statement_items
+    }
+
+
 # SPA routing - serve frontend for all non-API routes (production only)
 if IS_PRODUCTION:
     @app.get("/")

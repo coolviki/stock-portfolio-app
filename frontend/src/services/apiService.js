@@ -415,5 +415,35 @@ export const apiService = {
       params: { admin_email: adminEmail, skip, limit }
     });
     return response.data;
+  },
+
+  // Reports APIs
+  async getReportFinancialYears(userId = null) {
+    const params = new URLSearchParams();
+    if (userId) params.append('user_id', userId);
+
+    const response = await api.get(`/reports/financial-years?${params}`);
+    return response.data;
+  },
+
+  async getHoldingsAsOfDate(asOfDate, userId = null, includeZeroHoldings = false) {
+    const params = new URLSearchParams();
+    params.append('as_of_date', asOfDate);
+    if (userId) params.append('user_id', userId);
+    params.append('include_zero_holdings', includeZeroHoldings);
+
+    const response = await api.get(`/reports/holdings-as-of-date?${params}`);
+    return response.data;
+  },
+
+  async getTransactionStatement(startDate, endDate, userId = null, includeZeroHoldings = false) {
+    const params = new URLSearchParams();
+    params.append('start_date', startDate);
+    params.append('end_date', endDate);
+    if (userId) params.append('user_id', userId);
+    params.append('include_zero_holdings', includeZeroHoldings);
+
+    const response = await api.get(`/reports/transaction-statement?${params}`);
+    return response.data;
   }
 };

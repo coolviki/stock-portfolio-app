@@ -19,7 +19,8 @@ const Sidebar = ({ isOpen, onClose }) => {
     { path: '/upload', icon: '📤', label: 'Upload Contract Notes' },
     { path: '/manual-entry', icon: '✏️', label: 'Manual Entry' },
     { path: '/lots', icon: '📦', label: 'Lot View' },
-    { path: '/capital-gains', icon: '💰', label: 'Capital Gains' }
+    { path: '/capital-gains', icon: '💰', label: 'Capital Gains' },
+    { path: '/reports', icon: '📑', label: 'Reports' }
   ];
 
   const adminMenuItems = [

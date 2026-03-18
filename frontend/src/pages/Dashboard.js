@@ -675,8 +675,11 @@ const Dashboard = () => {
                       backgroundColor: 'rgba(75, 192, 192, 0.1)',
                       fill: true,
                       tension: 0.3,
-                      pointRadius: 2,
-                      pointHoverRadius: 5
+                      pointRadius: 4,
+                      pointHoverRadius: 6,
+                      pointBackgroundColor: 'rgb(75, 192, 192)',
+                      pointBorderColor: '#fff',
+                      pointBorderWidth: 2
                     },
                     {
                       label: 'Current Value',
@@ -692,8 +695,13 @@ const Dashboard = () => {
                         : 'rgba(239, 68, 68, 0.1)',
                       fill: true,
                       tension: 0.3,
-                      pointRadius: 2,
-                      pointHoverRadius: 5
+                      pointRadius: 4,
+                      pointHoverRadius: 6,
+                      pointBackgroundColor: portfolioHistory.current_value >= portfolioHistory.current_cost_basis
+                        ? 'rgb(34, 197, 94)'
+                        : 'rgb(239, 68, 68)',
+                      pointBorderColor: '#fff',
+                      pointBorderWidth: 2
                     }
                   ]
                 }}
