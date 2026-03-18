@@ -2,7 +2,7 @@ import ReactGA from 'react-ga4';
 
 // Google Analytics Measurement ID
 // Can be overridden by REACT_APP_GA_MEASUREMENT_ID environment variable
-const GA_MEASUREMENT_ID = GA_MEASUREMENT_ID || 'G-S9YD26850T';
+const GA_MEASUREMENT_ID = process.env.REACT_APP_GA_MEASUREMENT_ID || 'G-S9YD26850T';
 
 // Initialize Google Analytics
 export const initGA = () => {
