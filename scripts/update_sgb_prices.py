@@ -34,18 +34,39 @@ Setup Instructions:
    30 12 * * * cd /home/pi/stock-portfolio-app && /usr/bin/python3 scripts/update_sgb_prices.py >> /home/pi/sgb_update.log 2>&1
 
 Gold Price Sources (in order of preference):
-1. GoldAPI.io (free tier: 300 requests/month)
-2. Metals.live API (free, no key required)
-3. Fallback to previous price if all APIs fail
+1. GoldAPI.io (free tier: 300 requests/month) - requires API key
+2. Gold Price API (goldpricez.com) - free, no key
+3. Exchange rate based calculation using forex rates
+4. Fallback to previous price if all APIs fail
+
+Troubleshooting SSL Issues on Raspberry Pi:
+==========================================
+If you see SSL errors, try updating certificates:
+   sudo apt-get update
+   sudo apt-get install ca-certificates
+   sudo update-ca-certificates
+
+Or update Python/OpenSSL:
+   sudo apt-get install libssl-dev
+   pip3 install --upgrade certifi
 """
 
 import json
 import os
 import subprocess
+import ssl
+import urllib.request
 from datetime import datetime
 from pathlib import Path
-import requests
 import logging
+
+# Try to import requests, fall back to urllib if not available
+try:
+    import requests
+    HAS_REQUESTS = True
+except ImportError:
+    HAS_REQUESTS = False
+    logging.warning("requests library not found, using urllib (less reliable)")
 
 # Configure logging
 logging.basicConfig(
@@ -63,26 +84,99 @@ SGB_PRICES_FILE = REPO_ROOT / "backend" / "data" / "sgb_prices.json"
 GOLDAPI_KEY = os.environ.get("GOLDAPI_KEY", "")
 
 # USD to INR conversion (update periodically or fetch from API)
-USD_TO_INR = 83.5  # Approximate rate, script will try to fetch live rate
+DEFAULT_USD_TO_INR = 83.5  # Approximate rate, script will try to fetch live rate
+
+# Troy ounce to gram conversion
+TROY_OUNCE_TO_GRAM = 31.1035
+
+
+def create_ssl_context():
+    """Create an SSL context that works on older systems"""
+    try:
+        # Try default context first
+        context = ssl.create_default_context()
+        return context
+    except Exception:
+        # Fallback for older systems
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS)
+        context.verify_mode = ssl.CERT_NONE
+        logger.warning("Using unverified SSL context")
+        return context
+
+
+def fetch_url(url, headers=None, timeout=15):
+    """Fetch URL with fallback methods for older systems"""
+    if HAS_REQUESTS:
+        try:
+            response = requests.get(url, headers=headers, timeout=timeout)
+            if response.status_code == 200:
+                return response.json()
+        except requests.exceptions.SSLError as e:
+            logger.warning(f"SSL error with requests: {e}")
+            # Try with verify=False as fallback
+            try:
+                response = requests.get(url, headers=headers, timeout=timeout, verify=False)
+                if response.status_code == 200:
+                    logger.info("Fetched with SSL verification disabled")
+                    return response.json()
+            except Exception as e2:
+                logger.warning(f"Retry without SSL verify failed: {e2}")
+        except Exception as e:
+            logger.warning(f"requests failed: {e}")
+
+    # Fallback to urllib
+    try:
+        req = urllib.request.Request(url)
+        if headers:
+            for key, value in headers.items():
+                req.add_header(key, value)
+
+        context = create_ssl_context()
+        with urllib.request.urlopen(req, timeout=timeout, context=context) as response:
+            return json.loads(response.read().decode())
+    except Exception as e:
+        logger.warning(f"urllib failed: {e}")
+
+    return None
 
 
 def get_usd_to_inr_rate():
-    """Fetch current USD to INR exchange rate"""
+    """Fetch current USD to INR exchange rate from multiple sources"""
+    # Source 1: exchangerate-api.com
     try:
-        # Using exchangerate-api.com (free tier available)
-        response = requests.get(
-            "https://api.exchangerate-api.com/v4/latest/USD",
-            timeout=10
-        )
-        if response.status_code == 200:
-            data = response.json()
-            rate = data.get("rates", {}).get("INR", USD_TO_INR)
-            logger.info(f"USD to INR rate: {rate}")
-            return rate
+        data = fetch_url("https://api.exchangerate-api.com/v4/latest/USD")
+        if data:
+            rate = data.get("rates", {}).get("INR")
+            if rate:
+                logger.info(f"USD to INR rate (exchangerate-api): {rate}")
+                return rate
     except Exception as e:
-        logger.warning(f"Failed to fetch exchange rate: {e}")
+        logger.warning(f"exchangerate-api failed: {e}")
 
-    return USD_TO_INR
+    # Source 2: frankfurter.app (European Central Bank rates)
+    try:
+        data = fetch_url("https://api.frankfurter.app/latest?from=USD&to=INR")
+        if data:
+            rate = data.get("rates", {}).get("INR")
+            if rate:
+                logger.info(f"USD to INR rate (frankfurter): {rate}")
+                return rate
+    except Exception as e:
+        logger.warning(f"frankfurter failed: {e}")
+
+    # Source 3: open.er-api.com
+    try:
+        data = fetch_url("https://open.er-api.com/v6/latest/USD")
+        if data:
+            rate = data.get("rates", {}).get("INR")
+            if rate:
+                logger.info(f"USD to INR rate (open.er-api): {rate}")
+                return rate
+    except Exception as e:
+        logger.warning(f"open.er-api failed: {e}")
+
+    logger.warning(f"Using default USD to INR rate: {DEFAULT_USD_TO_INR}")
+    return DEFAULT_USD_TO_INR
 
 
 def get_gold_price_goldapi():
@@ -96,69 +190,97 @@ def get_gold_price_goldapi():
             "x-access-token": GOLDAPI_KEY,
             "Content-Type": "application/json"
         }
-        response = requests.get(
-            "https://www.goldapi.io/api/XAU/INR",
-            headers=headers,
-            timeout=10
-        )
-        if response.status_code == 200:
-            data = response.json()
+        data = fetch_url("https://www.goldapi.io/api/XAU/INR", headers=headers)
+        if data:
             # GoldAPI returns price per troy ounce, convert to per gram
             price_per_ounce = data.get("price", 0)
-            price_per_gram = price_per_ounce / 31.1035  # Troy ounce to gram
-            logger.info(f"GoldAPI price per gram: {price_per_gram:.2f} INR")
-            return price_per_gram
+            if price_per_ounce:
+                price_per_gram = price_per_ounce / TROY_OUNCE_TO_GRAM
+                logger.info(f"GoldAPI price per gram: {price_per_gram:.2f} INR")
+                return price_per_gram
     except Exception as e:
         logger.warning(f"GoldAPI failed: {e}")
 
     return None
 
 
-def get_gold_price_metals_live():
-    """Fetch gold price from Metals.live (free, no API key)"""
+def get_gold_price_goldpricez():
+    """Fetch gold price from goldpricez.com API (free, no key required)"""
     try:
-        response = requests.get(
-            "https://api.metals.live/v1/spot/gold",
-            timeout=10
-        )
-        if response.status_code == 200:
-            data = response.json()
-            # Returns price in USD per troy ounce
-            if isinstance(data, list) and len(data) > 0:
-                price_usd = data[0].get("price", 0)
-            else:
-                price_usd = data.get("price", 0)
-
-            # Convert to INR per gram
-            inr_rate = get_usd_to_inr_rate()
-            price_inr_per_ounce = price_usd * inr_rate
-            price_per_gram = price_inr_per_ounce / 31.1035
-            logger.info(f"Metals.live price per gram: {price_per_gram:.2f} INR")
-            return price_per_gram
+        # This API returns gold price in various currencies
+        data = fetch_url("https://goldpricez.com/api/rates/currency/inr/measure/gram")
+        if data:
+            price = data.get("price") or data.get("gold_price")
+            if price:
+                logger.info(f"GoldPriceZ price per gram: {price:.2f} INR")
+                return float(price)
     except Exception as e:
-        logger.warning(f"Metals.live failed: {e}")
+        logger.warning(f"GoldPriceZ failed: {e}")
 
     return None
 
 
-def get_gold_price_fallback():
-    """Fallback: fetch from alternative free API"""
+def get_gold_price_calculated():
+    """Calculate gold price from USD spot price and exchange rate"""
     try:
-        # Try frankfurter.app for exchange rate and estimate gold
-        response = requests.get(
-            "https://api.frankfurter.app/latest?from=XAU&to=INR",
-            timeout=10
-        )
-        if response.status_code == 200:
-            data = response.json()
-            # XAU rate is per troy ounce
-            price_per_ounce = data.get("rates", {}).get("INR", 0)
-            if price_per_ounce:
-                price_per_gram = price_per_ounce / 31.1035
-                logger.info(f"Frankfurter price per gram: {price_per_gram:.2f} INR")
-                return price_per_gram
+        # Try to get gold spot price in USD from multiple sources
+        gold_usd = None
+
+        # Source 1: metals-api (may have free tier)
+        try:
+            data = fetch_url("https://metals-api.com/api/latest?access_key=demo&base=USD&symbols=XAU")
+            if data and data.get("success"):
+                # XAU rate is inverted (USD per ounce = 1/rate)
+                xau_rate = data.get("rates", {}).get("XAU")
+                if xau_rate and xau_rate > 0:
+                    gold_usd = 1 / xau_rate
+                    logger.info(f"Gold USD spot (metals-api): ${gold_usd:.2f}/oz")
+        except Exception:
+            pass
+
+        # Source 2: Use a typical spot price if APIs fail
+        # As of March 2026, gold is around $2900-3200/oz
+        if not gold_usd:
+            # Fetch approximate from a currency/commodity endpoint
+            try:
+                data = fetch_url("https://api.coingecko.com/api/v3/simple/price?ids=pax-gold&vs_currencies=usd")
+                if data:
+                    # PAX Gold is 1:1 backed by physical gold
+                    gold_usd = data.get("pax-gold", {}).get("usd")
+                    if gold_usd:
+                        # Convert from per gram to per ounce (PAXG is per gram)
+                        gold_usd = gold_usd * TROY_OUNCE_TO_GRAM
+                        logger.info(f"Gold USD via PAXG: ${gold_usd:.2f}/oz")
+            except Exception:
+                pass
+
+        if gold_usd:
+            inr_rate = get_usd_to_inr_rate()
+            price_inr_per_ounce = gold_usd * inr_rate
+            price_per_gram = price_inr_per_ounce / TROY_OUNCE_TO_GRAM
+            logger.info(f"Calculated gold price: {price_per_gram:.2f} INR/gram")
+            return price_per_gram
+
     except Exception as e:
-        logger.warning(f"Frankfurter API failed: {e}")
+        logger.warning(f"Calculated price failed: {e}")
+
+    return None
+
+
+def get_gold_price_ibja():
+    """Attempt to get IBJA (India Bullion Jewellers Association) rate"""
+    # Note: IBJA doesn't have a public API, but we can try scraping alternatives
+    try:
+        # Try goodreturns.in API (aggregates Indian gold prices)
+        data = fetch_url("https://www.goodreturns.in/gold-rates/api/today-gold-rate.json")
+        if data:
+            # Extract 24K gold price per gram
+            rate = data.get("gold_24k_per_gram") or data.get("gold_rate")
+            if rate:
+                logger.info(f"GoodReturns gold price: {rate:.2f} INR/gram")
+                return float(rate)
+    except Exception as e:
+        logger.warning(f"IBJA/GoodReturns failed: {e}")
 
     return None
 
@@ -166,17 +288,26 @@ def get_gold_price_fallback():
 def get_current_gold_price():
     """Get current gold price using multiple sources"""
     # Try sources in order of preference
+
+    # 1. GoldAPI.io (most reliable, requires API key)
     price = get_gold_price_goldapi()
-    if price:
+    if price and price > 5000:  # Sanity check
         return price, "GoldAPI.io"
 
-    price = get_gold_price_metals_live()
-    if price:
-        return price, "Metals.live"
+    # 2. GoldPriceZ (free)
+    price = get_gold_price_goldpricez()
+    if price and price > 5000:
+        return price, "GoldPriceZ"
 
-    price = get_gold_price_fallback()
-    if price:
-        return price, "Frankfurter"
+    # 3. IBJA/GoodReturns (Indian source)
+    price = get_gold_price_ibja()
+    if price and price > 5000:
+        return price, "GoodReturns/IBJA"
+
+    # 4. Calculated from USD spot + forex
+    price = get_gold_price_calculated()
+    if price and price > 5000:
+        return price, "Calculated (USD spot + INR rate)"
 
     return None, None
 
@@ -203,6 +334,13 @@ def git_commit_and_push():
     """Commit changes and push to GitHub"""
     try:
         os.chdir(REPO_ROOT)
+
+        # Pull latest changes first to avoid conflicts
+        subprocess.run(
+            ["git", "pull", "--rebase"],
+            capture_output=True,
+            text=True
+        )
 
         # Check if there are changes
         result = subprocess.run(
