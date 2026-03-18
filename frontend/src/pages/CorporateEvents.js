@@ -1,8 +1,182 @@
-import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Form, Table, Badge, Button, Modal, Alert, Spinner } from 'react-bootstrap';
+import React, { useState, useEffect, useRef } from 'react';
+import { Container, Row, Col, Card, Form, Table, Badge, Button, Modal, Alert, Spinner, ListGroup } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/apiService';
 import { toast } from 'react-toastify';
+
+// Searchable Security Select Component
+const SearchableSecuritySelect = ({ securities, value, onChange, placeholder = "Search or select security...", required = false }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const wrapperRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // Get selected security name for display
+  const selectedSecurity = securities.find(s => s.id === parseInt(value));
+
+  // Filter securities based on search term
+  const filteredSecurities = securities.filter(s =>
+    s.security_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.security_ticker?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.security_ISIN?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Reset highlighted index when filtered list changes
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [searchTerm]);
+
+  const handleInputChange = (e) => {
+    setSearchTerm(e.target.value);
+    setIsOpen(true);
+    if (e.target.value === '') {
+      onChange({ target: { name: 'security_id', value: '' } });
+    }
+  };
+
+  const handleSelect = (security) => {
+    onChange({ target: { name: 'security_id', value: security.id.toString() } });
+    setSearchTerm('');
+    setIsOpen(false);
+  };
+
+  const handleKeyDown = (e) => {
+    if (!isOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        setIsOpen(true);
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setHighlightedIndex(prev => Math.min(prev + 1, filteredSecurities.length - 1));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setHighlightedIndex(prev => Math.max(prev - 1, 0));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (filteredSecurities[highlightedIndex]) {
+          handleSelect(filteredSecurities[highlightedIndex]);
+        }
+        break;
+      case 'Escape':
+        setIsOpen(false);
+        break;
+      default:
+        break;
+    }
+  };
+
+  const handleClear = () => {
+    onChange({ target: { name: 'security_id', value: '' } });
+    setSearchTerm('');
+    inputRef.current?.focus();
+  };
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative' }}>
+      <div className="input-group">
+        <Form.Control
+          ref={inputRef}
+          type="text"
+          placeholder={selectedSecurity ? selectedSecurity.security_name : placeholder}
+          value={searchTerm}
+          onChange={handleInputChange}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={handleKeyDown}
+          required={required && !value}
+          style={{
+            backgroundColor: selectedSecurity && !searchTerm ? '#e8f4e8' : undefined
+          }}
+        />
+        {(value || searchTerm) && (
+          <Button
+            variant="outline-secondary"
+            onClick={handleClear}
+            title="Clear selection"
+          >
+            ×
+          </Button>
+        )}
+        <Button
+          variant="outline-secondary"
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          ▼
+        </Button>
+      </div>
+      {selectedSecurity && !searchTerm && (
+        <Form.Text className="text-success">
+          Selected: {selectedSecurity.security_name} ({selectedSecurity.security_ticker})
+        </Form.Text>
+      )}
+      {isOpen && (
+        <ListGroup
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            maxHeight: '250px',
+            overflowY: 'auto',
+            zIndex: 1050,
+            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+          }}
+        >
+          {filteredSecurities.length === 0 ? (
+            <ListGroup.Item className="text-muted">
+              No securities found
+            </ListGroup.Item>
+          ) : (
+            filteredSecurities.slice(0, 50).map((security, index) => (
+              <ListGroup.Item
+                key={security.id}
+                action
+                active={index === highlightedIndex}
+                onClick={() => handleSelect(security)}
+                style={{ cursor: 'pointer' }}
+              >
+                <div className="d-flex justify-content-between align-items-center">
+                  <div>
+                    <strong>{security.security_name}</strong>
+                    <br />
+                    <small className="text-muted">
+                      {security.security_ticker} | {security.security_ISIN}
+                    </small>
+                  </div>
+                  {parseInt(value) === security.id && (
+                    <Badge bg="success">✓</Badge>
+                  )}
+                </div>
+              </ListGroup.Item>
+            ))
+          )}
+          {filteredSecurities.length > 50 && (
+            <ListGroup.Item className="text-muted text-center">
+              Type to filter... ({filteredSecurities.length - 50} more)
+            </ListGroup.Item>
+          )}
+        </ListGroup>
+      )}
+    </div>
+  );
+};
 
 const EVENT_TYPES = [
   { value: 'SPLIT', label: 'Stock Split' },
@@ -319,16 +493,12 @@ const CorporateEvents = () => {
                 <Col md={4}>
                   <Form.Group>
                     <Form.Label>Security</Form.Label>
-                    <Form.Select
-                      name="security_id"
+                    <SearchableSecuritySelect
+                      securities={securities}
                       value={filters.security_id}
                       onChange={handleFilterChange}
-                    >
-                      <option value="">All Securities</option>
-                      {securities.map(s => (
-                        <option key={s.id} value={s.id}>{s.security_name}</option>
-                      ))}
-                    </Form.Select>
+                      placeholder="All Securities - type to search..."
+                    />
                   </Form.Group>
                 </Col>
                 <Col md={4}>
@@ -468,17 +638,13 @@ const CorporateEvents = () => {
               <Col md={6}>
                 <Form.Group className="mb-3">
                   <Form.Label>Security *</Form.Label>
-                  <Form.Select
-                    name="security_id"
+                  <SearchableSecuritySelect
+                    securities={securities}
                     value={formData.security_id}
                     onChange={handleFormChange}
+                    placeholder="Type to search security..."
                     required
-                  >
-                    <option value="">Select Security</option>
-                    {securities.map(s => (
-                      <option key={s.id} value={s.id}>{s.security_name}</option>
-                    ))}
-                  </Form.Select>
+                  />
                 </Form.Group>
               </Col>
               <Col md={6}>
