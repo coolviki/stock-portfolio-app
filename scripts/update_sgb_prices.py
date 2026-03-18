@@ -3,35 +3,37 @@
 SGB Price Updater for Raspberry Pi
 
 This script fetches the current gold price and updates the sgb_prices.json file
-in the GitHub repository. Run this daily via cron job.
+in the GitHub repository using the GitHub API. Run this daily via cron job.
 
 Setup Instructions:
 ==================
-1. Clone the repo on your Raspberry Pi:
-   git clone https://github.com/coolviki/stock-portfolio-app.git
-   cd stock-portfolio-app
+1. Create a GitHub Personal Access Token:
+   - Go to: GitHub > Settings > Developer settings > Personal access tokens > Tokens (classic)
+   - Generate new token with 'repo' scope
+   - Copy the token
 
-2. Configure Git credentials (use Personal Access Token for HTTPS):
-   git config user.email "your-email@example.com"
-   git config user.name "Raspberry Pi Bot"
+2. Set up on Raspberry Pi:
+   # Create a directory for the script
+   mkdir -p ~/sgb-updater
+   cd ~/sgb-updater
 
-   # For HTTPS authentication, create a Personal Access Token on GitHub:
-   # GitHub > Settings > Developer settings > Personal access tokens > Tokens (classic)
-   # Generate with 'repo' scope
-   # Then configure credential storage:
-   git config credential.helper store
-   # On first push, enter your GitHub username and the token as password
+   # Download the script
+   curl -O https://raw.githubusercontent.com/coolviki/stock-portfolio-app/main/scripts/update_sgb_prices.py
+
+   # Create environment file with your token
+   echo 'export GITHUB_TOKEN="your_token_here"' > ~/.sgb_env
+   chmod 600 ~/.sgb_env
 
 3. Install dependencies:
    pip3 install requests
 
 4. Test the script:
-   python3 scripts/update_sgb_prices.py
+   source ~/.sgb_env && python3 update_sgb_prices.py
 
 5. Set up cron job to run daily at 6 PM IST (after market close):
    crontab -e
    # Add this line (6 PM IST = 12:30 PM UTC):
-   30 12 * * * cd /home/pi/stock-portfolio-app && /usr/bin/python3 scripts/update_sgb_prices.py >> /home/pi/sgb_update.log 2>&1
+   30 12 * * * source /home/pi/.sgb_env && /usr/bin/python3 /home/pi/sgb-updater/update_sgb_prices.py >> /home/pi/sgb_update.log 2>&1
 
 Gold Price Sources (in order of preference):
 1. GoldAPI.io (free tier: 300 requests/month) - requires API key
@@ -39,16 +41,10 @@ Gold Price Sources (in order of preference):
 3. Exchange rate based calculation using forex rates
 4. Fallback to previous price if all APIs fail
 
-Troubleshooting SSL Issues on Raspberry Pi:
-==========================================
-If you see SSL errors, try updating certificates:
-   sudo apt-get update
-   sudo apt-get install ca-certificates
-   sudo update-ca-certificates
-
-Or update Python/OpenSSL:
-   sudo apt-get install libssl-dev
-   pip3 install --upgrade certifi
+Environment Variables:
+=====================
+GITHUB_TOKEN  - Required: Your GitHub Personal Access Token
+GOLDAPI_KEY   - Optional: API key for goldapi.io (more reliable gold prices)
 """
 
 import json
@@ -79,6 +75,12 @@ logger = logging.getLogger(__name__)
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent
 SGB_PRICES_FILE = REPO_ROOT / "backend" / "data" / "sgb_prices.json"
+
+# GitHub configuration for API-based updates
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+GITHUB_OWNER = "coolviki"
+GITHUB_REPO = "stock-portfolio-app"
+GITHUB_FILE_PATH = "backend/data/sgb_prices.json"
 
 # Gold API configuration (optional - get free key at https://www.goldapi.io/)
 GOLDAPI_KEY = os.environ.get("GOLDAPI_KEY", "")
@@ -330,8 +332,114 @@ def save_prices(data):
     logger.info(f"Saved prices to {SGB_PRICES_FILE}")
 
 
+def get_file_sha_from_github():
+    """Get the current SHA of the file from GitHub (needed for updates)"""
+    if not GITHUB_TOKEN:
+        logger.error("GITHUB_TOKEN not set")
+        return None
+
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
+        headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+
+        if HAS_REQUESTS:
+            response = requests.get(url, headers=headers, timeout=15)
+            if response.status_code == 200:
+                return response.json().get("sha")
+            elif response.status_code == 404:
+                logger.info("File doesn't exist yet, will create new")
+                return None
+        else:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as response:
+                data = json.loads(response.read().decode())
+                return data.get("sha")
+
+    except Exception as e:
+        logger.warning(f"Failed to get file SHA: {e}")
+
+    return None
+
+
+def push_to_github(content):
+    """Push file content to GitHub using the API"""
+    if not GITHUB_TOKEN:
+        logger.error("GITHUB_TOKEN environment variable not set!")
+        logger.error("Set it with: export GITHUB_TOKEN='your_token_here'")
+        return False
+
+    try:
+        import base64
+
+        # Get current file SHA (required for updates)
+        sha = get_file_sha_from_github()
+
+        url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
+        headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json",
+            "Content-Type": "application/json"
+        }
+
+        # Encode content as base64
+        content_bytes = content.encode('utf-8')
+        content_base64 = base64.b64encode(content_bytes).decode('utf-8')
+
+        # Prepare request body
+        commit_msg = f"chore: update SGB prices ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
+        body = {
+            "message": commit_msg,
+            "content": content_base64,
+            "committer": {
+                "name": "Raspberry Pi Bot",
+                "email": "pi-bot@users.noreply.github.com"
+            }
+        }
+
+        # Include SHA if updating existing file
+        if sha:
+            body["sha"] = sha
+
+        if HAS_REQUESTS:
+            response = requests.put(url, headers=headers, json=body, timeout=30)
+            if response.status_code in [200, 201]:
+                logger.info("Successfully pushed to GitHub via API")
+                return True
+            else:
+                logger.error(f"GitHub API error: {response.status_code} - {response.text}")
+                return False
+        else:
+            # Use urllib
+            data = json.dumps(body).encode('utf-8')
+            req = urllib.request.Request(url, data=data, headers=headers, method='PUT')
+            with urllib.request.urlopen(req, timeout=30) as response:
+                if response.status in [200, 201]:
+                    logger.info("Successfully pushed to GitHub via API")
+                    return True
+
+    except Exception as e:
+        logger.error(f"GitHub API push failed: {e}")
+
+    return False
+
+
 def git_commit_and_push():
-    """Commit changes and push to GitHub"""
+    """Commit changes and push to GitHub (fallback to git commands if no token)"""
+    # If GITHUB_TOKEN is set, use API (preferred)
+    if GITHUB_TOKEN:
+        try:
+            with open(SGB_PRICES_FILE, "r") as f:
+                content = f.read()
+            return push_to_github(content)
+        except Exception as e:
+            logger.error(f"Failed to read file for API push: {e}")
+            return False
+
+    # Fallback to git commands
+    logger.info("GITHUB_TOKEN not set, trying git commands...")
     try:
         os.chdir(REPO_ROOT)
 
