@@ -1,0 +1,8 @@
+{
+  "last_updated": "2026-03-18T10:00:00",
+  "updated_by": "manual",
+  "gold_price_per_gram": 8337.0,
+  "sgb_price_per_unit": 8337.0,
+  "source": "Initial setup - update via Raspberry Pi script",
+  "notes": "SGB price = gold price per gram (1 unit = 1 gram of gold)"
+}

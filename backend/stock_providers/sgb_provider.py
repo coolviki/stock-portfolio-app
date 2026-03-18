@@ -1,30 +1,63 @@
 """
 Sovereign Gold Bond (SGB) Price Provider
 
-Provides SGB prices using hardcoded manual values.
+Provides SGB prices from a JSON file that is updated daily by a Raspberry Pi script.
 SGBs trade on the secondary market with symbols like SGBFEB32IV.
 
-TODO: Replace hardcoded prices with a cloud-friendly data source.
-NSE blocks cloud server IPs, so we use manually updated prices.
-Update SGB_PRICE_PER_UNIT below every few days.
+Price Update Flow:
+1. Raspberry Pi runs scripts/update_sgb_prices.py daily
+2. Script fetches gold price from APIs and updates backend/data/sgb_prices.json
+3. Script commits and pushes to GitHub
+4. This provider reads from the JSON file
+
+Fallback: If JSON file is not found or invalid, uses a hardcoded default price.
 """
 
 from typing import Dict, Optional, List
 from datetime import datetime
+from pathlib import Path
+import json
 import logging
 
 from .base import StockPriceProvider, StockPrice, ProviderStatus
 
 logger = logging.getLogger(__name__)
 
-# =============================================================================
-# MANUAL SGB PRICE - UPDATE THIS VALUE EVERY FEW DAYS
-# =============================================================================
-# Last updated: 2026-03-15
-# Check current price at: https://www.nseindia.com/ (search for SGBFEB32 etc)
-# All SGBs trade at approximately the same price (tracks gold price)
-SGB_PRICE_PER_UNIT = 16674.0
-# =============================================================================
+# Path to the SGB prices JSON file
+SGB_PRICES_FILE = Path(__file__).parent.parent / "data" / "sgb_prices.json"
+
+# Fallback price if JSON file is not available
+DEFAULT_SGB_PRICE = 8337.0  # Update this periodically as a fallback
+
+
+def get_sgb_price_from_file() -> tuple:
+    """
+    Read SGB price from the JSON file.
+    Returns (price, source, last_updated) or (None, None, None) if file not found.
+    """
+    try:
+        if SGB_PRICES_FILE.exists():
+            with open(SGB_PRICES_FILE, "r") as f:
+                data = json.load(f)
+                price = data.get("sgb_price_per_unit")
+                source = data.get("source", "JSON file")
+                last_updated = data.get("last_updated", "unknown")
+                if price:
+                    logger.info(f"SGB price from file: {price} (updated: {last_updated})")
+                    return price, source, last_updated
+    except Exception as e:
+        logger.warning(f"Error reading SGB prices file: {e}")
+
+    return None, None, None
+
+
+def get_sgb_price() -> float:
+    """Get the current SGB price per unit"""
+    price, source, _ = get_sgb_price_from_file()
+    if price:
+        return price
+    logger.warning(f"Using default SGB price: {DEFAULT_SGB_PRICE}")
+    return DEFAULT_SGB_PRICE
 
 
 class SGBProvider(StockPriceProvider):
@@ -101,21 +134,19 @@ class SGBProvider(StockPriceProvider):
 
     def get_price(self, symbol: str) -> Optional[StockPrice]:
         """
-        Get SGB price using hardcoded manual price.
-
-        TODO: Replace with a cloud-friendly data source.
-        Currently uses SGB_PRICE_PER_UNIT constant (no API calls).
-        Update the constant at the top of this file every few days.
+        Get SGB price from JSON file (updated daily by Raspberry Pi script).
+        Falls back to default price if file is not available.
         """
         if not self._is_sgb_symbol(symbol):
             logger.debug(f"SGBProvider: {symbol} is not an SGB symbol, skipping")
             return None
 
-        logger.info(f"SGBProvider: Using hardcoded price {SGB_PRICE_PER_UNIT} for {symbol}")
+        sgb_price = get_sgb_price()
+        logger.info(f"SGBProvider: Using price {sgb_price} for {symbol}")
 
         return StockPrice(
             symbol=symbol,
-            price=SGB_PRICE_PER_UNIT,
+            price=sgb_price,
             currency='INR',
             timestamp=datetime.now().isoformat(),
             provider=self.name,
@@ -163,6 +194,7 @@ class SGBProvider(StockPriceProvider):
 
     def get_provider_info(self) -> Dict:
         """Get provider information"""
+        price, source, last_updated = get_sgb_price_from_file()
         return {
             'name': self.name,
             'status': self.status.value,
@@ -171,6 +203,7 @@ class SGBProvider(StockPriceProvider):
             'max_errors': self.max_errors,
             'supported_markets': ['NSE', 'BSE'],
             'supported_instruments': ['SGB'],
-            'price_source': 'Manual (hardcoded)',
-            'current_price': SGB_PRICE_PER_UNIT
+            'price_source': source or 'Default fallback',
+            'current_price': price or DEFAULT_SGB_PRICE,
+            'last_updated': last_updated or 'N/A'
         }
