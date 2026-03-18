@@ -181,6 +181,52 @@ def get_usd_to_inr_rate():
     return DEFAULT_USD_TO_INR
 
 
+def get_sgb_price_from_nse():
+    """Fetch SGB price from NSE via Yahoo Finance"""
+    # List of SGB symbols to try (most liquid ones first)
+    sgb_symbols = [
+        "SGBFEB32IV.NS",  # Feb 2032 - most traded
+        "SGBFEB33.NS",    # Feb 2033
+        "SGBMAR33.NS",    # Mar 2033
+        "SGBJUN33.NS",    # Jun 2033
+    ]
+
+    for symbol in sgb_symbols:
+        try:
+            # Yahoo Finance API
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1d"
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+
+            if HAS_REQUESTS:
+                response = requests.get(url, headers=headers, timeout=15)
+                if response.status_code == 200:
+                    data = response.json()
+                else:
+                    continue
+            else:
+                req = urllib.request.Request(url, headers=headers)
+                context = create_ssl_context()
+                with urllib.request.urlopen(req, timeout=15, context=context) as response:
+                    data = json.loads(response.read().decode())
+
+            # Extract price from Yahoo response
+            result = data.get("chart", {}).get("result", [])
+            if result:
+                meta = result[0].get("meta", {})
+                price = meta.get("regularMarketPrice") or meta.get("previousClose")
+                if price and price > 5000:
+                    logger.info(f"NSE SGB price ({symbol}): {price:.2f} INR")
+                    return price, symbol
+
+        except Exception as e:
+            logger.warning(f"Yahoo Finance failed for {symbol}: {e}")
+            continue
+
+    return None, None
+
+
 def get_gold_price_goldapi():
     """Fetch gold price from GoldAPI.io (requires free API key)"""
     if not GOLDAPI_KEY:
@@ -294,31 +340,42 @@ def is_valid_gold_price(price):
     return False
 
 
-def get_current_gold_price():
-    """Get current gold price using multiple sources"""
+def get_current_sgb_price():
+    """Get current SGB price - prefer NSE price, fallback to gold price"""
     # Try sources in order of preference
 
-    # 1. GoldAPI.io (most reliable, requires API key)
+    # 1. NSE SGB price via Yahoo Finance (most accurate for SGBs)
+    price, symbol = get_sgb_price_from_nse()
+    if price and is_valid_gold_price(price):
+        return price, f"NSE ({symbol})"
+
+    # 2. GoldAPI.io (requires API key)
     price = get_gold_price_goldapi()
     if is_valid_gold_price(price):
-        return price, "GoldAPI.io"
+        return price, "GoldAPI.io (gold spot)"
 
-    # 2. GoldPriceZ (free)
+    # 3. GoldPriceZ (free)
     price = get_gold_price_goldpricez()
     if is_valid_gold_price(price):
-        return price, "GoldPriceZ"
+        return price, "GoldPriceZ (gold spot)"
 
-    # 3. IBJA/GoodReturns (Indian source)
+    # 4. IBJA/GoodReturns (Indian source)
     price = get_gold_price_ibja()
     if is_valid_gold_price(price):
-        return price, "GoodReturns/IBJA"
+        return price, "GoodReturns/IBJA (gold spot)"
 
-    # 4. Calculated from USD spot + forex
+    # 5. Calculated from USD spot + forex
     price = get_gold_price_calculated()
     if is_valid_gold_price(price):
         return price, "Calculated (USD spot + INR rate)"
 
     return None, None
+
+
+# Keep old function name for compatibility
+def get_current_gold_price():
+    """Alias for get_current_sgb_price"""
+    return get_current_sgb_price()
 
 
 def load_current_prices():
