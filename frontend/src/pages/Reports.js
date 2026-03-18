@@ -5,6 +5,7 @@ import { apiService } from '../services/apiService';
 import { toast } from 'react-toastify';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { trackReport, trackExport } from '../utils/analytics';
 
 const Reports = () => {
   const { user } = useAuth();
@@ -70,6 +71,7 @@ const Reports = () => {
         includeZeroHoldings
       );
       setHoldingsData(response);
+      trackReport('Holdings As-Of-Date');
     } catch (error) {
       console.error('Error generating holdings report:', error);
       toast.error('Failed to generate holdings report');
@@ -94,6 +96,7 @@ const Reports = () => {
         includeZeroHoldings
       );
       setStatementData(response);
+      trackReport('Transaction Statement');
     } catch (error) {
       console.error('Error generating transaction statement:', error);
       toast.error('Failed to generate transaction statement');
@@ -161,6 +164,7 @@ const Reports = () => {
 
   const exportHoldingsToCSV = () => {
     if (!holdingsData?.holdings) return;
+    trackExport('CSV', 'Holdings As-Of-Date');
 
     const csvData = holdingsData.holdings.map(h => ({
       'Security Name': h.security_name,
@@ -177,6 +181,7 @@ const Reports = () => {
 
   const exportStatementToCSV = () => {
     if (!statementData?.items) return;
+    trackExport('CSV', 'Transaction Statement');
 
     const csvData = statementData.items.map(item => {
       if (item.type === 'TRANSACTION') {
@@ -217,6 +222,7 @@ const Reports = () => {
       toast.error('No data to export');
       return;
     }
+    trackExport('PDF', 'Holdings As-Of-Date');
 
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -348,6 +354,7 @@ const Reports = () => {
       toast.error('No data to export');
       return;
     }
+    trackExport('PDF', 'Transaction Statement');
 
     const doc = new jsPDF('landscape');
     const pageWidth = doc.internal.pageSize.getWidth();

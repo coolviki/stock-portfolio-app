@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import { useAuth } from './context/AuthContext';
 import { authService } from './services/authService';
+import { initGA, trackPageView, setUserProperties } from './utils/analytics';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -25,13 +26,51 @@ import CorporateEventsTicker from './components/CorporateEventsTicker';
 import Reports from './pages/Reports';
 
 function App() {
-  const { user, loading } = useAuth();
+  const { user, loading, isAdmin } = useAuth();
   const [authConfig, setAuthConfig] = useState(null);
   const [configLoading, setConfigLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const closeSidebar = () => setSidebarOpen(false);
+
+  // Initialize Google Analytics on app load
+  useEffect(() => {
+    initGA();
+  }, []);
+
+  // Track page views on route change
+  useEffect(() => {
+    const pageTitles = {
+      '/': 'Dashboard',
+      '/dashboard': 'Dashboard',
+      '/transactions': 'Transactions',
+      '/upload': 'Upload Contract Notes',
+      '/manual-entry': 'Manual Entry',
+      '/lots': 'Lot View',
+      '/capital-gains': 'Capital Gains',
+      '/reports': 'Reports',
+      '/corporate-events': 'Corporate Events',
+      '/security-master': 'Security Master',
+      '/users': 'Manage Users',
+      '/price-providers': 'Price Providers',
+      '/admin': 'Admin',
+      '/db-admin': 'DB Admin',
+      '/login': 'Login',
+      '/register': 'Register',
+      '/firebase-auth': 'Firebase Auth'
+    };
+    const pageTitle = pageTitles[location.pathname] || 'Stock Portfolio';
+    trackPageView(location.pathname, pageTitle);
+  }, [location]);
+
+  // Set user properties when user logs in
+  useEffect(() => {
+    if (user) {
+      setUserProperties(user.id, isAdmin);
+    }
+  }, [user, isAdmin]);
 
   useEffect(() => {
     // Fetch auth configuration from backend
