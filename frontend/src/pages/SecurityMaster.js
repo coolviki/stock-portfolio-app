@@ -24,6 +24,8 @@ const SecurityMaster = () => {
   const [priceData, setPriceData] = useState({});
   const [loadingPrice, setLoadingPrice] = useState({});
   const [fetchingEvents, setFetchingEvents] = useState({});
+  const [sortField, setSortField] = useState('security_name');
+  const [sortDirection, setSortDirection] = useState('asc');
 
   useEffect(() => {
     loadSecurities();
@@ -311,11 +313,47 @@ const SecurityMaster = () => {
     }
   };
 
-  const filteredSecurities = securities.filter(security => 
-    security.security_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    security.security_ISIN.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    security.security_ticker.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortIcon = (field) => {
+    if (sortField !== field) return '↕️';
+    return sortDirection === 'asc' ? '↑' : '↓';
+  };
+
+  const filteredSecurities = securities
+    .filter(security =>
+      security.security_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      security.security_ISIN.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      security.security_ticker.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+      let aVal = a[sortField];
+      let bVal = b[sortField];
+
+      // Handle null/undefined values
+      if (aVal == null) aVal = '';
+      if (bVal == null) bVal = '';
+
+      // Handle dates
+      if (sortField === 'created_at' || sortField === 'updated_at') {
+        aVal = new Date(aVal).getTime();
+        bVal = new Date(bVal).getTime();
+      } else if (typeof aVal === 'string') {
+        aVal = aVal.toLowerCase();
+        bVal = bVal.toLowerCase();
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
 
   if (loading) {
     return (
@@ -381,12 +419,48 @@ const SecurityMaster = () => {
             <Table striped hover>
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Security Name</th>
-                  <th>ISIN</th>
-                  <th>Ticker</th>
-                  <th>Created</th>
-                  <th>Updated</th>
+                  <th
+                    style={{ cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => handleSort('id')}
+                    title="Sort by ID"
+                  >
+                    ID {getSortIcon('id')}
+                  </th>
+                  <th
+                    style={{ cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => handleSort('security_name')}
+                    title="Sort by Security Name"
+                  >
+                    Security Name {getSortIcon('security_name')}
+                  </th>
+                  <th
+                    style={{ cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => handleSort('security_ISIN')}
+                    title="Sort by ISIN"
+                  >
+                    ISIN {getSortIcon('security_ISIN')}
+                  </th>
+                  <th
+                    style={{ cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => handleSort('security_ticker')}
+                    title="Sort by Ticker"
+                  >
+                    Ticker {getSortIcon('security_ticker')}
+                  </th>
+                  <th
+                    style={{ cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => handleSort('created_at')}
+                    title="Sort by Created Date"
+                  >
+                    Created {getSortIcon('created_at')}
+                  </th>
+                  <th
+                    style={{ cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => handleSort('updated_at')}
+                    title="Sort by Updated Date"
+                  >
+                    Updated {getSortIcon('updated_at')}
+                  </th>
                   <th>Actions</th>
                 </tr>
               </thead>
