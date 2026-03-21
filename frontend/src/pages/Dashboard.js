@@ -541,29 +541,28 @@ const Dashboard = () => {
                 </div>
               )}
               {/* Column Settings Dropdown */}
-              <Dropdown>
+              <Dropdown autoClose="outside">
                 <Dropdown.Toggle variant="outline-secondary" size="sm" id="column-settings">
                   <span style={{ fontSize: '0.85rem' }}>⚙ Columns</span>
                 </Dropdown.Toggle>
                 <Dropdown.Menu align="end" style={{ minWidth: '180px' }}>
                   <Dropdown.Header>Show/Hide Columns</Dropdown.Header>
                   {columnConfig.map(col => (
-                    <Dropdown.Item
+                    <div
                       key={col.key}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleColumnToggle(col.key);
-                      }}
-                      className="py-1"
+                      className="dropdown-item py-1"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleColumnToggle(col.key)}
                     >
                       <Form.Check
                         type="checkbox"
                         checked={visibleColumns[col.key]}
-                        onChange={() => {}}
+                        onChange={() => handleColumnToggle(col.key)}
                         label={col.label}
                         className="mb-0"
+                        onClick={(e) => e.stopPropagation()}
                       />
-                    </Dropdown.Item>
+                    </div>
                   ))}
                 </Dropdown.Menu>
               </Dropdown>
