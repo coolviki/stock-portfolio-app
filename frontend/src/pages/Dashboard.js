@@ -12,7 +12,7 @@ const Dashboard = () => {
   const [portfolio, setPortfolio] = useState(null);
   const [marketIndices, setMarketIndices] = useState(null);
   const [portfolioHistory, setPortfolioHistory] = useState(null);
-  const [historyTimeRange, setHistoryTimeRange] = useState('5d');
+  const [historyTimeRange, setHistoryTimeRange] = useState('1m');
   const [loading, setLoading] = useState(true);
   const [sortConfig, setSortConfig] = useState({ key: 'dayPnlPercent', direction: 'desc' }); // Default: Day P&L % (highest gains on top)
   const { user } = useAuth();
@@ -160,6 +160,30 @@ const Dashboard = () => {
         case 'xirr':
           aVal = a.xirr ?? -Infinity;
           bVal = b.xirr ?? -Infinity;
+          break;
+        case 'quantity':
+          aVal = a.stock.quantity;
+          bVal = b.stock.quantity;
+          break;
+        case 'avgPrice':
+          aVal = a.stock.quantity > 0 ? a.stock.total_invested / a.stock.quantity : 0;
+          bVal = b.stock.quantity > 0 ? b.stock.total_invested / b.stock.quantity : 0;
+          break;
+        case 'currentPrice':
+          aVal = a.stock.quantity > 0 ? a.currentVal / a.stock.quantity : 0;
+          bVal = b.stock.quantity > 0 ? b.currentVal / b.stock.quantity : 0;
+          break;
+        case 'invested':
+          aVal = a.stock.total_invested;
+          bVal = b.stock.total_invested;
+          break;
+        case 'value':
+          aVal = a.currentVal;
+          bVal = b.currentVal;
+          break;
+        case 'allocation':
+          aVal = a.currentVal;
+          bVal = b.currentVal;
           break;
         default:
           aVal = a.symbol;
@@ -555,11 +579,41 @@ const Dashboard = () => {
                   >
                     Security {sortConfig.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th>Qty</th>
-                  <th>Avg. Price</th>
-                  <th>Current Price</th>
-                  <th className="d-none d-lg-table-cell">Invested</th>
-                  <th>Value</th>
+                  <th
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => handleSort('quantity')}
+                    className="sortable-header"
+                  >
+                    Qty {sortConfig.key === 'quantity' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => handleSort('avgPrice')}
+                    className="sortable-header"
+                  >
+                    Avg. Price {sortConfig.key === 'avgPrice' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => handleSort('currentPrice')}
+                    className="sortable-header"
+                  >
+                    Current Price {sortConfig.key === 'currentPrice' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => handleSort('invested')}
+                    className="sortable-header d-none d-lg-table-cell"
+                  >
+                    Invested {sortConfig.key === 'invested' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => handleSort('value')}
+                    className="sortable-header"
+                  >
+                    Value {sortConfig.key === 'value' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  </th>
                   <th
                     style={{ cursor: 'pointer' }}
                     onClick={() => handleSort('dayPnl')}
@@ -581,10 +635,17 @@ const Dashboard = () => {
                   >
                     XIRR {sortConfig.key === 'xirr' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                   </th>
+                  <th
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => handleSort('allocation')}
+                    className="sortable-header"
+                  >
+                    % {sortConfig.key === 'allocation' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent, xirr }) => {
+                {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent, xirr, avgHoldingDays }) => {
                   const currentPrice = stock.quantity > 0 ? currentVal / stock.quantity : 0;
                   const avgPrice = stock.quantity > 0 ? stock.total_invested / stock.quantity : 0;
 
@@ -598,9 +659,13 @@ const Dashboard = () => {
                       </td>
                       <td>{stock.quantity}</td>
                       <td>₹{avgPrice.toFixed(2)}</td>
-                      <td>₹{currentPrice.toFixed(2)}</td>
+                      <td className={currentPrice >= avgPrice ? 'text-success' : 'text-danger'}>
+                        ₹{currentPrice.toFixed(2)}
+                      </td>
                       <td className="d-none d-lg-table-cell">₹{stock.total_invested.toLocaleString('en-IN')}</td>
-                      <td>₹{currentVal.toLocaleString('en-IN')}</td>
+                      <td className={pnl >= 0 ? 'text-success' : 'text-danger'}>
+                        ₹{currentVal.toLocaleString('en-IN')}
+                      </td>
                       <td className={dailyChange >= 0 ? 'text-success' : 'text-danger'}>
                         {dailyChange >= 0 ? '+' : ''}₹{dailyChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}
                         <small className="d-block" style={{fontSize: '0.7rem'}}>
@@ -615,10 +680,20 @@ const Dashboard = () => {
                       </td>
                       <td className={xirr !== null ? (xirr >= 0 ? 'text-success' : 'text-danger') : 'text-muted'}>
                         {xirr !== null ? (
-                          <>{xirr >= 0 ? '+' : ''}{xirr.toFixed(1)}%</>
+                          <>
+                            {xirr >= 0 ? '+' : ''}{xirr.toFixed(1)}%
+                            {avgHoldingDays !== null && (
+                              <small className="d-block text-muted" style={{fontSize: '0.7rem'}}>
+                                {avgHoldingDays} days
+                              </small>
+                            )}
+                          </>
                         ) : (
                           <small>N/A</small>
                         )}
+                      </td>
+                      <td>
+                        {currentValue > 0 ? (currentVal / currentValue * 100).toFixed(1) : 0}%
                       </td>
                     </tr>
                   );
