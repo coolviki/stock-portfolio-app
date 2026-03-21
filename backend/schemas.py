@@ -312,6 +312,22 @@ class AdjustedCapitalGainsResponse(BaseModel):
     securities: List[AdjustedSecurityCapitalGains]
 
 
+# User Preferences Schemas
+class DashboardColumnsUpdate(BaseModel):
+    columns: dict  # {"qty": true, "avgPrice": false, ...}
+
+
+class UserPreferencesResponse(BaseModel):
+    id: int
+    user_id: int
+    dashboard_columns: Optional[dict] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # Update forward references
 LotDetailResponse.model_rebuild()
 

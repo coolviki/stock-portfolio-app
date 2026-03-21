@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, Table, Spinner, Button, Modal, Badge } from 'react-bootstrap';
+import { Row, Col, Card, Table, Spinner, Button, Modal, Badge, Dropdown, Form } from 'react-bootstrap';
 import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend, CategoryScale, LinearScale, BarElement, Title, PointElement, LineElement, Filler } from 'chart.js';
 import { Doughnut, Bar, Line } from 'react-chartjs-2';
 import { apiService } from '../services/apiService';
@@ -24,6 +24,32 @@ const Dashboard = () => {
   const [stockCorporateEvents, setStockCorporateEvents] = useState([]);
   const [txLoading, setTxLoading] = useState(false);
 
+  // Column visibility state
+  const [visibleColumns, setVisibleColumns] = useState({
+    qty: true,
+    avgPrice: true,
+    currentPrice: true,
+    invested: true,
+    value: true,
+    dayPnl: true,
+    totalPnl: true,
+    xirr: true,
+    allocation: true
+  });
+
+  // Column configuration for the settings dropdown
+  const columnConfig = [
+    { key: 'qty', label: 'Qty' },
+    { key: 'avgPrice', label: 'Avg. Price' },
+    { key: 'currentPrice', label: 'Current Price' },
+    { key: 'invested', label: 'Invested' },
+    { key: 'value', label: 'Value' },
+    { key: 'dayPnl', label: 'Day P&L' },
+    { key: 'totalPnl', label: 'Total P&L' },
+    { key: 'xirr', label: 'XIRR' },
+    { key: 'allocation', label: '%' }
+  ];
+
   const timeRangeOptions = [
     { value: '5d', label: '5D' },
     { value: '1m', label: '1M' },
@@ -36,11 +62,43 @@ const Dashboard = () => {
   useEffect(() => {
     loadPortfolioData();
     loadMarketIndices();
+    loadColumnPreferences();
   }, [user]);
 
   useEffect(() => {
     loadPortfolioHistory(historyTimeRange);
   }, [user, historyTimeRange]);
+
+  const loadColumnPreferences = async () => {
+    if (!user?.id) return;
+    try {
+      const prefs = await apiService.getUserPreferences(user.id);
+      if (prefs.dashboard_columns) {
+        setVisibleColumns(prefs.dashboard_columns);
+      }
+    } catch (error) {
+      console.error('Error loading column preferences:', error);
+      // Use defaults on error
+    }
+  };
+
+  const handleColumnToggle = async (columnKey) => {
+    const newVisibility = {
+      ...visibleColumns,
+      [columnKey]: !visibleColumns[columnKey]
+    };
+    setVisibleColumns(newVisibility);
+
+    // Persist to backend
+    try {
+      await apiService.updateDashboardColumns(user.id, newVisibility);
+    } catch (error) {
+      console.error('Error saving column preferences:', error);
+      toast.error('Failed to save column settings');
+      // Revert on error
+      setVisibleColumns(visibleColumns);
+    }
+  };
 
   const loadPortfolioData = async () => {
     try {
@@ -473,14 +531,43 @@ const Dashboard = () => {
               </h6>
               <h5 className="mb-0 d-none d-md-block">Current Holdings</h5>
             </div>
-            {portfolio.overall_xirr !== null && portfolio.overall_xirr !== undefined && (
-              <div className="d-none d-md-block text-end">
-                <small className="text-muted">Portfolio XIRR</small>
-                <div className={`fw-bold ${portfolio.overall_xirr >= 0 ? 'text-success' : 'text-danger'}`}>
-                  {portfolio.overall_xirr >= 0 ? '+' : ''}{portfolio.overall_xirr.toFixed(1)}%
+            <div className="d-none d-md-flex align-items-center gap-3">
+              {portfolio.overall_xirr !== null && portfolio.overall_xirr !== undefined && (
+                <div className="text-end">
+                  <small className="text-muted">Portfolio XIRR</small>
+                  <div className={`fw-bold ${portfolio.overall_xirr >= 0 ? 'text-success' : 'text-danger'}`}>
+                    {portfolio.overall_xirr >= 0 ? '+' : ''}{portfolio.overall_xirr.toFixed(1)}%
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+              {/* Column Settings Dropdown */}
+              <Dropdown>
+                <Dropdown.Toggle variant="outline-secondary" size="sm" id="column-settings">
+                  <span style={{ fontSize: '0.85rem' }}>⚙ Columns</span>
+                </Dropdown.Toggle>
+                <Dropdown.Menu align="end" style={{ minWidth: '180px' }}>
+                  <Dropdown.Header>Show/Hide Columns</Dropdown.Header>
+                  {columnConfig.map(col => (
+                    <Dropdown.Item
+                      key={col.key}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleColumnToggle(col.key);
+                      }}
+                      className="py-1"
+                    >
+                      <Form.Check
+                        type="checkbox"
+                        checked={visibleColumns[col.key]}
+                        onChange={() => {}}
+                        label={col.label}
+                        className="mb-0"
+                      />
+                    </Dropdown.Item>
+                  ))}
+                </Dropdown.Menu>
+              </Dropdown>
+            </div>
           </div>
           {/* Mobile Controls: Day/Total/XIRR sort toggle */}
           <div className="d-md-none mt-2 d-flex justify-content-end align-items-center">
@@ -579,69 +666,87 @@ const Dashboard = () => {
                   >
                     Security {sortConfig.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => handleSort('quantity')}
-                    className="sortable-header"
-                  >
-                    Qty {sortConfig.key === 'quantity' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                  </th>
-                  <th
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => handleSort('avgPrice')}
-                    className="sortable-header"
-                  >
-                    Avg. Price {sortConfig.key === 'avgPrice' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                  </th>
-                  <th
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => handleSort('currentPrice')}
-                    className="sortable-header"
-                  >
-                    Current Price {sortConfig.key === 'currentPrice' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                  </th>
-                  <th
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => handleSort('invested')}
-                    className="sortable-header d-none d-lg-table-cell"
-                  >
-                    Invested {sortConfig.key === 'invested' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                  </th>
-                  <th
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => handleSort('value')}
-                    className="sortable-header"
-                  >
-                    Value {sortConfig.key === 'value' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                  </th>
-                  <th
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => handleSort('dayPnl')}
-                    className="sortable-header"
-                  >
-                    Day P&L {sortConfig.key === 'dayPnl' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                  </th>
-                  <th
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => handleSort('pnl')}
-                    className="sortable-header"
-                  >
-                    Total P&L {sortConfig.key === 'pnl' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                  </th>
-                  <th
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => handleSort('xirr')}
-                    className="sortable-header"
-                  >
-                    XIRR {sortConfig.key === 'xirr' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                  </th>
-                  <th
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => handleSort('allocation')}
-                    className="sortable-header"
-                  >
-                    % {sortConfig.key === 'allocation' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-                  </th>
+                  {visibleColumns.qty && (
+                    <th
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleSort('quantity')}
+                      className="sortable-header"
+                    >
+                      Qty {sortConfig.key === 'quantity' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                  )}
+                  {visibleColumns.avgPrice && (
+                    <th
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleSort('avgPrice')}
+                      className="sortable-header"
+                    >
+                      Avg. Price {sortConfig.key === 'avgPrice' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                  )}
+                  {visibleColumns.currentPrice && (
+                    <th
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleSort('currentPrice')}
+                      className="sortable-header"
+                    >
+                      Current Price {sortConfig.key === 'currentPrice' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                  )}
+                  {visibleColumns.invested && (
+                    <th
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleSort('invested')}
+                      className="sortable-header d-none d-lg-table-cell"
+                    >
+                      Invested {sortConfig.key === 'invested' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                  )}
+                  {visibleColumns.value && (
+                    <th
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleSort('value')}
+                      className="sortable-header"
+                    >
+                      Value {sortConfig.key === 'value' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                  )}
+                  {visibleColumns.dayPnl && (
+                    <th
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleSort('dayPnl')}
+                      className="sortable-header"
+                    >
+                      Day P&L {sortConfig.key === 'dayPnl' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                  )}
+                  {visibleColumns.totalPnl && (
+                    <th
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleSort('pnl')}
+                      className="sortable-header"
+                    >
+                      Total P&L {sortConfig.key === 'pnl' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                  )}
+                  {visibleColumns.xirr && (
+                    <th
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleSort('xirr')}
+                      className="sortable-header"
+                    >
+                      XIRR {sortConfig.key === 'xirr' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                  )}
+                  {visibleColumns.allocation && (
+                    <th
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleSort('allocation')}
+                      className="sortable-header"
+                    >
+                      % {sortConfig.key === 'allocation' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -657,44 +762,58 @@ const Dashboard = () => {
                           onClick={() => handleStockClick(symbol, stock)}
                         >{symbol}</strong>
                       </td>
-                      <td>{stock.quantity}</td>
-                      <td>₹{avgPrice.toFixed(2)}</td>
-                      <td className={currentPrice >= avgPrice ? 'text-success' : 'text-danger'}>
-                        ₹{currentPrice.toFixed(2)}
-                      </td>
-                      <td className="d-none d-lg-table-cell">₹{stock.total_invested.toLocaleString('en-IN')}</td>
-                      <td className={pnl >= 0 ? 'text-success' : 'text-danger'}>
-                        ₹{currentVal.toLocaleString('en-IN')}
-                      </td>
-                      <td className={dailyChange >= 0 ? 'text-success' : 'text-danger'}>
-                        {dailyChange >= 0 ? '+' : ''}₹{dailyChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}
-                        <small className="d-block" style={{fontSize: '0.7rem'}}>
-                          ({dailyChangePercent >= 0 ? '+' : ''}{dailyChangePercent.toFixed(1)}%)
-                        </small>
-                      </td>
-                      <td className={pnl >= 0 ? 'text-success' : 'text-danger'}>
-                        {pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN', {maximumFractionDigits: 0})}
-                        <small className="d-block" style={{fontSize: '0.7rem'}}>
-                          ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%)
-                        </small>
-                      </td>
-                      <td className={xirr !== null ? (xirr >= 0 ? 'text-success' : 'text-danger') : 'text-muted'}>
-                        {xirr !== null ? (
-                          <>
-                            {xirr >= 0 ? '+' : ''}{xirr.toFixed(1)}%
-                            {avgHoldingDays !== null && (
-                              <small className="d-block text-muted" style={{fontSize: '0.7rem'}}>
-                                {avgHoldingDays} days
-                              </small>
-                            )}
-                          </>
-                        ) : (
-                          <small>N/A</small>
-                        )}
-                      </td>
-                      <td>
-                        {currentValue > 0 ? (currentVal / currentValue * 100).toFixed(1) : 0}%
-                      </td>
+                      {visibleColumns.qty && <td>{stock.quantity}</td>}
+                      {visibleColumns.avgPrice && <td>₹{avgPrice.toFixed(2)}</td>}
+                      {visibleColumns.currentPrice && (
+                        <td className={currentPrice >= avgPrice ? 'text-success' : 'text-danger'}>
+                          ₹{currentPrice.toFixed(2)}
+                        </td>
+                      )}
+                      {visibleColumns.invested && (
+                        <td className="d-none d-lg-table-cell">₹{stock.total_invested.toLocaleString('en-IN')}</td>
+                      )}
+                      {visibleColumns.value && (
+                        <td className={pnl >= 0 ? 'text-success' : 'text-danger'}>
+                          ₹{currentVal.toLocaleString('en-IN')}
+                        </td>
+                      )}
+                      {visibleColumns.dayPnl && (
+                        <td className={dailyChange >= 0 ? 'text-success' : 'text-danger'}>
+                          {dailyChange >= 0 ? '+' : ''}₹{dailyChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}
+                          <small className="d-block" style={{fontSize: '0.7rem'}}>
+                            ({dailyChangePercent >= 0 ? '+' : ''}{dailyChangePercent.toFixed(1)}%)
+                          </small>
+                        </td>
+                      )}
+                      {visibleColumns.totalPnl && (
+                        <td className={pnl >= 0 ? 'text-success' : 'text-danger'}>
+                          {pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN', {maximumFractionDigits: 0})}
+                          <small className="d-block" style={{fontSize: '0.7rem'}}>
+                            ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%)
+                          </small>
+                        </td>
+                      )}
+                      {visibleColumns.xirr && (
+                        <td className={xirr !== null ? (xirr >= 0 ? 'text-success' : 'text-danger') : 'text-muted'}>
+                          {xirr !== null ? (
+                            <>
+                              {xirr >= 0 ? '+' : ''}{xirr.toFixed(1)}%
+                              {avgHoldingDays !== null && (
+                                <small className="d-block text-muted" style={{fontSize: '0.7rem'}}>
+                                  {avgHoldingDays} days
+                                </small>
+                              )}
+                            </>
+                          ) : (
+                            <small>N/A</small>
+                          )}
+                        </td>
+                      )}
+                      {visibleColumns.allocation && (
+                        <td>
+                          {currentValue > 0 ? (currentVal / currentValue * 100).toFixed(1) : 0}%
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 from database import get_db, engine, Base
-from models import User, Transaction, Security, Lot, CorporateEvent, LotAdjustment, SaleAllocation, LotStatus, PortfolioSnapshot
+from models import User, Transaction, Security, Lot, CorporateEvent, LotAdjustment, SaleAllocation, LotStatus, PortfolioSnapshot, UserPreferences
 from schemas import (
     UserCreate, UserResponse, FirebaseUserCreate,
     TransactionCreate, TransactionResponse, TransactionUpdate,
@@ -21,7 +21,8 @@ from schemas import (
     SecurityCreate, SecurityResponse, SecurityUpdate, LegacyTransactionCreate,
     LotResponse, LotDetailResponse, LotAdjustmentResponse, SaleAllocationResponse,
     CorporateEventCreate, CorporateEventUpdate, CorporateEventResponse,
-    AdjustedCapitalGainsResponse
+    AdjustedCapitalGainsResponse,
+    DashboardColumnsUpdate, UserPreferencesResponse
 )
 from pdf_parser import parse_contract_note
 from stock_api import get_current_price, get_current_price_with_fallback, search_stocks, enrich_security_data, get_current_price_with_waterfall
@@ -94,6 +95,25 @@ def run_startup_migrations():
             add_column_if_missing(conn, 'securities', 'last_price', 'REAL', existing_cols)
             add_column_if_missing(conn, 'securities', 'last_price_timestamp', 'TIMESTAMP', existing_cols)
             add_column_if_missing(conn, 'securities', 'last_price_source', 'VARCHAR', existing_cols)
+
+            # Create user_preferences table if it doesn't exist
+            if 'user_preferences' not in inspector.get_table_names():
+                try:
+                    conn.execute(text('''
+                        CREATE TABLE user_preferences (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            user_id INTEGER UNIQUE NOT NULL,
+                            dashboard_columns TEXT,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (user_id) REFERENCES users(id)
+                        )
+                    '''))
+                    conn.execute(text('CREATE INDEX ix_user_preferences_user_id ON user_preferences(user_id)'))
+                    conn.commit()
+                    logger.info("Created user_preferences table")
+                except Exception as e:
+                    logger.debug(f"user_preferences table may already exist: {e}")
 
     except Exception as e:
         logger.error(f"Migration error (non-fatal): {e}")
@@ -500,6 +520,70 @@ def clear_user_transactions(user_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": f"Cleared {transaction_count} transactions for user '{user.username}'"}
+
+
+# Default dashboard column visibility settings
+DEFAULT_DASHBOARD_COLUMNS = {
+    "qty": True,
+    "avgPrice": True,
+    "currentPrice": True,
+    "invested": True,
+    "value": True,
+    "dayPnl": True,
+    "totalPnl": True,
+    "xirr": True,
+    "allocation": True
+}
+
+
+@app.get("/users/{user_id}/preferences")
+def get_user_preferences(user_id: int, db: Session = Depends(get_db)):
+    """Get user preferences, create with defaults if not exists"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    prefs = db.query(UserPreferences).filter(UserPreferences.user_id == user_id).first()
+
+    if not prefs:
+        # Create default preferences
+        prefs = UserPreferences(
+            user_id=user_id,
+            dashboard_columns=json.dumps(DEFAULT_DASHBOARD_COLUMNS)
+        )
+        db.add(prefs)
+        db.commit()
+        db.refresh(prefs)
+
+    return {
+        "id": prefs.id,
+        "user_id": prefs.user_id,
+        "dashboard_columns": json.loads(prefs.dashboard_columns) if prefs.dashboard_columns else DEFAULT_DASHBOARD_COLUMNS,
+        "created_at": prefs.created_at,
+        "updated_at": prefs.updated_at
+    }
+
+
+@app.put("/users/{user_id}/preferences/dashboard-columns")
+def update_dashboard_columns(user_id: int, columns: DashboardColumnsUpdate, db: Session = Depends(get_db)):
+    """Update dashboard column visibility preferences"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    prefs = db.query(UserPreferences).filter(UserPreferences.user_id == user_id).first()
+
+    if not prefs:
+        prefs = UserPreferences(user_id=user_id)
+        db.add(prefs)
+
+    prefs.dashboard_columns = json.dumps(columns.columns)
+    prefs.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(prefs)
+
+    return {"success": True, "dashboard_columns": columns.columns}
+
 
 # Helper function to get or create security
 def get_or_create_security(db: Session, security_name: str, isin: str = "", ticker: str = ""):

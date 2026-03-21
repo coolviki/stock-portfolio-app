@@ -135,6 +135,19 @@ export const apiService = {
     return response.data;
   },
 
+  // User Preferences APIs
+  async getUserPreferences(userId) {
+    const response = await api.get(`/users/${userId}/preferences`);
+    return response.data;
+  },
+
+  async updateDashboardColumns(userId, columns) {
+    const response = await api.put(`/users/${userId}/preferences/dashboard-columns`, {
+      columns: columns
+    });
+    return response.data;
+  },
+
   // Capital Gains APIs
   async getCapitalGains(financialYear, userId = null) {
     const params = new URLSearchParams();

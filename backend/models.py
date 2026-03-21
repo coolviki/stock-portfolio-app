@@ -43,6 +43,26 @@ class User(Base):
     lots = relationship("Lot", back_populates="user")
     created_corporate_events = relationship("CorporateEvent", back_populates="created_by_user")
     portfolio_snapshots = relationship("PortfolioSnapshot", back_populates="user")
+    preferences = relationship("UserPreferences", back_populates="user", uselist=False)
+
+
+class UserPreferences(Base):
+    """User preferences for UI settings like dashboard column visibility"""
+    __tablename__ = "user_preferences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+
+    # Dashboard column visibility - stored as JSON string
+    # Format: {"qty": true, "avgPrice": true, "currentPrice": true, ...}
+    dashboard_columns = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationship
+    user = relationship("User", back_populates="preferences")
+
 
 class Security(Base):
     __tablename__ = "securities"
