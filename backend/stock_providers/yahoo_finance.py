@@ -269,7 +269,8 @@ class YahooFinanceProvider(StockPriceProvider):
 
         # Map range to Yahoo Finance params
         range_mapping = {
-            "5d": ("5d", "1h"),     # 5 days, hourly intervals
+            "1d": ("1d", "5m"),     # 1 day, 5-minute intervals
+            "5d": ("5d", "1d"),     # 5 days, daily intervals
             "1m": ("1mo", "1d"),    # 30 days, daily
             "3m": ("3mo", "1d"),    # 3 months, daily
             "6m": ("6mo", "1d"),    # 6 months, daily

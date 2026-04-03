@@ -1368,7 +1368,7 @@ def get_stock_history(
     symbol = security.security_ticker or security.security_name
 
     # Validate range parameter
-    valid_ranges = ["5d", "1m", "3m", "6m", "1y", "5y", "max"]
+    valid_ranges = ["1d", "5d", "1m", "3m", "6m", "1y", "5y", "max"]
     if range not in valid_ranges:
         raise HTTPException(
             status_code=400,

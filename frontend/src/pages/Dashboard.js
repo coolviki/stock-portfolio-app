@@ -1044,7 +1044,7 @@ const Dashboard = () => {
               <Tab.Pane eventKey="chart">
                 <div className="mb-3 d-flex justify-content-end">
                   <div className="btn-group btn-group-sm">
-                    {['5d', '1m', '3m', '6m', '1y', '5y', 'max'].map(range => (
+                    {['1d', '5d', '1m', '3m', '6m', '1y', '5y', 'max'].map(range => (
                       <Button
                         key={range}
                         variant={stockHistoryRange === range ? 'primary' : 'outline-secondary'}
@@ -1069,6 +1069,9 @@ const Dashboard = () => {
                       data={{
                         labels: stockHistory.data_points.map(dp => {
                           const date = new Date(dp.date);
+                          if (stockHistoryRange === '1d') {
+                            return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+                          }
                           if (stockHistoryRange === '5d') {
                             return date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' });
                           }
