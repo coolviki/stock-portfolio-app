@@ -27,7 +27,7 @@ const Dashboard = () => {
   // Stock modal tab state
   const [activeModalTab, setActiveModalTab] = useState('chart');
   const [stockHistory, setStockHistory] = useState(null);
-  const [stockHistoryRange, setStockHistoryRange] = useState('1m');
+  const [stockHistoryRange, setStockHistoryRange] = useState('5d');
   const [stockHistoryLoading, setStockHistoryLoading] = useState(false);
   const [stockNews, setStockNews] = useState([]);
   const [stockNewsLoading, setStockNewsLoading] = useState(false);
@@ -160,7 +160,7 @@ const Dashboard = () => {
     setStockTransactions([]);
     setStockCorporateEvents([]);
     setStockHistory(null);
-    setStockHistoryRange('1m');
+    setStockHistoryRange('5d');
     setStockNews([]);
 
     try {
@@ -190,7 +190,7 @@ const Dashboard = () => {
         }
 
         // Load stock history
-        loadStockHistory(sorted[0].security_id, '1m');
+        loadStockHistory(sorted[0].security_id, '5d');
       }
     } catch (error) {
       console.error('Error fetching transactions:', error);
@@ -1044,7 +1044,7 @@ const Dashboard = () => {
               <Tab.Pane eventKey="chart">
                 <div className="mb-3 d-flex justify-content-end">
                   <div className="btn-group btn-group-sm">
-                    {['1m', '3m', '6m', '1y', '5y', 'max'].map(range => (
+                    {['5d', '1m', '3m', '6m', '1y', '5y', 'max'].map(range => (
                       <Button
                         key={range}
                         variant={stockHistoryRange === range ? 'primary' : 'outline-secondary'}
@@ -1052,7 +1052,7 @@ const Dashboard = () => {
                         onClick={() => handleStockHistoryRangeChange(range)}
                         style={{ minWidth: '40px', fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
                       >
-                        {range === '1m' ? '30D' : range.toUpperCase()}
+                        {range === '1m' ? '1M' : range.toUpperCase()}
                       </Button>
                     ))}
                   </div>
