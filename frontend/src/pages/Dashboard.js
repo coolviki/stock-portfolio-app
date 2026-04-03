@@ -1069,6 +1069,9 @@ const Dashboard = () => {
                       data={{
                         labels: stockHistory.data_points.map(dp => {
                           const date = new Date(dp.date);
+                          if (stockHistoryRange === '5d') {
+                            return date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' });
+                          }
                           if (stockHistoryRange === '1m' || stockHistoryRange === '3m') {
                             return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
                           }
