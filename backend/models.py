@@ -273,3 +273,28 @@ class PortfolioSnapshot(Base):
 
     # Relationships
     user = relationship("User", back_populates="portfolio_snapshots")
+
+
+class NewsArticle(Base):
+    """Cached news articles for securities with sentiment analysis"""
+    __tablename__ = "news_articles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    security_id = Column(Integer, ForeignKey("securities.id"), nullable=True, index=True)
+
+    # Article content
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    url = Column(String, unique=True, nullable=False)
+    source = Column(String, nullable=True)
+    published_at = Column(DateTime, nullable=False, index=True)
+
+    # Sentiment analysis results
+    sentiment = Column(String, nullable=True)  # positive, negative, neutral
+    sentiment_score = Column(Float, nullable=True)  # -1.0 to 1.0
+
+    # Metadata
+    fetched_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    security = relationship("Security")

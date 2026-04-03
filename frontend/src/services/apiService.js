@@ -76,6 +76,32 @@ export const apiService = {
   },
 
   /**
+   * Get historical price data for a security
+   * @param {number} securityId - Security ID from the database
+   * @param {string} range - Time range: "1m", "3m", "6m", "1y", "5y", "max"
+   * @returns {Promise<{security_id, symbol, range, data_points[], currency}>}
+   */
+  async getStockHistory(securityId, range = '1m') {
+    const response = await api.get(`/stock-history/${securityId}`, {
+      params: { range }
+    });
+    return response.data;
+  },
+
+  /**
+   * Get news articles for a security with sentiment analysis
+   * @param {number} securityId - Security ID from the database
+   * @param {number} limit - Maximum number of articles to return
+   * @returns {Promise<{security_id, symbol, articles[]}>}
+   */
+  async getStockNews(securityId, limit = 10) {
+    const response = await api.get(`/stock-news/${securityId}`, {
+      params: { limit }
+    });
+    return response.data;
+  },
+
+  /**
    * Search for stocks - used by all typeahead components (Manual Entry, Transactions)
    *
    * Search order (waterfall):

@@ -5,7 +5,7 @@ from datetime import datetime
 import os
 import logging
 
-from .base import StockPriceProvider, StockPrice, ProviderStatus
+from .base import StockPriceProvider, StockPrice, ProviderStatus, HistoricalPrice
 from .indian_stocks_db import get_stocks_for_provider
 
 logger = logging.getLogger(__name__)
@@ -229,6 +229,13 @@ class AlphaVantageProvider(StockPriceProvider):
             self.record_error(e)
             return []
     
+    def get_historical_prices(self, symbol: str, range: str = "1m") -> Optional[List[HistoricalPrice]]:
+        """
+        Get historical price data - not implemented for Alpha Vantage provider.
+        Returns None to fall through to other providers.
+        """
+        return None
+
     def get_provider_info(self) -> Dict:
         """Get provider information"""
         return {

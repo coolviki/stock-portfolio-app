@@ -22,7 +22,9 @@ from schemas import (
     LotResponse, LotDetailResponse, LotAdjustmentResponse, SaleAllocationResponse,
     CorporateEventCreate, CorporateEventUpdate, CorporateEventResponse,
     AdjustedCapitalGainsResponse,
-    DashboardColumnsUpdate, UserPreferencesResponse
+    DashboardColumnsUpdate, UserPreferencesResponse,
+    HistoricalPricePoint, StockHistoryResponse,
+    NewsArticleResponse, StockNewsResponse
 )
 from pdf_parser import parse_contract_note
 from stock_api import get_current_price, get_current_price_with_fallback, search_stocks, enrich_security_data, get_current_price_with_waterfall
@@ -1339,6 +1341,134 @@ def get_stock_price_by_isin(isin: str):
     except Exception as e:
         logger.error(f"Error fetching price for ISIN {isin}: {e}")
         return {"isin": isin, "price": 0, "method": "ERROR", "error": str(e)}
+
+
+@app.get("/stock-history/{security_id}", response_model=StockHistoryResponse)
+def get_stock_history(
+    security_id: int,
+    range: str = Query("1m", description="Time range: 1m, 3m, 6m, 1y, 5y, max"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get historical price data for a security.
+
+    Args:
+        security_id: The security ID from the database
+        range: Time range - "1m" (30 days), "3m", "6m", "1y", "5y", "max"
+
+    Returns:
+        Historical price data points for charting
+    """
+    # Get security from database
+    security = db.query(Security).filter(Security.id == security_id).first()
+    if not security:
+        raise HTTPException(status_code=404, detail="Security not found")
+
+    # Get symbol to use for fetching (prefer ticker, fallback to name)
+    symbol = security.security_ticker or security.security_name
+
+    # Validate range parameter
+    valid_ranges = ["1m", "3m", "6m", "1y", "5y", "max"]
+    if range not in valid_ranges:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid range. Must be one of: {', '.join(valid_ranges)}"
+        )
+
+    try:
+        # Fetch historical data from provider
+        historical_data = stock_price_manager.get_historical_prices(symbol, range)
+
+        if not historical_data:
+            return StockHistoryResponse(
+                security_id=security_id,
+                symbol=symbol,
+                range=range,
+                data_points=[],
+                currency="INR"
+            )
+
+        # Convert to response format
+        data_points = [
+            HistoricalPricePoint(
+                date=hp.date,
+                open=hp.open,
+                high=hp.high,
+                low=hp.low,
+                close=hp.close,
+                volume=hp.volume
+            )
+            for hp in historical_data
+        ]
+
+        return StockHistoryResponse(
+            security_id=security_id,
+            symbol=symbol,
+            range=range,
+            data_points=data_points,
+            currency="INR"
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching historical prices for security {security_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching historical data: {str(e)}")
+
+
+@app.get("/stock-news/{security_id}", response_model=StockNewsResponse)
+def get_stock_news(
+    security_id: int,
+    limit: int = Query(10, ge=1, le=50, description="Maximum number of articles"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get news articles for a security with sentiment analysis.
+
+    Args:
+        security_id: The security ID from the database
+        limit: Maximum number of articles to return (1-50)
+
+    Returns:
+        News articles with sentiment classification (positive/negative/neutral)
+    """
+    from news_providers.manager import news_manager
+
+    # Get security from database
+    security = db.query(Security).filter(Security.id == security_id).first()
+    if not security:
+        raise HTTPException(status_code=404, detail="Security not found")
+
+    # Get symbol to use for fetching
+    symbol = security.security_ticker or security.security_name
+
+    try:
+        # Fetch news from provider
+        articles = news_manager.get_news(symbol, limit)
+
+        # Convert to response format
+        article_responses = [
+            NewsArticleResponse(
+                id=idx,
+                title=article.title,
+                description=article.description,
+                url=article.url,
+                source=article.source,
+                published_at=article.published_at,
+                sentiment=article.sentiment,
+                sentiment_score=article.sentiment_score
+            )
+            for idx, article in enumerate(articles, start=1)
+        ]
+
+        return StockNewsResponse(
+            security_id=security_id,
+            symbol=symbol,
+            articles=article_responses
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching news for security {security_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching news: {str(e)}")
+
 
 # Cache for market indices (5 minute TTL)
 _market_indices_cache = {"data": None, "expires_at": None}

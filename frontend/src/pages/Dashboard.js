@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, Table, Spinner, Button, Modal, Badge, Dropdown, Form } from 'react-bootstrap';
+import { Row, Col, Card, Table, Spinner, Button, Modal, Badge, Dropdown, Form, Nav, Tab } from 'react-bootstrap';
 import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend, CategoryScale, LinearScale, BarElement, Title, PointElement, LineElement, Filler } from 'chart.js';
 import { Doughnut, Bar, Line } from 'react-chartjs-2';
 import { apiService } from '../services/apiService';
@@ -23,6 +23,14 @@ const Dashboard = () => {
   const [stockTransactions, setStockTransactions] = useState([]);
   const [stockCorporateEvents, setStockCorporateEvents] = useState([]);
   const [txLoading, setTxLoading] = useState(false);
+
+  // Stock modal tab state
+  const [activeModalTab, setActiveModalTab] = useState('chart');
+  const [stockHistory, setStockHistory] = useState(null);
+  const [stockHistoryRange, setStockHistoryRange] = useState('1m');
+  const [stockHistoryLoading, setStockHistoryLoading] = useState(false);
+  const [stockNews, setStockNews] = useState([]);
+  const [stockNewsLoading, setStockNewsLoading] = useState(false);
 
   // Column visibility state
   const [visibleColumns, setVisibleColumns] = useState({
@@ -147,9 +155,13 @@ const Dashboard = () => {
   const handleStockClick = async (symbol, stockData) => {
     setSelectedStock({ symbol, ...stockData });
     setShowTxModal(true);
+    setActiveModalTab('chart');
     setTxLoading(true);
     setStockTransactions([]);
     setStockCorporateEvents([]);
+    setStockHistory(null);
+    setStockHistoryRange('1m');
+    setStockNews([]);
 
     try {
       // Fetch transactions for this stock
@@ -160,6 +172,9 @@ const Dashboard = () => {
 
       // Fetch corporate events for this security (if we have transactions)
       if (sorted.length > 0 && sorted[0].security_id) {
+        // Store security_id in selectedStock for later use
+        setSelectedStock(prev => ({ ...prev, security_id: sorted[0].security_id }));
+
         try {
           const events = await apiService.getCorporateEvents({
             security_id: sorted[0].security_id,
@@ -172,14 +187,61 @@ const Dashboard = () => {
           setStockCorporateEvents(relevantEvents);
         } catch (eventError) {
           console.error('Error fetching corporate events:', eventError);
-          // Don't show error toast - corporate events are optional
         }
+
+        // Load stock history
+        loadStockHistory(sorted[0].security_id, '1m');
       }
     } catch (error) {
       console.error('Error fetching transactions:', error);
       toast.error('Failed to load transaction history');
     } finally {
       setTxLoading(false);
+    }
+  };
+
+  const loadStockHistory = async (securityId, range) => {
+    if (!securityId) return;
+
+    setStockHistoryLoading(true);
+    try {
+      const data = await apiService.getStockHistory(securityId, range);
+      setStockHistory(data);
+    } catch (error) {
+      console.error('Error fetching stock history:', error);
+      setStockHistory(null);
+    } finally {
+      setStockHistoryLoading(false);
+    }
+  };
+
+  const handleStockHistoryRangeChange = (range) => {
+    setStockHistoryRange(range);
+    if (selectedStock?.security_id) {
+      loadStockHistory(selectedStock.security_id, range);
+    }
+  };
+
+  const loadStockNews = async (securityId) => {
+    if (!securityId) return;
+
+    setStockNewsLoading(true);
+    try {
+      const data = await apiService.getStockNews(securityId);
+      setStockNews(data.articles || []);
+    } catch (error) {
+      console.error('Error fetching stock news:', error);
+      setStockNews([]);
+    } finally {
+      setStockNewsLoading(false);
+    }
+  };
+
+  const handleModalTabChange = (tab) => {
+    setActiveModalTab(tab);
+    // Load news on first visit to news tab
+    if (tab === 'news' && stockNews.length === 0 && selectedStock?.security_id) {
+      loadStockNews(selectedStock.security_id);
     }
   };
 
@@ -956,15 +1018,192 @@ const Dashboard = () => {
         </Card>
       )}
 
-      {/* Transaction History Modal */}
+      {/* Stock Detail Modal */}
       <Modal show={showTxModal} onHide={() => setShowTxModal(false)} size="lg" centered>
         <Modal.Header closeButton>
           <Modal.Title>
             {selectedStock?.symbol}
-            <small className="text-muted ms-2" style={{ fontSize: '0.6em' }}>Transaction History</small>
           </Modal.Title>
         </Modal.Header>
-        <Modal.Body style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+        <Modal.Body style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+          <Tab.Container activeKey={activeModalTab} onSelect={handleModalTabChange}>
+            <Nav variant="tabs" className="mb-3">
+              <Nav.Item>
+                <Nav.Link eventKey="chart">Chart</Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="news">News</Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="transactions">Transactions</Nav.Link>
+              </Nav.Item>
+            </Nav>
+
+            <Tab.Content>
+              {/* Chart Tab */}
+              <Tab.Pane eventKey="chart">
+                <div className="mb-3 d-flex justify-content-end">
+                  <div className="btn-group btn-group-sm">
+                    {['1m', '3m', '6m', '1y', '5y', 'max'].map(range => (
+                      <Button
+                        key={range}
+                        variant={stockHistoryRange === range ? 'primary' : 'outline-secondary'}
+                        size="sm"
+                        onClick={() => handleStockHistoryRangeChange(range)}
+                        style={{ minWidth: '40px', fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                      >
+                        {range === '1m' ? '30D' : range.toUpperCase()}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                {stockHistoryLoading ? (
+                  <div className="text-center py-5">
+                    <Spinner animation="border" size="sm" />
+                    <span className="ms-2">Loading chart data...</span>
+                  </div>
+                ) : stockHistory && stockHistory.data_points && stockHistory.data_points.length > 0 ? (
+                  <div style={{ height: '300px' }}>
+                    <Line
+                      data={{
+                        labels: stockHistory.data_points.map(dp => {
+                          const date = new Date(dp.date);
+                          if (stockHistoryRange === '1m' || stockHistoryRange === '3m') {
+                            return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+                          }
+                          return date.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
+                        }),
+                        datasets: [{
+                          label: 'Close Price',
+                          data: stockHistory.data_points.map(dp => dp.close),
+                          borderColor: stockHistory.data_points.length > 1 &&
+                            stockHistory.data_points[stockHistory.data_points.length - 1].close >= stockHistory.data_points[0].close
+                            ? 'rgb(34, 197, 94)'
+                            : 'rgb(239, 68, 68)',
+                          backgroundColor: stockHistory.data_points.length > 1 &&
+                            stockHistory.data_points[stockHistory.data_points.length - 1].close >= stockHistory.data_points[0].close
+                            ? 'rgba(34, 197, 94, 0.1)'
+                            : 'rgba(239, 68, 68, 0.1)',
+                          fill: true,
+                          tension: 0.3,
+                          pointRadius: stockHistory.data_points.length > 60 ? 0 : 3,
+                          pointHoverRadius: 5
+                        }]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            callbacks: {
+                              label: (context) => `₹${context.parsed.y.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+                            }
+                          }
+                        },
+                        scales: {
+                          y: {
+                            ticks: {
+                              callback: (value) => '₹' + value.toLocaleString('en-IN')
+                            }
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="text-center py-5 text-muted">
+                    <p>No chart data available for this security</p>
+                  </div>
+                )}
+
+                {/* Price summary below chart */}
+                {stockHistory && stockHistory.data_points && stockHistory.data_points.length > 0 && (
+                  <div className="mt-3 text-center">
+                    <small className="text-muted">
+                      {(() => {
+                        const first = stockHistory.data_points[0];
+                        const last = stockHistory.data_points[stockHistory.data_points.length - 1];
+                        const change = last.close - first.close;
+                        const changePercent = (change / first.close) * 100;
+                        return (
+                          <>
+                            Open: ₹{first.close.toLocaleString('en-IN', { maximumFractionDigits: 2 })} |
+                            Current: ₹{last.close.toLocaleString('en-IN', { maximumFractionDigits: 2 })} |
+                            <span className={change >= 0 ? 'text-success' : 'text-danger'}>
+                              {' '}{change >= 0 ? '+' : ''}{changePercent.toFixed(2)}%
+                            </span>
+                          </>
+                        );
+                      })()}
+                    </small>
+                  </div>
+                )}
+              </Tab.Pane>
+
+              {/* News Tab */}
+              <Tab.Pane eventKey="news">
+                {stockNewsLoading ? (
+                  <div className="text-center py-5">
+                    <Spinner animation="border" size="sm" />
+                    <span className="ms-2">Loading news...</span>
+                  </div>
+                ) : stockNews.length > 0 ? (
+                  <div className="news-list">
+                    {stockNews.map((article, idx) => (
+                      <div key={idx} className="news-item border-bottom py-2">
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div className="flex-grow-1">
+                            <a
+                              href={article.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-decoration-none"
+                            >
+                              <h6 className="mb-1">{article.title}</h6>
+                            </a>
+                            {article.description && (
+                              <p className="text-muted small mb-1" style={{ lineHeight: '1.3' }}>
+                                {article.description.length > 150
+                                  ? article.description.substring(0, 150) + '...'
+                                  : article.description}
+                              </p>
+                            )}
+                            <small className="text-muted">
+                              {article.source && <span>{article.source} • </span>}
+                              {new Date(article.published_at).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric'
+                              })}
+                            </small>
+                          </div>
+                          {article.sentiment && (
+                            <Badge
+                              bg={
+                                article.sentiment === 'positive' ? 'success' :
+                                article.sentiment === 'negative' ? 'danger' : 'secondary'
+                              }
+                              className="ms-2"
+                              style={{ fontSize: '0.65rem' }}
+                            >
+                              {article.sentiment}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-5 text-muted">
+                    <p>No news available for this security</p>
+                  </div>
+                )}
+              </Tab.Pane>
+
+              {/* Transactions Tab */}
+              <Tab.Pane eventKey="transactions">
           {txLoading ? (
             <div className="text-center py-4">
               <Spinner animation="border" size="sm" />
@@ -1105,6 +1344,9 @@ const Dashboard = () => {
           ) : (
             <p className="text-center text-muted py-4">No transactions found for this stock</p>
           )}
+              </Tab.Pane>
+            </Tab.Content>
+          </Tab.Container>
         </Modal.Body>
         <Modal.Footer className="justify-content-between">
           <small className="text-muted">

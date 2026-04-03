@@ -25,6 +25,17 @@ class StockPrice:
     previous_close: Optional[float] = None
     change: Optional[float] = None
     change_percent: Optional[float] = None
+
+
+@dataclass
+class HistoricalPrice:
+    """Historical price data point"""
+    date: str
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int = 0
     
 class StockPriceProvider(ABC):
     """Abstract base class for stock price providers"""
@@ -50,7 +61,21 @@ class StockPriceProvider(ABC):
     def search_stocks(self, query: str) -> List[Dict]:
         """Search for stocks by name or symbol"""
         pass
-    
+
+    @abstractmethod
+    def get_historical_prices(self, symbol: str, range: str = "1m") -> Optional[List[HistoricalPrice]]:
+        """
+        Get historical price data for a symbol.
+
+        Args:
+            symbol: Stock symbol
+            range: Time range - "1m" (30 days), "3m", "6m", "1y", "5y", "max"
+
+        Returns:
+            List of HistoricalPrice objects or None if not available
+        """
+        pass
+
     @abstractmethod
     def is_available(self) -> bool:
         """Check if provider is available"""

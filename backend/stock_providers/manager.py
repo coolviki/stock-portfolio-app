@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 
-from .base import StockPriceProvider, StockPrice, ProviderStatus
+from .base import StockPriceProvider, StockPrice, ProviderStatus, HistoricalPrice
 from .alpha_vantage import AlphaVantageProvider
 from .yahoo_finance import YahooFinanceProvider
 from .sgb_provider import SGBProvider
@@ -323,10 +323,10 @@ class StockPriceManager:
     def search_stocks(self, query: str) -> List[Dict]:
         """Search for stocks using available providers"""
         available_providers = self._get_available_providers()
-        
+
         for provider_name in available_providers:
             provider = self.providers[provider_name]
-            
+
             try:
                 results = provider.search_stocks(query)
                 if results:
@@ -335,10 +335,44 @@ class StockPriceManager:
             except Exception as e:
                 logger.error(f"Error searching stocks from {provider_name}: {e}")
                 provider.record_error(e)
-        
+
         logger.warning(f"No search results found for query: {query}")
         return []
-    
+
+    def get_historical_prices(self, symbol: str, range: str = "1m") -> Optional[List[HistoricalPrice]]:
+        """
+        Get historical price data for a symbol using available providers.
+
+        Args:
+            symbol: Stock symbol (e.g., "RELIANCE", "TCS.NS")
+            range: Time range - "1m" (30 days), "3m", "6m", "1y", "5y", "max"
+
+        Returns:
+            List of HistoricalPrice objects or None if not available
+        """
+        available_providers = self._get_available_providers()
+
+        logger.info(f"Getting historical prices for {symbol} (range={range}) using providers: {available_providers}")
+
+        for provider_name in available_providers:
+            provider = self.providers[provider_name]
+
+            try:
+                historical_data = provider.get_historical_prices(symbol, range)
+
+                if historical_data and len(historical_data) > 0:
+                    logger.info(f"Got {len(historical_data)} historical data points for {symbol} from {provider_name}")
+                    return historical_data
+
+                logger.debug(f"{provider_name} returned no historical data for {symbol}, trying next provider")
+
+            except Exception as e:
+                logger.error(f"Error getting historical prices from {provider_name}: {e}")
+                provider.record_error(e)
+
+        logger.warning(f"No historical price data found for {symbol}")
+        return None
+
     def get_provider_status(self) -> Dict:
         """Get status of all providers"""
         status = {}

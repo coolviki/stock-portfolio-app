@@ -328,6 +328,45 @@ class UserPreferencesResponse(BaseModel):
         from_attributes = True
 
 
+# Historical Price Schemas
+class HistoricalPricePoint(BaseModel):
+    date: str
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int = 0
+
+
+class StockHistoryResponse(BaseModel):
+    security_id: int
+    symbol: str
+    range: str
+    data_points: List[HistoricalPricePoint]
+    currency: str = "INR"
+
+
+# News Schemas
+class NewsArticleResponse(BaseModel):
+    id: int
+    title: str
+    description: Optional[str] = None
+    url: str
+    source: Optional[str] = None
+    published_at: datetime
+    sentiment: Optional[str] = None  # positive, negative, neutral
+    sentiment_score: Optional[float] = None  # -1.0 to 1.0
+
+    class Config:
+        from_attributes = True
+
+
+class StockNewsResponse(BaseModel):
+    security_id: int
+    symbol: str
+    articles: List[NewsArticleResponse]
+
+
 # Update forward references
 LotDetailResponse.model_rebuild()
 

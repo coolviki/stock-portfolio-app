@@ -4,7 +4,7 @@ from typing import Dict, Optional, List
 from datetime import datetime
 import logging
 
-from .base import StockPriceProvider, StockPrice, ProviderStatus
+from .base import StockPriceProvider, StockPrice, ProviderStatus, HistoricalPrice
 from .indian_stocks_db import get_stocks_for_provider
 
 logger = logging.getLogger(__name__)
@@ -253,6 +253,101 @@ class YahooFinanceProvider(StockPriceProvider):
         results.sort(key=sort_key)
         return results[:10]
     
+    def get_historical_prices(self, symbol: str, range: str = "1m") -> Optional[List[HistoricalPrice]]:
+        """
+        Get historical price data from Yahoo Finance.
+
+        Args:
+            symbol: Stock symbol
+            range: Time range - "1m" (30 days), "3m", "6m", "1y", "5y", "max"
+
+        Returns:
+            List of HistoricalPrice objects or None if not available
+        """
+        if not self.is_available():
+            return None
+
+        # Map range to Yahoo Finance params
+        range_mapping = {
+            "1m": ("1mo", "1d"),    # 30 days, daily
+            "3m": ("3mo", "1d"),    # 3 months, daily
+            "6m": ("6mo", "1d"),    # 6 months, daily
+            "1y": ("1y", "1d"),     # 1 year, daily
+            "5y": ("5y", "1wk"),    # 5 years, weekly
+            "max": ("max", "1mo"),  # Maximum, monthly
+        }
+
+        yf_range, interval = range_mapping.get(range, ("1mo", "1d"))
+
+        try:
+            clean_symbol = self._clean_symbol(symbol)
+            url = f"{self.base_url}/{clean_symbol}?interval={interval}&range={yf_range}"
+
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'application/json,text/plain,*/*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+            }
+
+            logger.info(f"Yahoo Finance: Fetching historical prices for {clean_symbol} (range={yf_range}, interval={interval})")
+            response = requests.get(url, headers=headers, timeout=self.timeout)
+
+            if response.status_code == 200:
+                data = response.json()
+
+                if 'chart' in data and 'result' in data['chart']:
+                    results = data['chart']['result']
+                    if results and len(results) > 0:
+                        result = results[0]
+                        timestamps = result.get('timestamp', [])
+                        indicators = result.get('indicators', {})
+                        quote = indicators.get('quote', [{}])[0]
+
+                        opens = quote.get('open', [])
+                        highs = quote.get('high', [])
+                        lows = quote.get('low', [])
+                        closes = quote.get('close', [])
+                        volumes = quote.get('volume', [])
+
+                        historical_prices = []
+                        for i, ts in enumerate(timestamps):
+                            if ts is None:
+                                continue
+
+                            # Skip entries with missing data
+                            if i >= len(closes) or closes[i] is None:
+                                continue
+
+                            date_str = datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
+
+                            historical_prices.append(HistoricalPrice(
+                                date=date_str,
+                                open=float(opens[i]) if i < len(opens) and opens[i] else 0.0,
+                                high=float(highs[i]) if i < len(highs) and highs[i] else 0.0,
+                                low=float(lows[i]) if i < len(lows) and lows[i] else 0.0,
+                                close=float(closes[i]),
+                                volume=int(volumes[i]) if i < len(volumes) and volumes[i] else 0
+                            ))
+
+                        self.record_success()
+                        logger.info(f"Yahoo Finance: Got {len(historical_prices)} data points for {clean_symbol}")
+                        return historical_prices
+
+            logger.warning(f"Yahoo Finance: No historical data found for {symbol}")
+            return None
+
+        except requests.RequestException as e:
+            logger.error(f"Yahoo Finance network error for historical prices {symbol}: {e}")
+            self.record_error(e)
+            return None
+        except Exception as e:
+            logger.error(f"Yahoo Finance error for historical prices {symbol}: {e}")
+            self.record_error(e)
+            return None
+
     def get_provider_info(self) -> Dict:
         """Get provider information"""
         return {

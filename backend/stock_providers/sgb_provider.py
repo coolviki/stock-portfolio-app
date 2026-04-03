@@ -19,7 +19,7 @@ from pathlib import Path
 import json
 import logging
 
-from .base import StockPriceProvider, StockPrice, ProviderStatus
+from .base import StockPriceProvider, StockPrice, ProviderStatus, HistoricalPrice
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +191,14 @@ class SGBProvider(StockPriceProvider):
                     })
 
         return results
+
+    def get_historical_prices(self, symbol: str, range: str = "1m") -> Optional[List[HistoricalPrice]]:
+        """
+        Get historical price data - not implemented for SGB provider.
+        SGBs track gold prices, so historical data would need gold price history.
+        Returns None to fall through to other providers.
+        """
+        return None
 
     def get_provider_info(self) -> Dict:
         """Get provider information"""
