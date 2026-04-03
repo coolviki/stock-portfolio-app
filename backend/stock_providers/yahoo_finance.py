@@ -314,6 +314,9 @@ class YahooFinanceProvider(StockPriceProvider):
                         closes = quote.get('close', [])
                         volumes = quote.get('volume', [])
 
+                        # Check if this is intraday data (interval less than 1 day)
+                        is_intraday = interval in ['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h']
+
                         historical_prices = []
                         for i, ts in enumerate(timestamps):
                             if ts is None:
@@ -323,7 +326,11 @@ class YahooFinanceProvider(StockPriceProvider):
                             if i >= len(closes) or closes[i] is None:
                                 continue
 
-                            date_str = datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
+                            # Include time for intraday data, date only for daily+
+                            if is_intraday:
+                                date_str = datetime.fromtimestamp(ts).strftime('%Y-%m-%dT%H:%M:%S')
+                            else:
+                                date_str = datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
 
                             historical_prices.append(HistoricalPrice(
                                 date=date_str,
