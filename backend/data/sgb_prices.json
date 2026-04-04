@@ -1,8 +1,8 @@
 {
-  "last_updated": "2026-04-03T18:30:11.165742",
+  "last_updated": "2026-04-04T18:30:20.800215",
   "updated_by": "raspberry_pi",
-  "gold_price_per_gram": 13937.29,
-  "sgb_price_per_unit": 13937.29,
+  "gold_price_per_gram": 13957.35,
+  "sgb_price_per_unit": 13957.35,
   "source": "Calculated (USD spot + INR rate)",
   "notes": "SGB price = gold price per gram (1 unit = 1 gram of gold)"
 }
