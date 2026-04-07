@@ -223,14 +223,14 @@ const CapitalGains = () => {
           )}
 
           {/* Summary Cards */}
-          {capitalGains && (
+          {(capitalGains || adjustedCapitalGains) && (
             <>
               <Row className="mb-4">
                 <Col md={4}>
                   <Card className="h-100">
                     <Card.Body className="text-center">
                       <h5 className="card-title">Total Gain/Loss</h5>
-                      {viewMode === 'both' && adjustedCapitalGains ? (
+                      {viewMode === 'both' && adjustedCapitalGains && capitalGains ? (
                         <>
                           <div className="mb-2">
                             <small className="text-muted">Original:</small>
@@ -245,15 +245,15 @@ const CapitalGains = () => {
                             </h4>
                           </div>
                         </>
-                      ) : viewMode === 'adjusted' && adjustedCapitalGains ? (
+                      ) : adjustedCapitalGains ? (
                         <h3 className={`text-${getGainLossColor(adjustedCapitalGains.total_adjusted_gain_loss)}`}>
                           {formatCurrency(adjustedCapitalGains.total_adjusted_gain_loss)}
                         </h3>
-                      ) : (
+                      ) : capitalGains ? (
                         <h3 className={`text-${getGainLossColor(capitalGains.total_gain_loss)}`}>
                           {formatCurrency(capitalGains.total_gain_loss)}
                         </h3>
-                      )}
+                      ) : null}
                     </Card.Body>
                   </Card>
                 </Col>
@@ -261,7 +261,7 @@ const CapitalGains = () => {
                   <Card className="h-100">
                     <Card.Body className="text-center">
                       <h5 className="card-title">Short Term Gain/Loss</h5>
-                      {viewMode === 'both' && adjustedCapitalGains ? (
+                      {viewMode === 'both' && adjustedCapitalGains && capitalGains ? (
                         <>
                           <div className="mb-2">
                             <small className="text-muted">Original:</small>
@@ -276,15 +276,15 @@ const CapitalGains = () => {
                             </h4>
                           </div>
                         </>
-                      ) : viewMode === 'adjusted' && adjustedCapitalGains ? (
+                      ) : adjustedCapitalGains ? (
                         <h3 className={`text-${getGainLossColor(adjustedCapitalGains.short_term_adjusted)}`}>
                           {formatCurrency(adjustedCapitalGains.short_term_adjusted)}
                         </h3>
-                      ) : (
+                      ) : capitalGains ? (
                         <h3 className={`text-${getGainLossColor(capitalGains.short_term_gain_loss)}`}>
                           {formatCurrency(capitalGains.short_term_gain_loss)}
                         </h3>
-                      )}
+                      ) : null}
                       <small className="text-muted">Holdings &lt;= 1 year</small>
                     </Card.Body>
                   </Card>
@@ -293,7 +293,7 @@ const CapitalGains = () => {
                   <Card className="h-100">
                     <Card.Body className="text-center">
                       <h5 className="card-title">Long Term Gain/Loss</h5>
-                      {viewMode === 'both' && adjustedCapitalGains ? (
+                      {viewMode === 'both' && adjustedCapitalGains && capitalGains ? (
                         <>
                           <div className="mb-2">
                             <small className="text-muted">Original:</small>
@@ -308,15 +308,15 @@ const CapitalGains = () => {
                             </h4>
                           </div>
                         </>
-                      ) : viewMode === 'adjusted' && adjustedCapitalGains ? (
+                      ) : adjustedCapitalGains ? (
                         <h3 className={`text-${getGainLossColor(adjustedCapitalGains.long_term_adjusted)}`}>
                           {formatCurrency(adjustedCapitalGains.long_term_adjusted)}
                         </h3>
-                      ) : (
+                      ) : capitalGains ? (
                         <h3 className={`text-${getGainLossColor(capitalGains.long_term_gain_loss)}`}>
                           {formatCurrency(capitalGains.long_term_gain_loss)}
                         </h3>
-                      )}
+                      ) : null}
                       <small className="text-muted">Holdings &gt; 1 year</small>
                     </Card.Body>
                   </Card>
@@ -335,14 +335,12 @@ const CapitalGains = () => {
               {/* Securities Breakdown */}
               <Card>
                 <Card.Header>
-                  <h5 className="mb-0">Securities Breakdown - {(viewMode === 'adjusted' && adjustedCapitalGains) ? adjustedCapitalGains.financial_year : capitalGains.financial_year}</h5>
+                  <h5 className="mb-0">Securities Breakdown - {adjustedCapitalGains?.financial_year || capitalGains?.financial_year || ''}</h5>
                 </Card.Header>
                 <Card.Body>
                   {(() => {
-                    // Use adjusted securities when in adjusted mode, otherwise use original
-                    const securitiesToShow = (viewMode === 'adjusted' && adjustedCapitalGains)
-                      ? adjustedCapitalGains.securities
-                      : capitalGains.securities;
+                    // Use adjusted securities when available, otherwise use original
+                    const securitiesToShow = adjustedCapitalGains?.securities || capitalGains?.securities;
 
                     if (!securitiesToShow || securitiesToShow.length === 0) {
                       return (
