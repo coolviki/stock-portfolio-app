@@ -335,14 +335,24 @@ const CapitalGains = () => {
               {/* Securities Breakdown */}
               <Card>
                 <Card.Header>
-                  <h5 className="mb-0">Securities Breakdown - {capitalGains.financial_year}</h5>
+                  <h5 className="mb-0">Securities Breakdown - {(viewMode === 'adjusted' && adjustedCapitalGains) ? adjustedCapitalGains.financial_year : capitalGains.financial_year}</h5>
                 </Card.Header>
                 <Card.Body>
-                  {capitalGains.securities.length === 0 ? (
-                    <Alert variant="info">
-                      No realized gains/losses for the selected financial year.
-                    </Alert>
-                  ) : (
+                  {(() => {
+                    // Use adjusted securities when in adjusted mode, otherwise use original
+                    const securitiesToShow = (viewMode === 'adjusted' && adjustedCapitalGains)
+                      ? adjustedCapitalGains.securities
+                      : capitalGains.securities;
+
+                    if (!securitiesToShow || securitiesToShow.length === 0) {
+                      return (
+                        <Alert variant="info">
+                          No realized gains/losses for the selected financial year.
+                        </Alert>
+                      );
+                    }
+
+                    return (
                     <Table responsive hover>
                       <thead>
                         <tr>
@@ -355,44 +365,55 @@ const CapitalGains = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {capitalGains.securities.map((security, index) => (
+                        {securitiesToShow.map((securityData, index) => {
+                          // Handle both original and adjusted API response formats
+                          const isAdjusted = viewMode === 'adjusted' && adjustedCapitalGains;
+                          const securityInfo = isAdjusted ? securityData.security : securityData;
+                          const securityName = securityInfo?.security_name || securityData.security_name || 'Unknown';
+                          const securitySymbol = securityInfo?.security_ticker || securityData.security_symbol;
+                          const isin = securityInfo?.security_ISIN || securityData.isin;
+                          const totalGainLoss = isAdjusted ? securityData.total_adjusted_gain_loss : securityData.total_gain_loss;
+                          const shortTermGainLoss = isAdjusted ? securityData.short_term_adjusted : securityData.short_term_gain_loss;
+                          const longTermGainLoss = isAdjusted ? securityData.long_term_adjusted : securityData.long_term_gain_loss;
+
+                          return (
                           <React.Fragment key={index}>
                             <tr>
                               <td>
-                                <strong>{security.security_name}</strong>
-                                {security.security_symbol && (
+                                <strong>{securityName}</strong>
+                                {securitySymbol && (
                                   <div className="text-muted small">
-                                    {security.security_symbol}
+                                    {securitySymbol}
                                   </div>
                                 )}
                               </td>
                               <td>
                                 <small className="text-muted">
-                                  {security.isin || 'N/A'}
+                                  {isin || 'N/A'}
                                 </small>
                               </td>
                               <td className="text-end">
-                                <Badge bg={getGainLossColor(security.total_gain_loss)}>
-                                  {formatCurrency(security.total_gain_loss)}
+                                <Badge bg={getGainLossColor(totalGainLoss)}>
+                                  {formatCurrency(totalGainLoss)}
                                 </Badge>
                               </td>
                               <td className="text-end">
-                                <span className={`text-${getGainLossColor(security.short_term_gain_loss)}`}>
-                                  {formatCurrency(security.short_term_gain_loss)}
+                                <span className={`text-${getGainLossColor(shortTermGainLoss)}`}>
+                                  {formatCurrency(shortTermGainLoss)}
                                 </span>
                               </td>
                               <td className="text-end">
-                                <span className={`text-${getGainLossColor(security.long_term_gain_loss)}`}>
-                                  {formatCurrency(security.long_term_gain_loss)}
+                                <span className={`text-${getGainLossColor(longTermGainLoss)}`}>
+                                  {formatCurrency(longTermGainLoss)}
                                 </span>
                               </td>
                               <td className="text-center">
                                 <Button
                                   variant="outline-primary"
                                   size="sm"
-                                  onClick={() => toggleSecurityDetails(security.security_name)}
+                                  onClick={() => toggleSecurityDetails(securityName)}
                                 >
-                                  {expandedSecurities[security.security_name] ? 'Hide' : 'Show'} Details
+                                  {expandedSecurities[securityName] ? 'Hide' : 'Show'} Details
                                 </Button>
                               </td>
                             </tr>
@@ -400,9 +421,9 @@ const CapitalGains = () => {
                             {/* Details Row */}
                             <tr>
                               <td colSpan="6" className="p-0">
-                                <Collapse in={expandedSecurities[security.security_name]}>
+                                <Collapse in={expandedSecurities[securityName]}>
                                   <div className="p-3 bg-light">
-                                    <h6>Transaction Details for {security.security_name}</h6>
+                                    <h6>Transaction Details for {securityName}</h6>
                                     <Table size="sm" className="mb-0">
                                       <thead>
                                         <tr>
@@ -418,21 +439,30 @@ const CapitalGains = () => {
                                         </tr>
                                       </thead>
                                       <tbody>
-                                        {security.details.map((detail, detailIndex) => (
+                                        {(securityData.details || []).map((detail, detailIndex) => {
+                                          // Handle both original and adjusted API response formats
+                                          const buyDate = detail.buy_transaction?.transaction_date || detail.purchase_date;
+                                          const sellDate = detail.sell_transaction?.transaction_date || detail.sell_date;
+                                          const buyPrice = detail.buy_price_per_unit || detail.original_cost_per_unit || detail.adjusted_cost_per_unit;
+                                          const sellPrice = detail.sell_price_per_unit || detail.sale_price_per_unit;
+                                          const gainLoss = detail.gain_loss || detail.adjusted_gain_loss || detail.original_gain_loss;
+                                          const gainLossPercent = detail.gain_loss_percentage || (buyPrice > 0 ? ((sellPrice - buyPrice) / buyPrice) * 100 : 0);
+
+                                          return (
                                           <tr key={detailIndex}>
-                                            <td>{formatDate(detail.buy_transaction.transaction_date)}</td>
-                                            <td>{formatDate(detail.sell_transaction.transaction_date)}</td>
+                                            <td>{formatDate(buyDate)}</td>
+                                            <td>{formatDate(sellDate)}</td>
                                             <td className="text-end">{detail.quantity_sold}</td>
-                                            <td className="text-end">{formatCurrency(detail.buy_price_per_unit)}</td>
-                                            <td className="text-end">{formatCurrency(detail.sell_price_per_unit)}</td>
+                                            <td className="text-end">{formatCurrency(buyPrice)}</td>
+                                            <td className="text-end">{formatCurrency(sellPrice)}</td>
                                             <td className="text-end">
-                                              <span className={`text-${getGainLossColor(detail.gain_loss)}`}>
-                                                {formatCurrency(detail.gain_loss)}
+                                              <span className={`text-${getGainLossColor(gainLoss)}`}>
+                                                {formatCurrency(gainLoss)}
                                               </span>
                                             </td>
                                             <td className="text-end">
-                                              <span className={`text-${getGainLossColor(detail.gain_loss_percentage)}`}>
-                                                {formatPercentage(detail.gain_loss_percentage)}
+                                              <span className={`text-${getGainLossColor(gainLossPercent)}`}>
+                                                {formatPercentage(gainLossPercent)}
                                               </span>
                                             </td>
                                             <td className="text-center">{detail.holding_period_days}</td>
@@ -442,7 +472,8 @@ const CapitalGains = () => {
                                               </Badge>
                                             </td>
                                           </tr>
-                                        ))}
+                                          );
+                                        })}
                                       </tbody>
                                     </Table>
                                   </div>
@@ -450,10 +481,12 @@ const CapitalGains = () => {
                               </td>
                             </tr>
                           </React.Fragment>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </Table>
-                  )}
+                    );
+                  })()}
                 </Card.Body>
               </Card>
             </>
