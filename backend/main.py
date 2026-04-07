@@ -3441,6 +3441,156 @@ def run_lot_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+@app.post("/admin/repair-unallocated-sells")
+def repair_unallocated_sells(
+    user_id: Optional[int] = Query(None, description="Specific user ID to repair (optional)"),
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Repair SELL transactions that weren't properly allocated to lots.
+    This handles cases where duplicate security records caused allocation failures.
+    """
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        calculator = LotCapitalGainsCalculator(db)
+
+        # Build query for SELL transactions
+        sell_query = db.query(Transaction).filter(
+            Transaction.transaction_type == 'SELL'
+        )
+        if user_id:
+            sell_query = sell_query.filter(Transaction.user_id == user_id)
+
+        sell_transactions = sell_query.order_by(Transaction.transaction_date.asc()).all()
+
+        repaired = 0
+        already_allocated = 0
+        failed = 0
+        failed_details = []
+
+        for tx in sell_transactions:
+            # Check if allocations already exist
+            existing = db.query(SaleAllocation).filter(
+                SaleAllocation.sell_transaction_id == tx.id
+            ).count()
+
+            if existing > 0:
+                already_allocated += 1
+                continue
+
+            try:
+                allocations = calculator.allocate_sale_to_lots(tx)
+                if allocations:
+                    repaired += 1
+                else:
+                    failed += 1
+                    security = db.query(Security).filter(
+                        Security.id == tx.security_id
+                    ).first()
+                    failed_details.append({
+                        "transaction_id": tx.id,
+                        "security_name": security.security_name if security else "Unknown",
+                        "quantity": tx.quantity,
+                        "date": str(tx.transaction_date)
+                    })
+            except Exception as e:
+                failed += 1
+                logger.error(f"Error allocating sell transaction {tx.id}: {e}")
+
+        return {
+            "success": True,
+            "message": "Repair completed",
+            "repaired": repaired,
+            "already_allocated": already_allocated,
+            "failed": failed,
+            "failed_details": failed_details[:10]  # Limit to first 10
+        }
+
+    except Exception as e:
+        logger.error(f"Repair failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Repair failed: {str(e)}")
+
+
+@app.get("/admin/check-lot-consistency")
+def check_lot_consistency(
+    user_id: Optional[int] = Query(None, description="Specific user ID to check (optional)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Check for data consistency issues between transactions and lots.
+    Returns information about unallocated sells and duplicate securities.
+    """
+    from sqlalchemy import func
+
+    result = {
+        "unallocated_sells": [],
+        "duplicate_securities": [],
+        "lots_with_positive_remaining": []
+    }
+
+    # Find SELL transactions without allocations
+    sell_query = db.query(Transaction).filter(
+        Transaction.transaction_type == 'SELL'
+    )
+    if user_id:
+        sell_query = sell_query.filter(Transaction.user_id == user_id)
+
+    for sell in sell_query.all():
+        allocation_count = db.query(SaleAllocation).filter(
+            SaleAllocation.sell_transaction_id == sell.id
+        ).count()
+
+        if allocation_count == 0:
+            security = db.query(Security).filter(
+                Security.id == sell.security_id
+            ).first()
+            result["unallocated_sells"].append({
+                "transaction_id": sell.id,
+                "security_name": security.security_name if security else "Unknown",
+                "security_id": sell.security_id,
+                "quantity": sell.quantity,
+                "date": str(sell.transaction_date),
+                "user_id": sell.user_id
+            })
+
+    # Find duplicate securities
+    duplicate_names = db.query(
+        Security.security_name,
+        func.count(Security.id).label('count')
+    ).group_by(Security.security_name).having(func.count(Security.id) > 1).all()
+
+    for name, count in duplicate_names:
+        securities = db.query(Security).filter(
+            Security.security_name == name
+        ).all()
+        result["duplicate_securities"].append({
+            "security_name": name,
+            "count": count,
+            "security_ids": [s.id for s in securities]
+        })
+
+    # Get lots with positive remaining quantity (current holdings)
+    lots_query = db.query(Lot).filter(Lot.remaining_quantity > 0)
+    if user_id:
+        lots_query = lots_query.filter(Lot.user_id == user_id)
+
+    for lot in lots_query.all():
+        security = db.query(Security).filter(Security.id == lot.security_id).first()
+        result["lots_with_positive_remaining"].append({
+            "lot_id": lot.id,
+            "security_name": security.security_name if security else "Unknown",
+            "security_id": lot.security_id,
+            "remaining_quantity": lot.remaining_quantity,
+            "purchase_date": str(lot.purchase_date),
+            "user_id": lot.user_id
+        })
+
+    return result
+
+
 # =============================================================================
 # REPORTS ENDPOINTS
 # =============================================================================

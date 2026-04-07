@@ -109,6 +109,52 @@ class LotCapitalGainsCalculator:
             Lot.status.in_([LotStatus.OPEN.value, LotStatus.PARTIALLY_SOLD.value])
         ).order_by(Lot.purchase_date.asc()).all()
 
+        # If no lots found by security_id, try matching by security name/ISIN
+        # This handles cases where duplicate security records exist
+        if not available_lots:
+            sell_security = self.db.query(Security).filter(
+                Security.id == transaction.security_id
+            ).first()
+
+            if sell_security:
+                # Find lots for securities with same name or ISIN
+                matching_security_ids = []
+
+                # Match by security name (exact match)
+                if sell_security.security_name:
+                    name_matches = self.db.query(Security).filter(
+                        Security.security_name == sell_security.security_name,
+                        Security.id != sell_security.id
+                    ).all()
+                    matching_security_ids.extend([s.id for s in name_matches])
+
+                # Match by ISIN (if available)
+                if sell_security.security_ISIN:
+                    isin_matches = self.db.query(Security).filter(
+                        Security.security_ISIN == sell_security.security_ISIN,
+                        Security.id != sell_security.id
+                    ).all()
+                    matching_security_ids.extend([s.id for s in isin_matches])
+
+                # Remove duplicates
+                matching_security_ids = list(set(matching_security_ids))
+
+                if matching_security_ids:
+                    available_lots = self.db.query(Lot).filter(
+                        Lot.user_id == transaction.user_id,
+                        Lot.security_id.in_(matching_security_ids),
+                        Lot.remaining_quantity > 0,
+                        Lot.status.in_([LotStatus.OPEN.value, LotStatus.PARTIALLY_SOLD.value])
+                    ).order_by(Lot.purchase_date.asc()).all()
+
+                    if available_lots:
+                        logger.info(
+                            f"Found {len(available_lots)} lots by security name/ISIN match "
+                            f"for SELL transaction {transaction.id}. "
+                            f"Original security_id: {transaction.security_id}, "
+                            f"Matched security_ids: {matching_security_ids}"
+                        )
+
         if not available_lots:
             logger.warning(
                 f"No available lots for SELL transaction {transaction.id}. "
