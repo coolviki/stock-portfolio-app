@@ -12,7 +12,7 @@ const CapitalGains = () => {
   const [capitalGains, setCapitalGains] = useState(null);
   const [adjustedCapitalGains, setAdjustedCapitalGains] = useState(null);
   const [expandedSecurities, setExpandedSecurities] = useState({});
-  const [viewMode, setViewMode] = useState('original'); // 'original', 'adjusted', 'both'
+  const [viewMode, setViewMode] = useState('adjusted'); // 'original', 'adjusted', 'both' - default to adjusted for accurate lot-based calculation
 
   useEffect(() => {
     loadAvailableYears();
@@ -20,9 +20,10 @@ const CapitalGains = () => {
 
   useEffect(() => {
     if (selectedYear) {
-      loadCapitalGains();
-      if (viewMode === 'adjusted' || viewMode === 'both') {
-        loadAdjustedCapitalGains();
+      // Always load adjusted data (lot-based) as it's more accurate
+      loadAdjustedCapitalGains();
+      if (viewMode === 'original' || viewMode === 'both') {
+        loadCapitalGains();
       }
     }
   }, [selectedYear, user]);

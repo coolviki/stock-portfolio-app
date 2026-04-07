@@ -1935,6 +1935,71 @@ def _get_portfolio_from_transactions(user_id: int, db: Session):
     }
 
 
+@app.get("/portfolio-zero-holdings/")
+def get_zero_holdings(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get securities that have been fully sold (zero current holdings)"""
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Get all lots that are fully sold (remaining_quantity = 0)
+        from sqlalchemy import func
+
+        # Find securities where all lots have remaining_quantity = 0
+        # but the user has traded them (has lots for them)
+        securities_with_zero = db.query(
+            Security,
+            func.sum(Lot.remaining_quantity).label('total_remaining'),
+            func.sum(Lot.original_quantity).label('total_bought'),
+            func.min(Lot.purchase_date).label('first_purchase')
+        ).join(Lot, Lot.security_id == Security.id).filter(
+            Lot.user_id == user_id
+        ).group_by(Security.id).having(
+            func.sum(Lot.remaining_quantity) == 0
+        ).all()
+
+        zero_holdings = []
+        for security, total_remaining, total_bought, first_purchase in securities_with_zero:
+            # Get realized gains for this security
+            realized_gain = db.query(func.sum(SaleAllocation.realized_gain_loss)).join(
+                Lot, SaleAllocation.lot_id == Lot.id
+            ).filter(
+                Lot.user_id == user_id,
+                Lot.security_id == security.id
+            ).scalar() or 0
+
+            # Get last sale date
+            last_sale = db.query(func.max(Transaction.transaction_date)).filter(
+                Transaction.user_id == user_id,
+                Transaction.security_id == security.id,
+                Transaction.transaction_type == 'SELL'
+            ).scalar()
+
+            zero_holdings.append({
+                "symbol": security.security_name,
+                "security_id": security.id,
+                "isin": security.security_ISIN,
+                "security_symbol": security.security_ticker,
+                "total_quantity_bought": total_bought,
+                "quantity": 0,
+                "realized_gain_loss": realized_gain,
+                "first_purchase_date": str(first_purchase) if first_purchase else None,
+                "last_sale_date": str(last_sale) if last_sale else None
+            })
+
+        return {"zero_holdings": zero_holdings}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting zero holdings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/portfolio-history/")
 def get_portfolio_history(
     user_id: int,

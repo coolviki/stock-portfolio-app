@@ -45,6 +45,10 @@ const Dashboard = () => {
     allocation: true
   });
 
+  // Show zero holdings toggle
+  const [showZeroHoldings, setShowZeroHoldings] = useState(false);
+  const [zeroHoldings, setZeroHoldings] = useState([]);
+
   // Column configuration for the settings dropdown
   const columnConfig = [
     { key: 'qty', label: 'Qty' },
@@ -141,6 +145,24 @@ const Dashboard = () => {
       setPortfolioHistory(data);
     } catch (error) {
       console.error('Error loading portfolio history:', error);
+    }
+  };
+
+  const loadZeroHoldings = async () => {
+    try {
+      if (!user?.id) return;
+      const data = await apiService.getZeroHoldings(user.id);
+      setZeroHoldings(data.zero_holdings || []);
+    } catch (error) {
+      console.error('Error loading zero holdings:', error);
+    }
+  };
+
+  const handleShowZeroHoldingsChange = (e) => {
+    const checked = e.target.checked;
+    setShowZeroHoldings(checked);
+    if (checked && zeroHoldings.length === 0) {
+      loadZeroHoldings();
     }
   };
 
@@ -412,6 +434,30 @@ const Dashboard = () => {
 
   const sortedHoldings = getSortedHoldings(allHoldingSymbols, portfolio.current_values, portfolio);
 
+  // Add zero holdings if checkbox is checked
+  const zeroHoldingsFormatted = showZeroHoldings ? zeroHoldings.map(zh => ({
+    symbol: zh.symbol,
+    stock: {
+      quantity: 0,
+      total_invested: 0,
+      isin: zh.isin,
+      security_symbol: zh.security_symbol,
+      security_id: zh.security_id,
+      isZeroHolding: true
+    },
+    currentVal: 0,
+    pnl: zh.realized_gain_loss || 0,
+    pnlPercent: 0,
+    dailyChange: 0,
+    dailyChangePercent: 0,
+    xirr: null,
+    avgHoldingDays: null,
+    isZeroHolding: true,
+    lastSaleDate: zh.last_sale_date
+  })) : [];
+
+  const allDisplayHoldings = [...sortedHoldings, ...zeroHoldingsFormatted];
+
   return (
     <div className="dashboard-container">
       {/* Header - simplified on mobile */}
@@ -602,6 +648,16 @@ const Dashboard = () => {
                   </div>
                 </div>
               )}
+              {/* Show Zero Holdings Checkbox */}
+              <Form.Check
+                type="checkbox"
+                id="show-zero-holdings"
+                label="Show sold"
+                checked={showZeroHoldings}
+                onChange={handleShowZeroHoldingsChange}
+                className="mb-0 me-2"
+                style={{ fontSize: '0.85rem' }}
+              />
               {/* Column Settings Dropdown */}
               <Dropdown autoClose="outside">
                 <Dropdown.Toggle variant="outline-secondary" size="sm" id="column-settings">
@@ -663,26 +719,35 @@ const Dashboard = () => {
         <Card.Body className="p-0 p-md-3">
           {/* Mobile: Single P&L row based on Day/Total/XIRR selection */}
           <div className="d-md-none">
-            {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent, xirr, avgHoldingDays }) => {
+            {allDisplayHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent, xirr, avgHoldingDays, isZeroHolding, lastSaleDate }) => {
               const isDay = sortConfig.key === 'dayPnl' || sortConfig.key === 'dayPnlPercent';
               const isXirr = sortConfig.key === 'xirr';
               const currentPrice = stock.quantity > 0 ? currentVal / stock.quantity : 0;
               const avgPrice = stock.quantity > 0 ? stock.total_invested / stock.quantity : 0;
 
               return (
-                <div key={symbol} className="holding-item-new px-3 py-2 border-bottom">
+                <div key={symbol} className={`holding-item-new px-3 py-2 border-bottom ${isZeroHolding ? 'opacity-75 bg-light' : ''}`}>
                   <div className="d-flex justify-content-between align-items-center">
                     <div>
                       <strong
                         className="holding-symbol"
                         style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
                         onClick={() => handleStockClick(symbol, stock)}
-                      >{symbol}</strong>
+                      >
+                        {symbol}
+                        {isZeroHolding && <Badge bg="secondary" className="ms-2" style={{ fontSize: '0.65rem' }}>SOLD</Badge>}
+                      </strong>
                       <div className="holding-meta">
-                        {stock.quantity} shares @ ₹{avgPrice.toFixed(0)}, CMP{' '}
-                        <span className={currentPrice >= avgPrice ? 'text-success' : 'text-danger'}>
-                          ₹{currentPrice.toFixed(0)}
-                        </span>
+                        {isZeroHolding ? (
+                          <span className="text-muted">Realized P&L: <span className={pnl >= 0 ? 'text-success' : 'text-danger'}>₹{pnl.toLocaleString('en-IN', {maximumFractionDigits: 0})}</span></span>
+                        ) : (
+                          <>
+                            {stock.quantity} shares @ ₹{avgPrice.toFixed(0)}, CMP{' '}
+                            <span className={currentPrice >= avgPrice ? 'text-success' : 'text-danger'}>
+                              ₹{currentPrice.toFixed(0)}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                     <div className="text-end">
@@ -811,47 +876,61 @@ const Dashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {sortedHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent, xirr, avgHoldingDays }) => {
+                {allDisplayHoldings.map(({ symbol, stock, currentVal, pnl, pnlPercent, dailyChange, dailyChangePercent, xirr, avgHoldingDays, isZeroHolding, lastSaleDate }) => {
                   const currentPrice = stock.quantity > 0 ? currentVal / stock.quantity : 0;
                   const avgPrice = stock.quantity > 0 ? stock.total_invested / stock.quantity : 0;
 
                   return (
-                    <tr key={symbol}>
+                    <tr key={symbol} className={isZeroHolding ? 'table-secondary opacity-75' : ''}>
                       <td>
                         <strong
                           style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
                           onClick={() => handleStockClick(symbol, stock)}
-                        >{symbol}</strong>
+                        >
+                          {symbol}
+                        </strong>
+                        {isZeroHolding && <Badge bg="secondary" className="ms-2" style={{ fontSize: '0.65rem' }}>SOLD</Badge>}
                       </td>
-                      {visibleColumns.qty && <td>{stock.quantity}</td>}
-                      {visibleColumns.avgPrice && <td>₹{avgPrice.toFixed(2)}</td>}
+                      {visibleColumns.qty && <td>{isZeroHolding ? '-' : stock.quantity}</td>}
+                      {visibleColumns.avgPrice && <td>{isZeroHolding ? '-' : `₹${avgPrice.toFixed(2)}`}</td>}
                       {visibleColumns.currentPrice && (
-                        <td className={currentPrice >= avgPrice ? 'text-success' : 'text-danger'}>
-                          ₹{currentPrice.toFixed(2)}
+                        <td className={isZeroHolding ? 'text-muted' : (currentPrice >= avgPrice ? 'text-success' : 'text-danger')}>
+                          {isZeroHolding ? '-' : `₹${currentPrice.toFixed(2)}`}
                         </td>
                       )}
                       {visibleColumns.invested && (
-                        <td className="d-none d-lg-table-cell">₹{stock.total_invested.toLocaleString('en-IN')}</td>
+                        <td className="d-none d-lg-table-cell">{isZeroHolding ? '-' : `₹${stock.total_invested.toLocaleString('en-IN')}`}</td>
                       )}
                       {visibleColumns.value && (
-                        <td className={pnl >= 0 ? 'text-success' : 'text-danger'}>
-                          ₹{currentVal.toLocaleString('en-IN')}
+                        <td className={isZeroHolding ? 'text-muted' : (pnl >= 0 ? 'text-success' : 'text-danger')}>
+                          {isZeroHolding ? '-' : `₹${currentVal.toLocaleString('en-IN')}`}
                         </td>
                       )}
                       {visibleColumns.dayPnl && (
-                        <td className={dailyChange >= 0 ? 'text-success' : 'text-danger'}>
-                          {dailyChange >= 0 ? '+' : ''}₹{dailyChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}
-                          <small className="d-block" style={{fontSize: '0.7rem'}}>
-                            ({dailyChangePercent >= 0 ? '+' : ''}{dailyChangePercent.toFixed(1)}%)
-                          </small>
+                        <td className={isZeroHolding ? 'text-muted' : (dailyChange >= 0 ? 'text-success' : 'text-danger')}>
+                          {isZeroHolding ? '-' : (
+                            <>
+                              {dailyChange >= 0 ? '+' : ''}₹{dailyChange.toLocaleString('en-IN', {maximumFractionDigits: 0})}
+                              <small className="d-block" style={{fontSize: '0.7rem'}}>
+                                ({dailyChangePercent >= 0 ? '+' : ''}{dailyChangePercent.toFixed(1)}%)
+                              </small>
+                            </>
+                          )}
                         </td>
                       )}
                       {visibleColumns.totalPnl && (
                         <td className={pnl >= 0 ? 'text-success' : 'text-danger'}>
                           {pnl >= 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN', {maximumFractionDigits: 0})}
-                          <small className="d-block" style={{fontSize: '0.7rem'}}>
-                            ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%)
-                          </small>
+                          {!isZeroHolding && (
+                            <small className="d-block" style={{fontSize: '0.7rem'}}>
+                              ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%)
+                            </small>
+                          )}
+                          {isZeroHolding && (
+                            <small className="d-block text-muted" style={{fontSize: '0.7rem'}}>
+                              Realized
+                            </small>
+                          )}
                         </td>
                       )}
                       {visibleColumns.xirr && (

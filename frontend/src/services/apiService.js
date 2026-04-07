@@ -140,6 +140,16 @@ export const apiService = {
     return response.data;
   },
 
+  async getZeroHoldings(userId) {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+    const response = await api.get('/portfolio-zero-holdings/', {
+      params: { user_id: userId }
+    });
+    return response.data;
+  },
+
   // User APIs
   async getUsers() {
     const response = await api.get('/users/');
