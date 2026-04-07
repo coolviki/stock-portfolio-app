@@ -365,14 +365,16 @@ const CapitalGains = () => {
                       <tbody>
                         {securitiesToShow.map((securityData, index) => {
                           // Handle both original and adjusted API response formats
-                          const isAdjusted = viewMode === 'adjusted' && adjustedCapitalGains;
-                          const securityInfo = isAdjusted ? securityData.security : securityData;
-                          const securityName = securityInfo?.security_name || securityData.security_name || 'Unknown';
-                          const securitySymbol = securityInfo?.security_ticker || securityData.security_symbol;
-                          const isin = securityInfo?.security_ISIN || securityData.isin;
-                          const totalGainLoss = isAdjusted ? securityData.total_adjusted_gain_loss : securityData.total_gain_loss;
-                          const shortTermGainLoss = isAdjusted ? securityData.short_term_adjusted : securityData.short_term_gain_loss;
-                          const longTermGainLoss = isAdjusted ? securityData.long_term_adjusted : securityData.long_term_gain_loss;
+                          // Both APIs return security info in securityData.security
+                          const securityInfo = securityData.security;
+                          const securityName = securityInfo?.security_name || 'Unknown';
+                          const securitySymbol = securityInfo?.security_ticker;
+                          const isin = securityInfo?.security_ISIN;
+                          // Check if this data is from adjusted API (has adjusted fields)
+                          const hasAdjustedFields = securityData.total_adjusted_gain_loss !== undefined;
+                          const totalGainLoss = hasAdjustedFields ? securityData.total_adjusted_gain_loss : securityData.total_gain_loss;
+                          const shortTermGainLoss = hasAdjustedFields ? securityData.short_term_adjusted : securityData.short_term_gain_loss;
+                          const longTermGainLoss = hasAdjustedFields ? securityData.long_term_adjusted : securityData.long_term_gain_loss;
 
                           return (
                           <React.Fragment key={index}>
