@@ -3450,12 +3450,33 @@ def repair_unallocated_sells(
     """
     Repair SELL transactions that weren't properly allocated to lots.
     This handles cases where duplicate security records caused allocation failures.
+    Also creates missing lots for BUY transactions first.
     """
     if not is_admin_user(admin_email):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     try:
         calculator = LotCapitalGainsCalculator(db)
+
+        # First, create lots for any BUY transactions that don't have them
+        buy_query = db.query(Transaction).filter(
+            Transaction.transaction_type == 'BUY'
+        )
+        if user_id:
+            buy_query = buy_query.filter(Transaction.user_id == user_id)
+
+        buy_transactions = buy_query.order_by(Transaction.transaction_date.asc()).all()
+        lots_created = 0
+
+        for buy in buy_transactions:
+            existing_lot = db.query(Lot).filter(Lot.transaction_id == buy.id).first()
+            if not existing_lot:
+                try:
+                    calculator.create_lot_from_transaction(buy)
+                    lots_created += 1
+                    logger.info(f"Created missing lot for BUY transaction {buy.id}")
+                except Exception as e:
+                    logger.error(f"Failed to create lot for BUY {buy.id}: {e}")
 
         # Build query for SELL transactions
         sell_query = db.query(Transaction).filter(
@@ -3503,7 +3524,8 @@ def repair_unallocated_sells(
         return {
             "success": True,
             "message": "Repair completed",
-            "repaired": repaired,
+            "lots_created": lots_created,
+            "sells_repaired": repaired,
             "already_allocated": already_allocated,
             "failed": failed,
             "failed_details": failed_details[:10]  # Limit to first 10
@@ -3527,9 +3549,32 @@ def check_lot_consistency(
 
     result = {
         "unallocated_sells": [],
+        "buys_without_lots": [],
         "duplicate_securities": [],
         "lots_with_positive_remaining": []
     }
+
+    # Find BUY transactions without lots
+    buy_query = db.query(Transaction).filter(
+        Transaction.transaction_type == 'BUY'
+    )
+    if user_id:
+        buy_query = buy_query.filter(Transaction.user_id == user_id)
+
+    for buy in buy_query.all():
+        lot = db.query(Lot).filter(Lot.transaction_id == buy.id).first()
+        if not lot:
+            security = db.query(Security).filter(
+                Security.id == buy.security_id
+            ).first()
+            result["buys_without_lots"].append({
+                "transaction_id": buy.id,
+                "security_name": security.security_name if security else "Unknown",
+                "security_id": buy.security_id,
+                "quantity": buy.quantity,
+                "date": str(buy.transaction_date),
+                "user_id": buy.user_id
+            })
 
     # Find SELL transactions without allocations
     sell_query = db.query(Transaction).filter(
@@ -3547,13 +3592,33 @@ def check_lot_consistency(
             security = db.query(Security).filter(
                 Security.id == sell.security_id
             ).first()
+
+            # Find potential matching lots by security name
+            matching_lots = []
+            if security:
+                lots_by_name = db.query(Lot).join(Security).filter(
+                    Security.security_name == security.security_name,
+                    Lot.user_id == sell.user_id,
+                    Lot.remaining_quantity > 0
+                ).all()
+                for lot in lots_by_name:
+                    lot_security = db.query(Security).filter(Security.id == lot.security_id).first()
+                    matching_lots.append({
+                        "lot_id": lot.id,
+                        "lot_security_id": lot.security_id,
+                        "lot_security_name": lot_security.security_name if lot_security else "Unknown",
+                        "remaining_qty": lot.remaining_quantity,
+                        "status": lot.status
+                    })
+
             result["unallocated_sells"].append({
                 "transaction_id": sell.id,
                 "security_name": security.security_name if security else "Unknown",
                 "security_id": sell.security_id,
                 "quantity": sell.quantity,
                 "date": str(sell.transaction_date),
-                "user_id": sell.user_id
+                "user_id": sell.user_id,
+                "potential_matching_lots": matching_lots
             })
 
     # Find duplicate securities
