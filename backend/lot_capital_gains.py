@@ -120,10 +120,11 @@ class LotCapitalGainsCalculator:
                 # Find lots for securities with same name or ISIN
                 matching_security_ids = []
 
-                # Match by security name (exact match)
+                # Match by security name (case-insensitive)
                 if sell_security.security_name:
+                    from sqlalchemy import func
                     name_matches = self.db.query(Security).filter(
-                        Security.security_name == sell_security.security_name,
+                        func.lower(Security.security_name) == func.lower(sell_security.security_name),
                         Security.id != sell_security.id
                     ).all()
                     matching_security_ids.extend([s.id for s in name_matches])

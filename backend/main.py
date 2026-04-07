@@ -3593,11 +3593,11 @@ def check_lot_consistency(
                 Security.id == sell.security_id
             ).first()
 
-            # Find potential matching lots by security name
+            # Find potential matching lots by security name (case-insensitive)
             matching_lots = []
             if security:
                 lots_by_name = db.query(Lot).join(Security).filter(
-                    Security.security_name == security.security_name,
+                    func.lower(Security.security_name) == func.lower(security.security_name),
                     Lot.user_id == sell.user_id,
                     Lot.remaining_quantity > 0
                 ).all()
