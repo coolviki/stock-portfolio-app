@@ -186,11 +186,12 @@ def get_capital_gains_for_financial_year(
         )
     
     # Group by security (using ISIN or security_name as key)
+    # Use lowercase for security_name to handle case differences
     securities_map = {}
     for sell_tx in sell_transactions:
-        # Use ISIN as primary key, fallback to security_name
-        security_key = sell_tx.security.security_ISIN if sell_tx.security.security_ISIN else sell_tx.security.security_name
-        
+        # Use ISIN as primary key, fallback to lowercase security_name
+        security_key = sell_tx.security.security_ISIN if sell_tx.security.security_ISIN else sell_tx.security.security_name.lower()
+
         if security_key not in securities_map:
             securities_map[security_key] = []
         securities_map[security_key].append(sell_tx)
@@ -213,13 +214,15 @@ def get_capital_gains_for_financial_year(
     
     # Build optimized query for all securities at once
     all_transactions_query = db.query(Transaction).join(Security)
-    
+
     if isin_keys or name_keys:
+        from sqlalchemy import func
         conditions = []
         if isin_keys:
             conditions.append(Security.security_ISIN.in_(isin_keys))
         if name_keys:
-            conditions.append(Security.security_name.in_(name_keys))
+            # Use case-insensitive matching for security names
+            conditions.append(func.lower(Security.security_name).in_(name_keys))
         
         if len(conditions) == 1:
             all_transactions_query = all_transactions_query.filter(conditions[0])
@@ -233,9 +236,10 @@ def get_capital_gains_for_financial_year(
     all_transactions = all_transactions_query.order_by(Transaction.transaction_date).all()
     
     # Group transactions by security key for processing
+    # Use lowercase for security_name to match the securities_map keys
     transactions_by_security = {}
     for tx in all_transactions:
-        security_key = tx.security.security_ISIN if tx.security.security_ISIN else tx.security.security_name
+        security_key = tx.security.security_ISIN if tx.security.security_ISIN else tx.security.security_name.lower()
         if security_key not in transactions_by_security:
             transactions_by_security[security_key] = []
         transactions_by_security[security_key].append(tx)
