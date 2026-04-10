@@ -1060,7 +1060,6 @@ const Dashboard = () => {
                   },
                   scales: {
                     y: {
-                      beginAtZero: true,
                       ticks: {
                         callback: function(value) {
                           if (value >= 10000000) {
