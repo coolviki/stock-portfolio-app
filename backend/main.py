@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 from database import get_db, engine, Base
-from models import User, Transaction, Security, Lot, CorporateEvent, LotAdjustment, SaleAllocation, LotStatus, PortfolioSnapshot, UserPreferences
+from models import User, Transaction, Security, Lot, CorporateEvent, LotAdjustment, SaleAllocation, LotStatus, PortfolioSnapshot, UserPreferences, Benchmark, BenchmarkDailyValue, PortfolioBenchmark, BenchmarkPerformance
 from schemas import (
     UserCreate, UserResponse, FirebaseUserCreate,
     TransactionCreate, TransactionResponse, TransactionUpdate,
@@ -24,7 +24,11 @@ from schemas import (
     AdjustedCapitalGainsResponse,
     DashboardColumnsUpdate, UserPreferencesResponse,
     HistoricalPricePoint, StockHistoryResponse,
-    NewsArticleResponse, StockNewsResponse
+    NewsArticleResponse, StockNewsResponse,
+    BenchmarkCreate, BenchmarkResponse, BenchmarkUpdate,
+    BenchmarkDailyValueCreate, BenchmarkDailyValueResponse,
+    PortfolioBenchmarkCreate, PortfolioBenchmarkResponse,
+    BenchmarkPerformanceResponse, PortfolioBenchmarkAnalytics
 )
 from pdf_parser import parse_contract_note
 from stock_api import get_current_price, get_current_price_with_fallback, search_stocks, enrich_security_data, get_current_price_with_waterfall
@@ -38,6 +42,7 @@ from lot_capital_gains import LotCapitalGainsCalculator, get_adjusted_portfolio_
 from corporate_events_fetcher_http import CorporateEventsFetcherHTTP, get_http_fetcher as get_fetcher
 from xirr_calculator import calculate_xirr
 from price_cache import update_price_cache, get_cached_price
+from benchmark_service import BenchmarkService
 
 load_dotenv()
 
@@ -4055,6 +4060,387 @@ def get_transaction_statement(
         "net_investment": round(total_bought - total_sold, 2),
         "items": statement_items
     }
+
+
+# =============================================================================
+# BENCHMARK ENDPOINTS
+# =============================================================================
+
+@app.get("/benchmarks/", response_model=List[BenchmarkResponse])
+def get_benchmarks(db: Session = Depends(get_db)):
+    """Get all available benchmarks"""
+    benchmarks = db.query(Benchmark).filter(Benchmark.is_active == True).all()
+    return benchmarks
+
+
+@app.post("/benchmarks/", response_model=BenchmarkResponse)
+def create_benchmark(
+    benchmark: BenchmarkCreate,
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Create a new benchmark (admin only)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    db_benchmark = Benchmark(**benchmark.model_dump())
+    db.add(db_benchmark)
+    db.commit()
+    db.refresh(db_benchmark)
+    return db_benchmark
+
+
+@app.get("/benchmarks/{benchmark_id}", response_model=BenchmarkResponse)
+def get_benchmark(benchmark_id: int, db: Session = Depends(get_db)):
+    """Get a specific benchmark"""
+    benchmark = db.query(Benchmark).filter(Benchmark.id == benchmark_id).first()
+    if not benchmark:
+        raise HTTPException(status_code=404, detail="Benchmark not found")
+    return benchmark
+
+
+@app.put("/benchmarks/{benchmark_id}", response_model=BenchmarkResponse)
+def update_benchmark(
+    benchmark_id: int,
+    benchmark_update: BenchmarkUpdate,
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Update a benchmark (admin only)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    benchmark = db.query(Benchmark).filter(Benchmark.id == benchmark_id).first()
+    if not benchmark:
+        raise HTTPException(status_code=404, detail="Benchmark not found")
+
+    update_data = benchmark_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(benchmark, field, value)
+
+    benchmark.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(benchmark)
+    return benchmark
+
+
+@app.post("/benchmarks/initialize")
+def initialize_default_benchmarks(
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Initialize default Indian benchmarks (admin only)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    service = BenchmarkService(db)
+    created_benchmarks = service.initialize_default_benchmarks()
+    
+    return {
+        "success": True,
+        "message": f"Initialized {len(created_benchmarks)} benchmarks",
+        "benchmarks_created": [b.name for b in created_benchmarks]
+    }
+
+
+@app.post("/benchmarks/{benchmark_id}/update-data")
+def update_benchmark_data(
+    benchmark_id: int,
+    target_date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format. Defaults to today."),
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Update benchmark data for a specific date (admin only)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    from datetime import date
+    
+    benchmark = db.query(Benchmark).filter(Benchmark.id == benchmark_id).first()
+    if not benchmark:
+        raise HTTPException(status_code=404, detail="Benchmark not found")
+
+    target_date_obj = None
+    if target_date:
+        try:
+            target_date_obj = datetime.strptime(target_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    try:
+        service = BenchmarkService(db)
+        success = service.update_benchmark_data(benchmark_id, target_date_obj)
+        
+        if success:
+            return {
+                "success": True,
+                "message": f"Updated data for {benchmark.name}",
+                "benchmark_id": benchmark_id,
+                "date": str(target_date_obj or date.today())
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to update benchmark data")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating benchmark data: {str(e)}")
+
+
+@app.post("/benchmarks/{benchmark_id}/backfill")
+def backfill_benchmark_data(
+    benchmark_id: int,
+    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end_date: Optional[str] = Query(None, description="End date in YYYY-MM-DD format. Defaults to today."),
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Backfill historical benchmark data (admin only)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    benchmark = db.query(Benchmark).filter(Benchmark.id == benchmark_id).first()
+    if not benchmark:
+        raise HTTPException(status_code=404, detail="Benchmark not found")
+
+    try:
+        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end_date_obj = None
+        if end_date:
+            end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    try:
+        service = BenchmarkService(db)
+        added_count = service.backfill_benchmark_data(benchmark_id, start_date_obj, end_date_obj)
+        
+        return {
+            "success": True,
+            "message": f"Backfilled {added_count} records for {benchmark.name}",
+            "benchmark_id": benchmark_id,
+            "records_added": added_count,
+            "start_date": start_date,
+            "end_date": end_date or str(date.today())
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error backfilling data: {str(e)}")
+
+
+@app.get("/benchmarks/{benchmark_id}/daily-values")
+def get_benchmark_daily_values(
+    benchmark_id: int,
+    start_date: Optional[str] = Query(None, description="Start date in YYYY-MM-DD format"),
+    end_date: Optional[str] = Query(None, description="End date in YYYY-MM-DD format"),
+    limit: int = Query(100, ge=1, le=1000),
+    db: Session = Depends(get_db)
+):
+    """Get daily values for a benchmark with optional date filtering"""
+    benchmark = db.query(Benchmark).filter(Benchmark.id == benchmark_id).first()
+    if not benchmark:
+        raise HTTPException(status_code=404, detail="Benchmark not found")
+
+    query = db.query(BenchmarkDailyValue).filter(BenchmarkDailyValue.benchmark_id == benchmark_id)
+    
+    if start_date:
+        try:
+            start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+            query = query.filter(BenchmarkDailyValue.value_date >= start_date_obj)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid start_date format. Use YYYY-MM-DD")
+    
+    if end_date:
+        try:
+            end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+            query = query.filter(BenchmarkDailyValue.value_date <= end_date_obj)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid end_date format. Use YYYY-MM-DD")
+
+    daily_values = query.order_by(BenchmarkDailyValue.value_date.desc()).limit(limit).all()
+    
+    return {
+        "benchmark": BenchmarkResponse.from_orm(benchmark),
+        "daily_values": [BenchmarkDailyValueResponse.from_orm(dv) for dv in daily_values],
+        "total_records": len(daily_values)
+    }
+
+
+@app.post("/portfolio/{user_id}/assign-benchmark")
+def assign_benchmark_to_portfolio(
+    user_id: int,
+    benchmark_id: int = Query(...),
+    is_primary: bool = Query(True),
+    admin_email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Assign a benchmark to a user's portfolio (admin only)"""
+    if not is_admin_user(admin_email):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Verify user and benchmark exist
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    benchmark = db.query(Benchmark).filter(Benchmark.id == benchmark_id).first()
+    if not benchmark:
+        raise HTTPException(status_code=404, detail="Benchmark not found")
+
+    try:
+        service = BenchmarkService(db)
+        portfolio_benchmark = service.assign_benchmark_to_portfolio(user_id, benchmark_id, is_primary)
+        
+        return {
+            "success": True,
+            "message": f"Assigned {benchmark.name} to user {user.username}",
+            "portfolio_benchmark": PortfolioBenchmarkResponse.from_orm(portfolio_benchmark)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error assigning benchmark: {str(e)}")
+
+
+@app.get("/portfolio/{user_id}/benchmark-analytics")
+def get_portfolio_benchmark_analytics(
+    user_id: int,
+    benchmark_id: Optional[int] = Query(None, description="Benchmark ID. Uses primary benchmark if not specified."),
+    start_date: Optional[str] = Query(None, description="Start date in YYYY-MM-DD format"),
+    end_date: Optional[str] = Query(None, description="End date in YYYY-MM-DD format"),
+    db: Session = Depends(get_db)
+):
+    """Get comprehensive analytics comparing portfolio to benchmark"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    service = BenchmarkService(db)
+    
+    # If no benchmark specified, get primary benchmark
+    if not benchmark_id:
+        portfolio_benchmark = service.get_portfolio_primary_benchmark(user_id)
+        if not portfolio_benchmark:
+            raise HTTPException(status_code=404, detail="No primary benchmark assigned to this portfolio")
+        benchmark_id = portfolio_benchmark.benchmark_id
+
+    benchmark = db.query(Benchmark).filter(Benchmark.id == benchmark_id).first()
+    if not benchmark:
+        raise HTTPException(status_code=404, detail="Benchmark not found")
+
+    try:
+        start_date_obj = None
+        end_date_obj = None
+        
+        if start_date:
+            start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+        if end_date:
+            end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+
+        analytics = service.calculate_benchmark_analytics(
+            user_id, benchmark_id, start_date_obj, end_date_obj
+        )
+        
+        # Calculate XIRR for portfolio
+        try:
+            calculator = LotCapitalGainsCalculator(db)
+            portfolio_xirr = calculate_xirr(db, user_id)
+            analytics.portfolio_xirr = portfolio_xirr
+        except:
+            analytics.portfolio_xirr = None
+            
+        # Calculate XIRR for benchmark if we have enough data
+        try:
+            benchmark_values = db.query(BenchmarkDailyValue).filter(
+                BenchmarkDailyValue.benchmark_id == benchmark_id,
+                BenchmarkDailyValue.value_date >= (start_date_obj or date.today() - timedelta(days=365)),
+                BenchmarkDailyValue.value_date <= (end_date_obj or date.today())
+            ).order_by(BenchmarkDailyValue.value_date).all()
+            
+            if len(benchmark_values) >= 2:
+                # For benchmark XIRR, assume 1 unit invested at start and current value at end
+                initial_value = benchmark_values[0].closing_value
+                final_value = benchmark_values[-1].closing_value
+                days = (benchmark_values[-1].value_date - benchmark_values[0].value_date).days
+                
+                if days > 0 and initial_value > 0:
+                    # Calculate annualized return as proxy for XIRR
+                    benchmark_return = (final_value / initial_value) ** (365.25 / days) - 1
+                    analytics.benchmark_xirr = benchmark_return * 100
+                    
+                    if analytics.portfolio_xirr is not None:
+                        analytics.outperformance_xirr = analytics.portfolio_xirr - analytics.benchmark_xirr
+        except:
+            pass
+
+        return analytics
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error calculating benchmark analytics: {e}")
+        raise HTTPException(status_code=500, detail=f"Error calculating analytics: {str(e)}")
+
+
+@app.get("/portfolio/{user_id}/benchmarks")
+def get_portfolio_benchmarks(user_id: int, db: Session = Depends(get_db)):
+    """Get all benchmarks assigned to a user's portfolio"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    portfolio_benchmarks = db.query(PortfolioBenchmark).filter(
+        PortfolioBenchmark.user_id == user_id,
+        PortfolioBenchmark.end_date.is_(None)  # Currently active
+    ).all()
+    
+    return {
+        "user_id": user_id,
+        "benchmarks": [PortfolioBenchmarkResponse.from_orm(pb) for pb in portfolio_benchmarks]
+    }
+
+
+@app.get("/benchmarks/current-values")
+def get_current_benchmark_values(db: Session = Depends(get_db)):
+    """Get current values for all active benchmarks"""
+    from datetime import date
+    
+    benchmarks = db.query(Benchmark).filter(Benchmark.is_active == True).all()
+    
+    results = []
+    for benchmark in benchmarks:
+        # Get latest daily value
+        latest_value = db.query(BenchmarkDailyValue).filter(
+            BenchmarkDailyValue.benchmark_id == benchmark.id
+        ).order_by(BenchmarkDailyValue.value_date.desc()).first()
+        
+        if latest_value:
+            # Calculate change from previous day
+            prev_value = db.query(BenchmarkDailyValue).filter(
+                BenchmarkDailyValue.benchmark_id == benchmark.id,
+                BenchmarkDailyValue.value_date < latest_value.value_date
+            ).order_by(BenchmarkDailyValue.value_date.desc()).first()
+            
+            change = 0
+            change_percent = 0
+            if prev_value and prev_value.closing_value > 0:
+                change = latest_value.closing_value - prev_value.closing_value
+                change_percent = (change / prev_value.closing_value) * 100
+            
+            results.append({
+                "benchmark": BenchmarkResponse.from_orm(benchmark),
+                "current_value": latest_value.closing_value,
+                "change": round(change, 2),
+                "change_percent": round(change_percent, 2),
+                "last_updated": latest_value.value_date.isoformat()
+            })
+        else:
+            results.append({
+                "benchmark": BenchmarkResponse.from_orm(benchmark),
+                "current_value": 0,
+                "change": 0,
+                "change_percent": 0,
+                "last_updated": None
+            })
+    
+    return {"benchmarks": results}
 
 
 # SPA routing - serve frontend for all non-API routes (production only)

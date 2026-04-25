@@ -20,7 +20,8 @@ const Sidebar = ({ isOpen, onClose }) => {
     { path: '/manual-entry', icon: '✏️', label: 'Manual Entry' },
     { path: '/lots', icon: '📦', label: 'Lot View' },
     { path: '/capital-gains', icon: '💰', label: 'Capital Gains' },
-    { path: '/reports', icon: '📑', label: 'Reports' }
+    { path: '/reports', icon: '📑', label: 'Reports' },
+    { path: '/benchmark-comparison', icon: '📈', label: 'Benchmark Comparison' }
   ];
 
   const adminMenuItems = [

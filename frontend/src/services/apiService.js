@@ -494,5 +494,99 @@ export const apiService = {
 
     const response = await api.get(`/reports/transaction-statement?${params}`);
     return response.data;
+  },
+
+  // Benchmark APIs
+  async getBenchmarks() {
+    const response = await api.get('/benchmarks/');
+    return response.data;
+  },
+
+  async createBenchmark(benchmark, adminEmail) {
+    const params = new URLSearchParams();
+    params.append('admin_email', adminEmail);
+
+    const response = await api.post(`/benchmarks/?${params}`, benchmark);
+    return response.data;
+  },
+
+  async updateBenchmark(benchmarkId, benchmark, adminEmail) {
+    const params = new URLSearchParams();
+    params.append('admin_email', adminEmail);
+
+    const response = await api.put(`/benchmarks/${benchmarkId}?${params}`, benchmark);
+    return response.data;
+  },
+
+  async getBenchmark(benchmarkId) {
+    const response = await api.get(`/benchmarks/${benchmarkId}`);
+    return response.data;
+  },
+
+  async initializeDefaultBenchmarks(adminEmail) {
+    const params = new URLSearchParams();
+    params.append('admin_email', adminEmail);
+
+    const response = await api.post(`/benchmarks/initialize?${params}`);
+    return response.data;
+  },
+
+  async updateBenchmarkData(benchmarkId, targetDate = null, adminEmail) {
+    const params = new URLSearchParams();
+    params.append('admin_email', adminEmail);
+    if (targetDate) params.append('target_date', targetDate);
+
+    const response = await api.post(`/benchmarks/${benchmarkId}/update-data?${params}`);
+    return response.data;
+  },
+
+  async backfillBenchmarkData(benchmarkId, startDate, endDate = null, adminEmail) {
+    const params = new URLSearchParams();
+    params.append('admin_email', adminEmail);
+    params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+
+    const response = await api.post(`/benchmarks/${benchmarkId}/backfill?${params}`);
+    return response.data;
+  },
+
+  async getBenchmarkDailyValues(benchmarkId, startDate = null, endDate = null, limit = 100) {
+    const params = new URLSearchParams();
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    params.append('limit', limit.toString());
+
+    const response = await api.get(`/benchmarks/${benchmarkId}/daily-values?${params}`);
+    return response.data;
+  },
+
+  async assignBenchmarkToPortfolio(userId, benchmarkId, isPrimary = true, adminEmail) {
+    const params = new URLSearchParams();
+    params.append('benchmark_id', benchmarkId.toString());
+    params.append('is_primary', isPrimary.toString());
+    params.append('admin_email', adminEmail);
+
+    const response = await api.post(`/portfolio/${userId}/assign-benchmark?${params}`);
+    return response.data;
+  },
+
+  async getPortfolioBenchmarkAnalytics(userId, benchmarkId = null, startDate = null, endDate = null) {
+    const params = new URLSearchParams();
+    if (benchmarkId) params.append('benchmark_id', benchmarkId.toString());
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+
+    const response = await api.get(`/portfolio/${userId}/benchmark-analytics?${params}`);
+    return response.data;
+  },
+
+  async getPortfolioBenchmarks(userId) {
+    const response = await api.get(`/portfolio/${userId}/benchmarks`);
+    return response.data;
+  },
+
+  async getCurrentBenchmarkValues() {
+    const response = await api.get('/benchmarks/current-values');
+    return response.data;
   }
 };

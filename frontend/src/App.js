@@ -24,6 +24,7 @@ import CorporateEvents from './pages/CorporateEvents';
 import LotView from './pages/LotView';
 import CorporateEventsTicker from './components/CorporateEventsTicker';
 import Reports from './pages/Reports';
+import BenchmarkComparison from './pages/BenchmarkComparison';
 
 function App() {
   const { user, loading, isAdmin } = useAuth();
@@ -51,6 +52,7 @@ function App() {
       '/lots': 'Lot View',
       '/capital-gains': 'Capital Gains',
       '/reports': 'Reports',
+      '/benchmark-comparison': 'Benchmark Comparison',
       '/corporate-events': 'Corporate Events',
       '/security-master': 'Security Master',
       '/users': 'Manage Users',
@@ -142,6 +144,7 @@ function App() {
                 <Route path="/lots" element={<LotView />} />
                 <Route path="/capital-gains" element={<CapitalGains />} />
                 <Route path="/reports" element={<Reports />} />
+                <Route path="/benchmark-comparison" element={<BenchmarkComparison />} />
                 <Route path="/corporate-events" element={<CorporateEvents />} />
                 <Route path="/security-master" element={<SecurityMaster />} />
                 <Route path="/users" element={<ManageUsers />} />

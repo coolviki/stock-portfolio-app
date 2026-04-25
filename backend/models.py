@@ -44,6 +44,7 @@ class User(Base):
     created_corporate_events = relationship("CorporateEvent", back_populates="created_by_user")
     portfolio_snapshots = relationship("PortfolioSnapshot", back_populates="user")
     preferences = relationship("UserPreferences", back_populates="user", uselist=False)
+    portfolio_benchmarks = relationship("PortfolioBenchmark")
 
 
 class UserPreferences(Base):
@@ -298,3 +299,114 @@ class NewsArticle(Base):
 
     # Relationships
     security = relationship("Security")
+
+
+class Benchmark(Base):
+    """Definition of benchmark indices like NIFTY 50, BSE Sensex"""
+    __tablename__ = "benchmarks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, unique=True, index=True)  # e.g., "NIFTY 50", "BSE Sensex"
+    symbol = Column(String, nullable=False, unique=True, index=True)  # e.g., "^NSEI", "^BSESN"
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    daily_values = relationship("BenchmarkDailyValue", back_populates="benchmark")
+    portfolio_benchmarks = relationship("PortfolioBenchmark", back_populates="benchmark")
+
+
+class BenchmarkDailyValue(Base):
+    """Daily closing values for benchmark indices"""
+    __tablename__ = "benchmark_daily_values"
+
+    id = Column(Integer, primary_key=True, index=True)
+    benchmark_id = Column(Integer, ForeignKey("benchmarks.id"), nullable=False)
+    value_date = Column(Date, nullable=False, index=True)
+    closing_value = Column(Float, nullable=False)
+    opening_value = Column(Float, nullable=True)
+    high_value = Column(Float, nullable=True)
+    low_value = Column(Float, nullable=True)
+    volume = Column(Float, nullable=True)
+    
+    # Data source info
+    source = Column(String, default="YAHOO_FINANCE")  # YAHOO_FINANCE, NSE, BSE, etc.
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Unique constraint: one value per benchmark per date
+    __table_args__ = (
+        UniqueConstraint('benchmark_id', 'value_date', name='uq_benchmark_date'),
+    )
+    
+    # Relationships
+    benchmark = relationship("Benchmark", back_populates="daily_values")
+
+
+class PortfolioBenchmark(Base):
+    """Associates portfolios with their chosen benchmark indices"""
+    __tablename__ = "portfolio_benchmarks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    benchmark_id = Column(Integer, ForeignKey("benchmarks.id"), nullable=False)
+    
+    # When this benchmark association started
+    start_date = Column(Date, nullable=False, default=datetime.utcnow().date())
+    end_date = Column(Date, nullable=True)  # NULL means currently active
+    
+    # Whether this is the primary benchmark for the portfolio
+    is_primary = Column(Boolean, default=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Unique constraint: one primary benchmark per user at a time
+    # Note: This would need to be enforced in application logic since SQLite doesn't support partial unique constraints
+    
+    # Relationships
+    user = relationship("User")
+    benchmark = relationship("Benchmark", back_populates="portfolio_benchmarks")
+
+
+class BenchmarkPerformance(Base):
+    """Daily portfolio vs benchmark performance metrics"""
+    __tablename__ = "benchmark_performance"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    benchmark_id = Column(Integer, ForeignKey("benchmarks.id"), nullable=False)
+    performance_date = Column(Date, nullable=False, index=True)
+    
+    # Portfolio metrics
+    portfolio_value = Column(Float, nullable=False)
+    portfolio_cost_basis = Column(Float, nullable=False)
+    portfolio_return_pct = Column(Float, nullable=False)  # Daily return %
+    portfolio_cumulative_return_pct = Column(Float, nullable=False)  # Since inception
+    
+    # Benchmark metrics
+    benchmark_value = Column(Float, nullable=False)
+    benchmark_return_pct = Column(Float, nullable=False)  # Daily return %
+    benchmark_cumulative_return_pct = Column(Float, nullable=False)  # Since inception
+    
+    # Relative performance
+    alpha = Column(Float, nullable=False)  # Portfolio return - Benchmark return
+    cumulative_alpha = Column(Float, nullable=False)  # Cumulative outperformance
+    
+    # Risk metrics (optional for advanced analytics)
+    portfolio_volatility = Column(Float, nullable=True)  # 30-day rolling volatility
+    beta = Column(Float, nullable=True)  # Portfolio beta vs benchmark
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Unique constraint: one performance record per user, benchmark, date
+    __table_args__ = (
+        UniqueConstraint('user_id', 'benchmark_id', 'performance_date', name='uq_user_benchmark_date'),
+    )
+    
+    # Relationships
+    user = relationship("User")
+    benchmark = relationship("Benchmark")
