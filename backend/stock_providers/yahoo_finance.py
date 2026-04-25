@@ -1,8 +1,11 @@
 import requests
 import json
 from typing import Dict, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import logging
+
+# India Standard Time offset (UTC+5:30)
+IST = timezone(timedelta(hours=5, minutes=30))
 
 from .base import StockPriceProvider, StockPrice, ProviderStatus, HistoricalPrice
 from .indian_stocks_db import get_stocks_for_provider
@@ -327,8 +330,11 @@ class YahooFinanceProvider(StockPriceProvider):
                                 continue
 
                             # Include time for intraday data, date only for daily+
+                            # Convert to IST for Indian stocks (UTC+5:30)
                             if is_intraday:
-                                date_str = datetime.fromtimestamp(ts).strftime('%Y-%m-%dT%H:%M:%S')
+                                dt_utc = datetime.fromtimestamp(ts, tz=timezone.utc)
+                                dt_ist = dt_utc.astimezone(IST)
+                                date_str = dt_ist.strftime('%Y-%m-%dT%H:%M:%S')
                             else:
                                 date_str = datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
 
