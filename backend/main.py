@@ -1845,6 +1845,69 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
         except Exception as e:
             logger.debug(f"Overall XIRR calculation failed: {e}")
 
+    # Calculate benchmark XIRR for comparison
+    # Uses the same cash flows but invested in benchmark instead
+    benchmark_xirr = None
+    benchmark_name = None
+    benchmark_outperformance = None
+
+    try:
+        # Get primary benchmark (default to NIFTY 50)
+        primary_benchmark = db.query(PortfolioBenchmark).filter(
+            PortfolioBenchmark.user_id == user_id,
+            PortfolioBenchmark.is_primary == True,
+            PortfolioBenchmark.end_date == None
+        ).first()
+
+        benchmark_id = primary_benchmark.benchmark_id if primary_benchmark else 1  # Default to NIFTY 50
+        benchmark = db.query(Benchmark).filter(Benchmark.id == benchmark_id).first()
+
+        if benchmark and overall_cash_flows and len(overall_cash_flows) > 1:
+            benchmark_name = benchmark.name
+
+            # Calculate benchmark XIRR using same cash flow dates
+            # For each cash flow, find the benchmark value on that date
+            benchmark_cash_flows = []
+            benchmark_units = 0
+
+            for cf_date, cf_amount in overall_cash_flows[:-1]:  # Exclude final current value
+                # Get benchmark value on or near this date
+                bench_value = db.query(BenchmarkDailyValue).filter(
+                    BenchmarkDailyValue.benchmark_id == benchmark_id,
+                    BenchmarkDailyValue.value_date <= cf_date.date() if hasattr(cf_date, 'date') else cf_date
+                ).order_by(BenchmarkDailyValue.value_date.desc()).first()
+
+                if bench_value and bench_value.closing_value > 0:
+                    # Negative cash flow = buying, positive = selling
+                    if cf_amount < 0:  # Investment (buying)
+                        units_bought = abs(cf_amount) / bench_value.closing_value
+                        benchmark_units += units_bought
+                    else:  # Withdrawal (selling)
+                        units_sold = cf_amount / bench_value.closing_value
+                        benchmark_units -= units_sold
+
+                    benchmark_cash_flows.append((cf_date, cf_amount))
+
+            # Get current benchmark value
+            current_bench_value = db.query(BenchmarkDailyValue).filter(
+                BenchmarkDailyValue.benchmark_id == benchmark_id
+            ).order_by(BenchmarkDailyValue.value_date.desc()).first()
+
+            if current_bench_value and benchmark_units > 0 and benchmark_cash_flows:
+                current_benchmark_portfolio_value = benchmark_units * current_bench_value.closing_value
+                benchmark_cash_flows.append((now, current_benchmark_portfolio_value))
+
+                try:
+                    bench_xirr = calculate_xirr(benchmark_cash_flows)
+                    if bench_xirr is not None:
+                        benchmark_xirr = round(bench_xirr * 100, 2)
+                        if overall_xirr is not None:
+                            benchmark_outperformance = round(overall_xirr - benchmark_xirr, 2)
+                except Exception as e:
+                    logger.debug(f"Benchmark XIRR calculation failed: {e}")
+    except Exception as e:
+        logger.debug(f"Benchmark comparison failed: {e}")
+
     return {
         "portfolio": portfolio,
         "realized_gains": realized_gains,
@@ -1853,7 +1916,10 @@ def _get_portfolio_from_lots(user_id: int, db: Session):
         "todays_change": todays_change,
         "todays_change_percent": todays_change_percent,
         "xirr_values": xirr_values,
-        "overall_xirr": overall_xirr
+        "overall_xirr": overall_xirr,
+        "benchmark_xirr": benchmark_xirr,
+        "benchmark_name": benchmark_name,
+        "benchmark_outperformance": benchmark_outperformance
     }
 
 

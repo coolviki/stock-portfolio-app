@@ -636,6 +636,11 @@ const Dashboard = () => {
                     XIRR: {portfolio.overall_xirr >= 0 ? '+' : ''}{portfolio.overall_xirr.toFixed(1)}%
                   </span>
                 )}
+                {portfolio.benchmark_outperformance !== null && portfolio.benchmark_outperformance !== undefined && (
+                  <span className={`ms-2 ${portfolio.benchmark_outperformance >= 0 ? 'text-success' : 'text-danger'}`}>
+                    ({portfolio.benchmark_outperformance >= 0 ? '+' : ''}{portfolio.benchmark_outperformance.toFixed(1)}% vs {portfolio.benchmark_name || 'Benchmark'})
+                  </span>
+                )}
               </h6>
               <h5 className="mb-0 d-none d-md-block">Current Holdings</h5>
             </div>
@@ -645,6 +650,23 @@ const Dashboard = () => {
                   <small className="text-muted">Portfolio XIRR</small>
                   <div className={`fw-bold ${portfolio.overall_xirr >= 0 ? 'text-success' : 'text-danger'}`}>
                     {portfolio.overall_xirr >= 0 ? '+' : ''}{portfolio.overall_xirr.toFixed(1)}%
+                  </div>
+                </div>
+              )}
+              {portfolio.benchmark_xirr !== null && portfolio.benchmark_xirr !== undefined && (
+                <div className="text-end">
+                  <small className="text-muted">{portfolio.benchmark_name || 'Benchmark'} XIRR</small>
+                  <div className={`fw-bold ${portfolio.benchmark_xirr >= 0 ? 'text-success' : 'text-danger'}`}>
+                    {portfolio.benchmark_xirr >= 0 ? '+' : ''}{portfolio.benchmark_xirr.toFixed(1)}%
+                  </div>
+                </div>
+              )}
+              {portfolio.benchmark_outperformance !== null && portfolio.benchmark_outperformance !== undefined && (
+                <div className="text-end">
+                  <small className="text-muted">vs Benchmark</small>
+                  <div className={`fw-bold ${portfolio.benchmark_outperformance >= 0 ? 'text-success' : 'text-danger'}`}>
+                    {portfolio.benchmark_outperformance >= 0 ? '+' : ''}{portfolio.benchmark_outperformance.toFixed(1)}%
+                    {portfolio.benchmark_outperformance >= 0 ? ' \u2191' : ' \u2193'}
                   </div>
                 </div>
               )}
