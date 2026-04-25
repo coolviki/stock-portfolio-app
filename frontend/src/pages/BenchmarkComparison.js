@@ -16,7 +16,7 @@ const BenchmarkComparison = () => {
   const [selectedBenchmarkId, setSelectedBenchmarkId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
-  const { selectedUserId, user } = useAuth();
+  const { selectedUserId, user, isAdmin } = useAuth();
 
   // Date range state
   const [startDate, setStartDate] = useState('');
@@ -199,7 +199,7 @@ const BenchmarkComparison = () => {
         <Col>
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h2>📊 Benchmark Comparison</h2>
-            {user?.is_admin && (
+            {isAdmin && (
               <Button variant="outline-secondary" size="sm" onClick={() => setShowAdminModal(true)}>
                 Admin Tools
               </Button>
