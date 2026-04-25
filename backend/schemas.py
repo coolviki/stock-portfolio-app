@@ -367,6 +367,128 @@ class StockNewsResponse(BaseModel):
     articles: List[NewsArticleResponse]
 
 
+# Benchmark Schemas
+class BenchmarkBase(BaseModel):
+    name: str
+    symbol: str
+    description: Optional[str] = None
+
+class BenchmarkCreate(BenchmarkBase):
+    pass
+
+class BenchmarkUpdate(BaseModel):
+    name: Optional[str] = None
+    symbol: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class BenchmarkResponse(BenchmarkBase):
+    id: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class BenchmarkDailyValueBase(BaseModel):
+    value_date: datetime
+    closing_value: float
+    opening_value: Optional[float] = None
+    high_value: Optional[float] = None
+    low_value: Optional[float] = None
+    volume: Optional[float] = None
+
+class BenchmarkDailyValueCreate(BenchmarkDailyValueBase):
+    benchmark_id: int
+    source: Optional[str] = "YAHOO_FINANCE"
+
+class BenchmarkDailyValueResponse(BenchmarkDailyValueBase):
+    id: int
+    benchmark_id: int
+    source: str
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class PortfolioBenchmarkBase(BaseModel):
+    start_date: datetime
+    end_date: Optional[datetime] = None
+    is_primary: bool = True
+
+class PortfolioBenchmarkCreate(PortfolioBenchmarkBase):
+    user_id: int
+    benchmark_id: int
+
+class PortfolioBenchmarkResponse(PortfolioBenchmarkBase):
+    id: int
+    user_id: int
+    benchmark_id: int
+    benchmark: BenchmarkResponse
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class BenchmarkPerformanceBase(BaseModel):
+    performance_date: datetime
+    portfolio_value: float
+    portfolio_cost_basis: float
+    portfolio_return_pct: float
+    portfolio_cumulative_return_pct: float
+    benchmark_value: float
+    benchmark_return_pct: float
+    benchmark_cumulative_return_pct: float
+    alpha: float
+    cumulative_alpha: float
+    portfolio_volatility: Optional[float] = None
+    beta: Optional[float] = None
+
+class BenchmarkPerformanceCreate(BenchmarkPerformanceBase):
+    user_id: int
+    benchmark_id: int
+
+class BenchmarkPerformanceResponse(BenchmarkPerformanceBase):
+    id: int
+    user_id: int
+    benchmark_id: int
+    benchmark: BenchmarkResponse
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class PortfolioBenchmarkAnalytics(BaseModel):
+    """Analytics summary comparing portfolio to benchmark"""
+    benchmark: BenchmarkResponse
+    portfolio_xirr: Optional[float] = None
+    benchmark_xirr: Optional[float] = None
+    outperformance_xirr: Optional[float] = None  # portfolio_xirr - benchmark_xirr
+    portfolio_total_return: float
+    benchmark_total_return: float
+    outperformance_total: float  # portfolio_return - benchmark_return
+    volatility_portfolio: Optional[float] = None
+    volatility_benchmark: Optional[float] = None
+    beta: Optional[float] = None
+    alpha_annualized: Optional[float] = None
+    sharpe_ratio_portfolio: Optional[float] = None
+    sharpe_ratio_benchmark: Optional[float] = None
+    max_drawdown_portfolio: Optional[float] = None
+    max_drawdown_benchmark: Optional[float] = None
+    correlation: Optional[float] = None
+    tracking_error: Optional[float] = None
+    information_ratio: Optional[float] = None
+    start_date: datetime
+    end_date: datetime
+    total_days: int
+
+
 # Update forward references
 LotDetailResponse.model_rebuild()
 
