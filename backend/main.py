@@ -4090,6 +4090,52 @@ def create_benchmark(
     return db_benchmark
 
 
+@app.get("/benchmarks/current-values")
+def get_current_benchmark_values(db: Session = Depends(get_db)):
+    """Get current values for all active benchmarks"""
+    from datetime import date
+
+    benchmarks = db.query(Benchmark).filter(Benchmark.is_active == True).all()
+
+    results = []
+    for benchmark in benchmarks:
+        # Get latest daily value
+        latest_value = db.query(BenchmarkDailyValue).filter(
+            BenchmarkDailyValue.benchmark_id == benchmark.id
+        ).order_by(BenchmarkDailyValue.value_date.desc()).first()
+
+        if latest_value:
+            # Calculate change from previous day
+            prev_value = db.query(BenchmarkDailyValue).filter(
+                BenchmarkDailyValue.benchmark_id == benchmark.id,
+                BenchmarkDailyValue.value_date < latest_value.value_date
+            ).order_by(BenchmarkDailyValue.value_date.desc()).first()
+
+            change = 0
+            change_percent = 0
+            if prev_value and prev_value.closing_value > 0:
+                change = latest_value.closing_value - prev_value.closing_value
+                change_percent = (change / prev_value.closing_value) * 100
+
+            results.append({
+                "benchmark": BenchmarkResponse.from_orm(benchmark),
+                "current_value": latest_value.closing_value,
+                "change": round(change, 2),
+                "change_percent": round(change_percent, 2),
+                "last_updated": latest_value.value_date.isoformat()
+            })
+        else:
+            results.append({
+                "benchmark": BenchmarkResponse.from_orm(benchmark),
+                "current_value": 0,
+                "change": 0,
+                "change_percent": 0,
+                "last_updated": None
+            })
+
+    return {"benchmarks": results}
+
+
 @app.get("/benchmarks/{benchmark_id}", response_model=BenchmarkResponse)
 def get_benchmark(benchmark_id: int, db: Session = Depends(get_db)):
     """Get a specific benchmark"""
@@ -4395,52 +4441,6 @@ def get_portfolio_benchmarks(user_id: int, db: Session = Depends(get_db)):
         "user_id": user_id,
         "benchmarks": [PortfolioBenchmarkResponse.from_orm(pb) for pb in portfolio_benchmarks]
     }
-
-
-@app.get("/benchmarks/current-values")
-def get_current_benchmark_values(db: Session = Depends(get_db)):
-    """Get current values for all active benchmarks"""
-    from datetime import date
-    
-    benchmarks = db.query(Benchmark).filter(Benchmark.is_active == True).all()
-    
-    results = []
-    for benchmark in benchmarks:
-        # Get latest daily value
-        latest_value = db.query(BenchmarkDailyValue).filter(
-            BenchmarkDailyValue.benchmark_id == benchmark.id
-        ).order_by(BenchmarkDailyValue.value_date.desc()).first()
-        
-        if latest_value:
-            # Calculate change from previous day
-            prev_value = db.query(BenchmarkDailyValue).filter(
-                BenchmarkDailyValue.benchmark_id == benchmark.id,
-                BenchmarkDailyValue.value_date < latest_value.value_date
-            ).order_by(BenchmarkDailyValue.value_date.desc()).first()
-            
-            change = 0
-            change_percent = 0
-            if prev_value and prev_value.closing_value > 0:
-                change = latest_value.closing_value - prev_value.closing_value
-                change_percent = (change / prev_value.closing_value) * 100
-            
-            results.append({
-                "benchmark": BenchmarkResponse.from_orm(benchmark),
-                "current_value": latest_value.closing_value,
-                "change": round(change, 2),
-                "change_percent": round(change_percent, 2),
-                "last_updated": latest_value.value_date.isoformat()
-            })
-        else:
-            results.append({
-                "benchmark": BenchmarkResponse.from_orm(benchmark),
-                "current_value": 0,
-                "change": 0,
-                "change_percent": 0,
-                "last_updated": None
-            })
-    
-    return {"benchmarks": results}
 
 
 # SPA routing - serve frontend for all non-API routes (production only)
