@@ -560,11 +560,12 @@ export const apiService = {
     return response.data;
   },
 
-  async assignBenchmarkToPortfolio(userId, benchmarkId, isPrimary = true, adminEmail) {
+  async assignBenchmarkToPortfolio(userId, benchmarkId, isPrimary = true, userEmail, adminEmail = null) {
     const params = new URLSearchParams();
     params.append('benchmark_id', benchmarkId.toString());
     params.append('is_primary', isPrimary.toString());
-    params.append('admin_email', adminEmail);
+    if (userEmail) params.append('user_email', userEmail);
+    if (adminEmail) params.append('admin_email', adminEmail);
 
     const response = await api.post(`/portfolio/${userId}/assign-benchmark?${params}`);
     return response.data;

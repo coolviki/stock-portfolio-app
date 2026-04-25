@@ -128,8 +128,15 @@ const BenchmarkComparison = () => {
     if (!selectedUserId) return;
 
     try {
-      await apiService.assignBenchmarkToPortfolio(selectedUserId, benchmarkId, isPrimary, user.email);
-      toast.success('Benchmark assigned to portfolio successfully');
+      // Pass user email for self-assignment, admin email for admin override
+      await apiService.assignBenchmarkToPortfolio(
+        selectedUserId,
+        benchmarkId,
+        isPrimary,
+        user.email,  // user_email for self-assignment
+        isAdmin ? user.email : null  // admin_email only if admin
+      );
+      toast.success('Benchmark set as primary successfully');
       loadBenchmarkData();
     } catch (error) {
       console.error('Error assigning benchmark:', error);
@@ -279,6 +286,16 @@ const BenchmarkComparison = () => {
                         </option>
                       ))}
                     </Form.Select>
+                    {selectedBenchmarkId && (
+                      <Button
+                        variant="outline-primary"
+                        size="sm"
+                        onClick={() => handleAssignBenchmark(selectedBenchmarkId)}
+                        title="Set as your primary benchmark for XIRR comparison"
+                      >
+                        Set as Primary
+                      </Button>
+                    )}
                   </div>
                 </div>
               </Card.Header>

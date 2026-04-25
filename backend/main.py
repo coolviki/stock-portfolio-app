@@ -4381,17 +4381,24 @@ def assign_benchmark_to_portfolio(
     user_id: int,
     benchmark_id: int = Query(...),
     is_primary: bool = Query(True),
-    admin_email: str = Query(...),
+    admin_email: str = Query(None),
+    user_email: str = Query(None),
     db: Session = Depends(get_db)
 ):
-    """Assign a benchmark to a user's portfolio (admin only)"""
-    if not is_admin_user(admin_email):
-        raise HTTPException(status_code=403, detail="Admin access required")
-
-    # Verify user and benchmark exist
+    """Assign a benchmark to a user's portfolio.
+    Users can set their own benchmark, admins can set any user's benchmark.
+    """
+    # Verify user exists
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Authorization check: must be admin OR setting your own benchmark
+    is_admin = admin_email and is_admin_user(admin_email)
+    is_own_portfolio = user_email and user.email and user.email.lower() == user_email.lower()
+
+    if not is_admin and not is_own_portfolio:
+        raise HTTPException(status_code=403, detail="You can only set your own benchmark")
         
     benchmark = db.query(Benchmark).filter(Benchmark.id == benchmark_id).first()
     if not benchmark:
